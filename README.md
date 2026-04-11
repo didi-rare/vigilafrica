@@ -65,4 +65,4 @@ VigilAfrica is a volunteer-led project. To support our hosting costs and data en
 ---
 
 ## 📞 Contact
-Maintained by **DidiPepple**. Reach out via GitHub Issues for collaborations or inquiries.
+Maintained by **[@didi-rare](https://github.com/didi-rare)**. Reach out via GitHub Issues or directly at [didi.pepple@gmail.com](mailto:didi.pepple@gmail.com) for collaborations or inquiries.
