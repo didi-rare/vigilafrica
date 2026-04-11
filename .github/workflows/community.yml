@@ -1,0 +1,27 @@
+name: Community Management
+
+on:
+  issues:
+    types: [opened]
+  pull_request:
+    types: [opened]
+
+jobs:
+  welcome:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Welcome message for first-time issue
+        uses: actions/first-interaction@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          issue-message: "Hello and welcome to VigilAfrica! 🌍 We appreciate your interest in tracking natural events across Africa. A maintainer will review your issue shortly."
+          pr-message: "Thank you for contributing to VigilAfrica! 🚀 Your changes will be automatically verified against our OpenSpec specifications. We'll review your PR soon."
+
+  label-issues:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'issues'
+    steps:
+      - name: Auto-label based on keywords
+        uses: andymckay/labeler@1.0.4
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}

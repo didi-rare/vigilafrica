@@ -1,0 +1,3 @@
+module vigilafrica/api
+
+go 1.26.2
