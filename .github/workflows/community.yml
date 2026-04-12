@@ -9,7 +9,11 @@ on:
 jobs:
   welcome:
     runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
     steps:
+
       - name: Welcome message for first-time issue
         uses: actions/first-interaction@v1
         with:
