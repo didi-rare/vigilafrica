@@ -326,7 +326,7 @@ a {
 
 .steps {
   display: flex;
-  align-items: flex-start;
+  align-items: stretch;
   gap: 8px;
   margin-top: 48px;
   flex-wrap: wrap;
@@ -340,6 +340,8 @@ a {
   border-radius: 16px;
   padding: 32px 28px;
   transition: all 0.25s ease;
+  display: flex;
+  flex-direction: column;
 }
 
 .step:hover {
@@ -382,8 +384,8 @@ a {
 
 /* Step accent borders */
 .step:nth-child(1) { border-top: 2px solid var(--accent-amber); }
-.step:nth-child(3) { border-top: 2px solid var(--accent-blue); }
-.step:nth-child(5) { border-top: 2px solid var(--accent-orange); }
+.step:nth-child(3) { border-top: 2px solid var(--accent-orange); }
+.step:nth-child(5) { border-top: 2px solid var(--accent-blue); }
 
 /* ─────────────────────────────────────
    Built For

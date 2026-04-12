@@ -7,6 +7,7 @@
 //   - Links to GitHub repository
 //   - Responsive at 375px and 1280px
 //   - No API calls (static component only)
+import { Fragment } from 'react'
 import './App.css'
 
 const GITHUB_URL = 'https://github.com/didi-rare/vigilafrica'
@@ -118,15 +119,17 @@ function App() {
 
             <div className="steps" role="list">
               {STEPS.map((step, i) => (
-              <article key={step.title} className="step" role="listitem">
-                <span className="step-icon" aria-hidden="true">{step.icon}</span>
-                <h3>{step.title}</h3>
-                <p>{step.desc}</p>
-                {i < STEPS.length - 1 && (
-                  <span className="step-arrow" aria-hidden="true">→</span>
-                )}
-              </article>
-            ))}
+                <Fragment key={step.title}>
+                  <article className="step" role="listitem">
+                    <span className="step-icon" aria-hidden="true">{step.icon}</span>
+                    <h3>{step.title}</h3>
+                    <p>{step.desc}</p>
+                  </article>
+                  {i < STEPS.length - 1 && (
+                    <span className="step-arrow" aria-hidden="true">→</span>
+                  )}
+                </Fragment>
+              ))}
             </div>
           </div>
         </section>
