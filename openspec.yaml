@@ -14,9 +14,12 @@ specifications:
     - "architecture.md"
     - "roadmap.md"
     - "api-contract.md"
-    - "openapi.yaml"
     - "data-model.md"
     - "decisions.md"
+  # openapi.yaml is tracked by version control but excluded from OpenSpec validation.
+  # It is a machine-readable artifact generated from api-contract.md and is not a
+  # governance document — it does not need Purpose/Requirements sections.
+
 
 drift:
   threshold: 0
