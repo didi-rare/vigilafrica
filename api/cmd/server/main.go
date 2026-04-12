@@ -1,11 +1,12 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
+
+	"vigilafrica/api/internal/handlers"
 )
 
 // version is injected at build time via:
@@ -20,10 +21,12 @@ func main() {
 
 	mux := http.NewServeMux()
 
+	// Initialize handlers
+	healthHandler := handlers.NewHealthHandler(version)
+
 	// F-001: Health endpoint
 	// Spec: GET /health → {"status":"ok","version":"<semver>"}
-	// Contract: api-contract.md §2 — stateless, < 100ms, no DB dependency
-	mux.HandleFunc("GET /health", handleHealth)
+	mux.Handle("GET /health", healthHandler)
 
 	addr := fmt.Sprintf(":%s", port)
 	slog.Info("VigilAfrica API starting", "addr", addr, "version", version)
@@ -34,27 +37,3 @@ func main() {
 	}
 }
 
-// healthResponse is the response body for GET /health.
-// Schema locked in api-contract.md §2.
-type healthResponse struct {
-	Status  string `json:"status"`
-	Version string `json:"version"`
-}
-
-// handleHealth implements F-001.
-// Acceptance criteria:
-//   - Returns HTTP 200
-//   - Body: {"status":"ok","version":"<semver>"}
-//   - No database dependency
-//   - Response < 100ms
-func handleHealth(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-
-	if err := json.NewEncoder(w).Encode(healthResponse{
-		Status:  "ok",
-		Version: version,
-	}); err != nil {
-		slog.Error("failed to encode health response", "err", err)
-	}
-}

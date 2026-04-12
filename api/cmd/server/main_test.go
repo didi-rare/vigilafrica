@@ -5,17 +5,17 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"vigilafrica/api/internal/handlers"
 )
 
-// TestHandleHealth validates F-001 acceptance criteria:
-// - Returns HTTP 200
-// - Body is {"status":"ok","version":"<non-empty>"}
-// - Content-Type is application/json
+// TestHandleHealth validates F-001 acceptance criteria using the real handler.
 func TestHandleHealth(t *testing.T) {
+	h := handlers.NewHealthHandler(version)
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()
 
-	handleHealth(rec, req)
+	h.ServeHTTP(rec, req)
 
 	// Criterion: returns HTTP 200
 	if rec.Code != http.StatusOK {
@@ -29,7 +29,7 @@ func TestHandleHealth(t *testing.T) {
 	}
 
 	// Criterion: body matches {"status":"ok","version":"<semver>"}
-	var resp healthResponse
+	var resp handlers.HealthResponse
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("failed to decode health response: %v", err)
 	}
@@ -38,7 +38,8 @@ func TestHandleHealth(t *testing.T) {
 		t.Errorf("expected status field 'ok', got %q", resp.Status)
 	}
 
-	if resp.Version == "" {
-		t.Error("expected non-empty version field")
+	if resp.Version != version {
+		t.Errorf("expected version %q, got %q", version, resp.Version)
 	}
 }
+
