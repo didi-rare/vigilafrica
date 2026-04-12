@@ -1,18 +1,18 @@
 {
   "name": "vigilafrica",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "VigilAfrica: African Natural Event Tracker",
   "main": "index.js",
   "scripts": {
     "web:dev": "cd web && npm run dev",
     "web:build": "cd web && npm run build",
-    "api:dev": "go run api/main.go",
-    "build": "npm run web:build && go build -o vigilafrica api/main.go",
+    "api:dev": "go run ./api/cmd/server/",
+    "build": "npm run web:build && go build -o vigilafrica ./api/cmd/server/",
     "spec:validate": "openspec validate",
     "spec:trace": "openspec trace"
   },
   "devDependencies": {
-    "@openspec/cli": "latest"
+    "@fission-ai/openspec": "latest"
   },
   "author": "",
   "license": "Apache-2.0"

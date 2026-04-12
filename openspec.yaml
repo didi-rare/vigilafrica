@@ -1,13 +1,21 @@
 # OpenSpec Configuration: VigilAfrica
+# Version: 1.0 — Locked 2026-04-12
+
 project:
   id: vigilafrica
   name: VigilAfrica
-  description: African Natural Event Tracker
+  description: African Natural Event Tracker — open-source localized natural event awareness
 
 specifications:
   root: openspec/specs/vigilafrica
+  # Active locked spec files. SUPERSEDED files are excluded from validation.
   patterns:
-    - "**/*.md"
+    - "product.md"
+    - "architecture.md"
+    - "roadmap.md"
+    - "api-contract.md"
+    - "data-model.md"
+    - "decisions.md"
 
 drift:
   threshold: 0

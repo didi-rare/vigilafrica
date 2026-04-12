@@ -15,7 +15,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version: '1.26'          # Must match api/go.mod — see ADR-008
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -39,7 +39,8 @@ jobs:
 
       - name: Build API
         run: |
-          go build -o vigilafrica api/main.go
+          cd api
+          go build -o ../vigilafrica ./cmd/server/    # Entry point: api/cmd/server/main.go (ADR-007)
 
   deploy-staging:
     needs: build-and-test

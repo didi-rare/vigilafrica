@@ -1,8 +1,10 @@
-name: OpenSpec - Drift Verification
+name: OpenSpec — Drift Verification
 
 on:
+  push:
+    branches: [ development ]        # Catch drift on every direct push to development
   pull_request:
-    branches: [ main, releases ]
+    branches: [ development, main, releases ]  # Catch drift on every PR at all levels
 
 jobs:
   openspec-verify:
@@ -16,7 +18,7 @@ jobs:
           node-version: '20'
 
       - name: Install OpenSpec CLI
-        run: npm install -g @openspec/cli
+        run: npm install -g @fission-ai/openspec@latest
 
       - name: OpenSpec Validate
         run: openspec validate --strict
