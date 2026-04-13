@@ -13,7 +13,7 @@
 | Milestone | Theme                        | Features                              | Status    |
 |-----------|------------------------------|---------------------------------------|-----------|
 | v0.1      | Something real exists        | F-001, F-009                          | 🔴 Planned |
-| v0.2      | First real data flow         | F-002, F-003, F-004                   | 🔴 Planned |
+| v0.2      | First real data flow         | F-002, F-003, F-004                   | ✅ Complete |
 | v0.3      | Localization engine          | F-005, F-006, F-007, F-010, F-016    | 🔴 Planned |
 | v0.4      | Useful prototype             | F-008, F-011, F-014, F-015, F-017    | 🔴 Planned |
 | v0.5      | Operational prototype        | F-012, F-013 + operational hygiene   | 🔴 Planned |
