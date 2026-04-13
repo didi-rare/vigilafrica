@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 
 import './App.css'
+import { EventsDashboard } from './components/EventsDashboard'
 
 const GithubIcon = () => (
   <svg 
@@ -41,10 +42,10 @@ const GithubIcon = () => (
 const GITHUB_URL = 'https://github.com/didi-rare/vigilafrica'
 
 const MILESTONES = [
-  { label: 'v0.1 · Foundation', active: true },
-  { label: 'v0.2 · First real data flow', active: false },
-  { label: 'v0.3 · Localization engine', active: false },
-  { label: 'v0.4 · Map + near-me experience', active: false },
+  { label: 'v0.1 · Foundation', active: false, complete: true },
+  { label: 'v0.2 · First real data flow', active: false, complete: true },
+  { label: 'v0.3 · Localization engine', active: true, complete: false },
+  { label: 'v0.4 · Map + near-me experience', active: false, complete: false },
 ]
 
 const STEPS = [
@@ -77,7 +78,7 @@ function App() {
     <div id="app">
       {/* ── Prototype Banner ── */}
       <div id="prototype-banner" className="prototype-banner" role="banner" aria-label="Project status">
-        🚧 Early Prototype — v0.1 in active development · Not yet usable for real event monitoring
+        🚧 Early Prototype — v0.3 Localization Engine live · Interactive maps coming in v0.4
       </div>
 
       {/* ── Navigation ── */}
@@ -135,6 +136,9 @@ function App() {
             </div>
           </div>
         </section>
+
+        {/* ── Dashboard (v0.3 Live Integration) ── */}
+        <EventsDashboard />
 
         {/* ── How It Works ── */}
         <section id="how-it-works" className="how-it-works" aria-labelledby="how-heading">
@@ -200,9 +204,9 @@ function App() {
               </h2>
 
               <p>
-                VigilAfrica is being built milestone by milestone. The current focus (v0.1) is
-                establishing the foundation — a working API and this landing page. Event data,
-                maps, and localisation are coming in v0.2–v0.4.
+                VigilAfrica is being built milestone by milestone. The current focus (**v0.3**) is
+                the Localization Engine — mapping raw coordinates to Nigerian states. Data ingestion
+                and localized tagging are now live.
               </p>
 
               <nav aria-label="Milestone progress">
@@ -210,10 +214,15 @@ function App() {
                   {MILESTONES.map((m) => (
                     <li
                       key={m.label}
-                      className={`milestone${m.active ? ' milestone--active' : ''}`}
+                      className={`milestone${m.active ? ' milestone--active' : ''}${m.complete ? ' milestone--complete' : ''}`}
                       aria-current={m.active ? 'step' : undefined}
                     >
                       {m.label}
+                      {m.complete && (
+                         <span className="milestone-tag milestone-tag--complete">
+                          ✅ Complete
+                        </span>
+                      )}
                       {m.active && (
                         <span className="milestone-tag">
                           🔄 In progress

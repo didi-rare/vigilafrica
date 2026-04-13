@@ -1,0 +1,213 @@
+.dashboard.section {
+  padding: var(--section-py) 0;
+  background-color: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Subtle dashboard background glow */
+.dashboard.section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle at 50% -20%, rgba(56, 189, 248, 0.03) 0%, transparent 60%);
+  pointer-events: none;
+}
+
+.dashboard-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 5rem;
+  background: var(--bg-card);
+  border-radius: 20px;
+  border: 1px dashed var(--border);
+  margin-top: 2rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent-blue);
+  border-radius: 50%;
+  animation: spin 0.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  margin-bottom: 1.5rem;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.events-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 1.5rem;
+  margin-top: 40px;
+}
+
+.event-card {
+  background: #0D1127; /* More opaque Sentinel Navy */
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  padding: 24px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  position: relative;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+}
+
+/* Sentinel Highlight Accents */
+.event-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 16px;
+  right: 16px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
+}
+
+.event-card:hover {
+  transform: translateY(-5px);
+  border-color: rgba(255, 255, 255, 0.25);
+  box-shadow: var(--shadow-sentinel);
+  background: #111631;
+}
+
+/* Category Accent Borders */
+.event-card--fire {
+  border-bottom: 2px solid rgba(245, 158, 11, 0.3);
+}
+.event-card--fire:hover {
+  border-bottom-color: var(--accent-amber);
+}
+
+.event-card--flood {
+  border-bottom: 2px solid rgba(56, 189, 248, 0.3);
+}
+.event-card--flood:hover {
+  border-bottom-color: var(--accent-blue);
+}
+
+.event-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.event-date {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+
+.event-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.4;
+  margin: 0;
+  color: var(--text-primary);
+  min-height: 3.2rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.event-id {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  font-weight: 400;
+  font-family: monospace;
+}
+
+.event-location {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.location-pin {
+  font-size: 0.9rem;
+  filter: grayscale(0.2);
+}
+
+.location-text {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.location-text strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.location-text.coords {
+  font-family: monospace;
+  letter-spacing: -0.01em;
+}
+
+.event-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  margin-top: auto;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+
+.status-dot.open {
+  background: #f43f5e;
+  box-shadow: 0 0 8px rgba(244, 63, 94, 0.4);
+}
+
+.status-dot.closed {
+  background: var(--accent-green);
+}
+
+.event-link {
+  color: var(--accent-amber);
+  text-decoration: none;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  transition: color 0.2s;
+}
+
+.event-link:hover {
+  color: var(--text-primary);
+}

@@ -9,6 +9,7 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"vigilafrica/api/db"
@@ -18,6 +19,8 @@ import (
 // Repository defines the data access methods for VigilAfrica.
 type Repository interface {
 	UpsertEvent(ctx context.Context, e models.Event, geoJSON string) error
+	ListEvents(ctx context.Context, filters EventFilters) ([]models.Event, int, error)
+	GetEventByID(ctx context.Context, id uuid.UUID) (*models.Event, error)
 	Close()
 }
 

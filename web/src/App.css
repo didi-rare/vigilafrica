@@ -11,7 +11,7 @@
   --bg-card:        rgba(15, 23, 42, 0.4);
   --bg-card-hover:  rgba(30, 41, 59, 0.6);
   --glass-bg:       rgba(15, 23, 42, 0.6);
-  --glass-border:   rgba(255, 255, 255, 0.08);
+  --glass-border:   rgba(255, 255, 255, 0.12);
 
   --accent-amber:   #F59E0B;
   --accent-blue:    #38BDF8;   /* Slightly more vibrant sky blue */
@@ -22,11 +22,12 @@
   --text-secondary: #94A3B8;
   --text-muted:     #64748B;
 
-  --border:         rgba(255, 255, 255, 0.06);
+  --border:         rgba(255, 255, 255, 0.1);
   --border-accent:  rgba(245, 158, 11, 0.15);
 
   --shadow-glow-blue:   0 0 100px rgba(56, 189, 248, 0.08);
   --shadow-glow-orange: 0 0 100px rgba(251, 146, 60, 0.06);
+  --shadow-sentinel:    0 16px 48px rgba(0, 0, 0, 0.5);
   --shadow-card:        0 12px 40px rgba(0, 0, 0, 0.4);
 
   /* Typography */
@@ -584,6 +585,20 @@ a {
   background: rgba(245,158,11,0.1);
   color: var(--accent-amber);
   border: 1px solid rgba(245,158,11,0.2);
+}
+
+.milestone-tag--complete {
+  background: rgba(52, 211, 153, 0.1);
+  color: var(--accent-green);
+  border-color: rgba(52, 211, 153, 0.2);
+}
+
+.milestone--complete {
+  color: var(--text-secondary);
+}
+
+.milestone--complete::after {
+  background: var(--accent-green);
 }
 
 /* ─────────────────────────────────────
