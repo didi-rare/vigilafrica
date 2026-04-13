@@ -33,43 +33,57 @@ export function EventsDashboard() {
 
         {data && data.data && (
           <div className="events-grid">
-            {data.data.map((event) => (
-              <article key={event.id} className="event-card">
-                <div className="event-header">
-                  <span className={`badge badge--${event.category === 'floods' ? 'flood' : 'fire'}`}>
-                    {event.category === 'floods' ? '🌊 Floods' : '🔥 Wildfires'}
-                  </span>
-                  <span className="event-date">
-                    {event.event_date ? new Date(event.event_date).toLocaleDateString() : 'Active'}
-                  </span>
-                </div>
-                <h3 className="event-title">{event.title}</h3>
-                
-                <div className="event-location glass-effect">
-                  <span className="location-pin" aria-hidden="true">📍</span>
-                  {event.state_name ? (
-                    <span className="location-text">
-                      <strong>{event.state_name}</strong>, {event.country_name}
-                    </span>
-                  ) : (
-                    <span className="location-text coords">
-                      {event.latitude?.toFixed(4)}, {event.longitude?.toFixed(4)}
-                    </span>
-                  )}
-                </div>
+            {data.data.map((event) => {
+              const categoryClass = event.category === 'floods' ? 'flood' : 'fire'
+              // Split title into text and ID if numeric ID exists at the end
+              const titleMatch = event.title.match(/^(.*)\s(\d+)$/)
+              const displayTitle = titleMatch ? titleMatch[1] : event.title
+              const eventId = titleMatch ? titleMatch[2] : ''
 
-                <div className="event-meta">
-                  <span className="status-indicator">
-                    <span className={`status-dot ${event.status}`} /> {event.status}
-                  </span>
-                  {event.source_url && (
-                    <a href={event.source_url} target="_blank" rel="noopener noreferrer" className="event-link">
-                      Source →
-                    </a>
-                  )}
-                </div>
-              </article>
-            ))}
+              return (
+                <article 
+                  key={event.id} 
+                  className={`event-card event-card--${categoryClass}`}
+                >
+                  <div className="event-header">
+                    <span className={`badge badge--${categoryClass}`}>
+                      {event.category === 'floods' ? '🌊 Floods' : '🔥 Wildfires'}
+                    </span>
+                    <span className="event-date">
+                      {event.event_date ? new Date(event.event_date).toLocaleDateString() : 'Active'}
+                    </span>
+                  </div>
+                  <h3 className="event-title">
+                    {displayTitle}
+                    {eventId && <span className="event-id"> {eventId}</span>}
+                  </h3>
+                  
+                  <div className="event-location glass-effect">
+                    <span className="location-pin" aria-hidden="true">📍</span>
+                    {event.state_name ? (
+                      <span className="location-text">
+                        <strong>{event.state_name}</strong>, {event.country_name}
+                      </span>
+                    ) : (
+                      <span className="location-text coords">
+                        {event.latitude?.toFixed(4)}, {event.longitude?.toFixed(4)}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="event-meta">
+                    <span className="status-indicator">
+                      <span className={`status-dot ${event.status}`} /> {event.status}
+                    </span>
+                    {event.source_url && (
+                      <a href={event.source_url} target="_blank" rel="noopener noreferrer" className="event-link">
+                        Source →
+                      </a>
+                    )}
+                  </div>
+                </article>
+              )
+            })}
           </div>
         )}
       </div>
