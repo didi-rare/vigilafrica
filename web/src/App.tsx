@@ -16,9 +16,9 @@ import {
   Newspaper, 
   Truck, 
   ShieldAlert,
-  ArrowRight,
-  Globe
+  ArrowRight
 } from 'lucide-react'
+
 import './App.css'
 
 const GithubIcon = () => (
