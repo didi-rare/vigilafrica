@@ -586,6 +586,20 @@ a {
   border: 1px solid rgba(245,158,11,0.2);
 }
 
+.milestone-tag--complete {
+  background: rgba(52, 211, 153, 0.1);
+  color: var(--accent-green);
+  border-color: rgba(52, 211, 153, 0.2);
+}
+
+.milestone--complete {
+  color: var(--text-secondary);
+}
+
+.milestone--complete::after {
+  background: var(--accent-green);
+}
+
 /* ─────────────────────────────────────
    Footer
 ───────────────────────────────────── */
