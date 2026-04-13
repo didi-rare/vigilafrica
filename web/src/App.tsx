@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 
 import './App.css'
+import { EventsDashboard } from './components/EventsDashboard'
 
 const GithubIcon = () => (
   <svg 
@@ -135,6 +136,9 @@ function App() {
             </div>
           </div>
         </section>
+
+        {/* ── Dashboard (v0.3 Live Integration) ── */}
+        <EventsDashboard />
 
         {/* ── How It Works ── */}
         <section id="how-it-works" className="how-it-works" aria-labelledby="how-heading">
