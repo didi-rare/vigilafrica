@@ -1,0 +1,283 @@
+openapi: 3.1.0
+info:
+  title: VigilAfrica API
+  description: |
+    VigilAfrica is an open-source African natural event tracker. 
+    This API provides access to enriched natural event data from NASA’s EONET feed, 
+    with a focus on situational awareness and community preparedness in Nigeria.
+  version: 0.1.0
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+
+servers:
+  - url: http://localhost:8080
+    description: Local Development
+  - url: https://api-staging.vigilafrica.io
+    description: Staging Environment
+  - url: https://api.vigilafrica.io
+    description: Production Environment
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      description: Returns the health status of the API service. No database dependency.
+      operationId: getHealth
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /v1/events:
+    get:
+      summary: List events
+      description: Returns a paginated list of enriched natural events. Supports filtering by category, state, and status.
+      operationId: listEvents
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum: [floods, wildfires]
+          description: Filter by event category
+        - name: state
+          in: query
+          schema:
+            type: string
+          description: Filter by enriched Nigerian state name (case-insensitive)
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [open, closed]
+            default: open
+          description: Filter by event status
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/OffsetParam'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+
+  /v1/events/{id}:
+    get:
+      summary: Get event details
+      description: Returns the full detail of a single event by its internal UUID.
+      operationId: getEventById
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Internal VigilAfrica event UUID
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventDetail'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/context:
+    get:
+      summary: Get situational context
+      description: Returns the caller's detected location and a list of open events in their resolved country and state.
+      operationId: getContext
+      responses:
+        '200':
+          description: OK - Always returns 200 even if location not resolved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContextResponse'
+
+components:
+  parameters:
+    LimitParam:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+      description: Maximum results per page
+    OffsetParam:
+      name: offset
+      in: query
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+      description: Pagination offset
+
+  responses:
+    BadRequestError:
+      description: Bad Request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        version:
+          type: string
+          example: 0.1.0
+      required: [status, version]
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
+
+    Meta:
+      type: object
+      properties:
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+      required: [total, limit, offset]
+
+    EventSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        source_id:
+          type: string
+        source:
+          type: string
+          enum: [eonet]
+        title:
+          type: string
+        category:
+          type: string
+          enum: [floods, wildfires]
+        status:
+          type: string
+          enum: [open, closed]
+        geometry_type:
+          type: string
+          nullable: true
+          enum: [Point, Polygon]
+        latitude:
+          type: number
+          nullable: true
+        longitude:
+          type: number
+          nullable: true
+        country_name:
+          type: string
+          nullable: true
+        state_name:
+          type: string
+          nullable: true
+        event_date:
+          type: string
+          format: date-time
+          nullable: true
+        ingested_at:
+          type: string
+          format: date-time
+      required: [id, source_id, source, title, category, status, ingested_at]
+
+    EventDetail:
+      allOf:
+        - $ref: '#/components/schemas/EventSummary'
+        - type: object
+          properties:
+            enriched_at:
+              type: string
+              format: date-time
+              nullable: true
+            source_url:
+              type: string
+              format: uri
+              nullable: true
+
+    EventListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/EventSummary'
+        meta:
+          $ref: '#/components/schemas/Meta'
+      required: [data, meta]
+
+    ContextResponse:
+      type: object
+      properties:
+        location:
+          type: object
+          nullable: true
+          properties:
+            country_code:
+              type: string
+            country_name:
+              type: string
+            state_name:
+              type: string
+              nullable: true
+          required: [country_code, country_name]
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/ContextEvent'
+      required: [location, events]
+
+    ContextEvent:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        category:
+          type: string
+          enum: [floods, wildfires]
+        status:
+          type: string
+          enum: [open, closed]
+        state_name:
+          type: string
+          nullable: true
+        country_name:
+          type: string
+          nullable: true
+        event_date:
+          type: string
+          format: date-time
+      required: [id, title, category, status]

@@ -9,8 +9,9 @@ out/
 
 # Go
 bin/
-vigilafrica
+/vigilafrica
 *.exe
+
 
 # OS
 .DS_Store
