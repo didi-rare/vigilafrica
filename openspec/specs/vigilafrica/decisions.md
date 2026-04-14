@@ -21,6 +21,7 @@
 | ADR-007 | Go Backend Package Structure              | ACCEPTED | 2026-04-12 |
 | ADR-008 | Go Version: 1.26                          | ACCEPTED | 2026-04-12 |
 | ADR-009 | Database Driver: pgx (No ORM)             | ACCEPTED | 2026-04-12 |
+| ADR-010 | Automated Governance: The Sentinel        | ACCEPTED | 2026-04-14 |
 
 ---
 
@@ -270,4 +271,33 @@ Use **`jackc/pgx`** as the PostgreSQL driver. No ORM (no GORM, no sqlc, no ent).
 - All database queries are written as raw SQL strings
 - Query parameters use `pgx` named or positional parameters (`$1`, `$2`, ...)
 - No auto-migrations — all schema changes via numbered SQL files in `api/db/migrations/`
-- `pgxpool` used for connection pooling (not `database/sql` interface)
+---
+
+## ADR-010 — Automated Governance: The Sentinel
+
+**Date**: 2026-04-14
+**Status**: ACCEPTED
+
+### Decision
+
+Implement an automated governance gate ("The Sentinel") that prevents code changes to critical packages from being merged into `development` or `main` without a corresponding OpenSpec change record.
+
+### Rationale
+
+- **Ghost Implementations**: As the project grows, AI agents and human contributors might add features without formal design review (ADRs/Specs).
+- **Traceability**: Every architectural decision and feature must be traceable to a specific proposal in `openspec/changes/`.
+- **System Intelligence**: The repository must be "intelligent" enough to enforce its own governance rules without manual overhead.
+
+### Enforcement Rules
+
+1. **Critical Packages**: Any change to `api/internal/*`, `api/cmd/*`, or `web/src/*` triggers an audit.
+2. **Governance Link**: The audit passes IF at least one file is added or modified in `openspec/changes/`.
+3. **Exemptions**: 
+   - **Trivial Fixes**: Commits containing `[trivial]` in the message skip the audit (for typos, linting, etc.).
+   - **Maintenance**: Changes to `api/db/migrations/`, `docs/`, or root configuration files are exempt.
+
+### Consequences
+
+- **CI Failure**: Pull Requests that violate these rules will fail the `openspec-verify` workflow.
+- **Workflow Dependency**: Developers must run `/opsx-propose` before starting implementation on a new feature.
+- **Improved Scannability**: The `openspec/changes/archive` becomes a reliable history of *why* every part of the codebase exists.
