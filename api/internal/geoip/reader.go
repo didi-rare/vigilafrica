@@ -14,10 +14,10 @@ type Reader struct {
 
 // Location represents the geospatial data resolved from an IP address.
 type Location struct {
-	Country string
-	State   string
-	Lat     float64
-	Lng     float64
+	Country string  `json:"country"`
+	State   string  `json:"state"`
+	Lat     float64 `json:"lat"`
+	Lng     float64 `json:"lng"`
 }
 
 // NewReader initializes a new GeoIP reader from the provided mmdb file path.

@@ -30,7 +30,8 @@ export function EventsDashboard() {
   const error = eventsError
   const data = eventsData
 
-  const mapCenter: [number, number] = contextData?.location 
+  const mapCenter: [number, number] = contextData?.location && 
+    typeof contextData.location.lng === 'number' && typeof contextData.location.lat === 'number'
     ? [contextData.location.lng, contextData.location.lat]
     : [8.6753, 9.082] // default to Nigeria center
 

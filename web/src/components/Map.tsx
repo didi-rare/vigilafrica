@@ -75,6 +75,9 @@ export function Map({ events, center = [8.6753, 9.082], zoom = 5 }: MapProps) {
   // Fly-to when center changes (e.g., context loaded)
   useEffect(() => {
     if (!map.current || !isLoaded) return
+    // Guard against invalid coordinates that would crash flyTo
+    if (typeof center[0] !== 'number' || typeof center[1] !== 'number') return
+    
     map.current.flyTo({ center, zoom: 7, speed: 0.8 })
   }, [center, isLoaded])
 

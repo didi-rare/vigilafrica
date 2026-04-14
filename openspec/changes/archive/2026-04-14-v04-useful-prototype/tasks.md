@@ -10,3 +10,5 @@
 - [x] Build neon `pulse-fire` and `pulse-flood` marker animations.
 - [x] Wire frontend React Query hook to `GET /v1/context` and pass nearby events down as props.
 - [x] Implement `/events/:id` basic detail routing and layout.
+- [x] Dockerize the Go API service and integrate into `docker-compose.yml`.
+- [x] Implement `DEV_OVERRIDE_IP` logic for localized testing on localhost.

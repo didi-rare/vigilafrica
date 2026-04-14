@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"os"
 	"strings"
 
 	"vigilafrica/api/internal/database"
@@ -20,14 +21,28 @@ type ContextResponse struct {
 // automatically searches for nearby events in PostgreSQL.
 func GetContext(db database.Repository, geo *geoip.Reader) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ip := extractIP(r)
-
 		resp := ContextResponse{
-			Location:     nil, // Will stay nil if lookup fails or IP is local
+			Location:     nil,
 			NearbyEvents: make([]models.Event, 0),
 		}
 
-		if geo != nil && ip != "" {
+		// Priority 1: Check for development override in ENV
+		ip := os.Getenv("DEV_OVERRIDE_IP")
+		forceLagos := os.Getenv("DEV_FORCE_LAGOS") == "true"
+		
+		if forceLagos {
+			resp.Location = &geoip.Location{
+				Country: "Nigeria",
+				State:   "Lagos",
+				Lat:     6.5244,
+				Lng:     3.3792,
+			}
+		} else if ip == "" {
+			// Priority 2: Extract real IP from request
+			ip = extractIP(r)
+		}
+
+		if !forceLagos && geo != nil && ip != "" {
 			loc, err := geo.Lookup(ip)
 			if err == nil {
 				resp.Location = loc
