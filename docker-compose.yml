@@ -16,6 +16,17 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+  geoipupdate:
+    image: maxmindinc/geoipupdate
+    container_name: vigilafrica-geoip
+    environment:
+      - GEOIPUPDATE_ACCOUNT_ID=${MAXMIND_ACCOUNT_ID:-0}
+      - GEOIPUPDATE_LICENSE_KEY=${MAXMIND_LICENSE_KEY:-000000000000}
+      - GEOIPUPDATE_EDITION_IDS=GeoLite2-City
+      - GEOIPUPDATE_FREQUENCY=168 # update once a week
+    volumes:
+      - maxmind_data:/usr/share/GeoIP
 
 volumes:
   postgres_data:
+  maxmind_data:

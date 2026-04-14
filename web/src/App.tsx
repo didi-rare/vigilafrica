@@ -19,8 +19,10 @@ import {
   ArrowRight
 } from 'lucide-react'
 
+import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom'
 import './App.css'
 import { EventsDashboard } from './components/EventsDashboard'
+import { EventDetail } from './pages/EventDetail'
 
 const GithubIcon = () => (
   <svg 
@@ -75,10 +77,11 @@ const AUDIENCE = [
 
 function App() {
   return (
-    <div id="app">
+    <Router>
+      <div id="app">
       {/* ── Prototype Banner ── */}
       <div id="prototype-banner" className="prototype-banner" role="banner" aria-label="Project status">
-        🚧 Early Prototype — v0.3 Localization Engine live · Interactive maps coming in v0.4
+        🛰️ Useful Prototype — v0.4 Maps & Near-Me context live
       </div>
 
       {/* ── Navigation ── */}
@@ -101,150 +104,152 @@ function App() {
       </nav>
 
       <main>
-        {/* ── Hero ── */}
-        <section id="hero" className="hero" aria-labelledby="hero-heading">
-          <div className="hero-glow hero-glow--blue" aria-hidden="true" />
-          <div className="hero-glow hero-glow--orange" aria-hidden="true" />
+        <Routes>
+          <Route path="/" element={
+            <>
+              <section id="hero" className="hero" aria-labelledby="hero-heading">
+                <div className="hero-glow hero-glow--blue" aria-hidden="true" />
+                <div className="hero-glow hero-glow--orange" aria-hidden="true" />
 
-          <div className="container">
-            <div className="event-badges" aria-label="Supported event types">
-              <span className="badge badge--flood">🌊 Floods</span>
-              <span className="badge badge--fire">🔥 Wildfires</span>
-            </div>
+                <div className="container">
+                  <div className="event-badges" aria-label="Supported event types">
+                    <span className="badge badge--flood">🌊 Floods</span>
+                    <span className="badge badge--fire">🔥 Wildfires</span>
+                  </div>
 
-            <h1 id="hero-heading" className="hero-title">
-              What is happening<span className="hero-title--accent"> near you?</span>
-            </h1>
+                  <h1 id="hero-heading" className="hero-title">
+                    What is happening<span className="hero-title--accent"> near you?</span>
+                  </h1>
 
-            <p className="hero-desc">
-              VigilAfrica translates raw NASA satellite event data into local African context &mdash;
-              showing floods and wildfires by country and state, not just coordinates.
-              Open-source. Nigeria first.
-            </p>
+                  <p className="hero-desc">
+                    VigilAfrica translates raw NASA satellite event data into local African context &mdash;
+                    showing floods and wildfires by country and state, not just coordinates.
+                    Open-source. Nigeria first.
+                  </p>
 
-            <div className="hero-cta">
-              <a
-                id="hero-github-cta"
-                href={GITHUB_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn btn-primary"
-              >
-                Follow on GitHub →
-              </a>
-              <span className="hero-cta-note">Open source · Apache 2.0</span>
-            </div>
-          </div>
-        </section>
-
-        {/* ── Dashboard (v0.3 Live Integration) ── */}
-        <EventsDashboard />
-
-        {/* ── How It Works ── */}
-        <section id="how-it-works" className="how-it-works" aria-labelledby="how-heading">
-          <div className="container">
-            <span className="section-label">Architecture</span>
-            <h2 id="how-heading" className="section-title">How it works</h2>
-            <p className="section-subtitle">
-              A simple three-stage pipeline turns satellite metadata into something any field
-              coordinator can understand.
-            </p>
-
-            <div className="steps" role="list">
-              {STEPS.map((step, i) => (
-                <Fragment key={step.title}>
-                  <article className="step" role="listitem">
-                    <div className="step-icon" aria-hidden="true">{step.icon}</div>
-                    <h3>{step.title}</h3>
-                    <p>{step.desc}</p>
-                  </article>
-                  {i < STEPS.length - 1 && (
-                    <div className="step-arrow" aria-hidden="true">
-                      <ArrowRight size={20} />
-                    </div>
-                  )}
-                </Fragment>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* ── Built For ── */}
-        <section id="built-for" className="built-for" aria-labelledby="built-heading">
-          <div className="container">
-            <span className="section-label">Use cases</span>
-            <h2 id="built-heading" className="section-title">Built for people on the ground</h2>
-            <p className="section-subtitle">
-              Not for data scientists — for the people who need to act on events quickly.
-            </p>
-
-            <div className="audience-grid">
-              {AUDIENCE.map((item) => (
-                <article key={item.label} className="audience-card">
-                  <div className="audience-icon" aria-hidden="true">{item.icon}</div>
-                  <h3>{item.label}</h3>
-                  <p>{item.desc}</p>
-                </article>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* ── Status / Roadmap ── */}
-        <section id="roadmap" className="status" aria-labelledby="status-heading">
-          <div className="container">
-            <div className="status-card glass-effect">
-              <div className="status-header">
-                <span className="status-dot" aria-hidden="true" />
-                <span>Project Status</span>
-              </div>
-
-              <h2 id="status-heading" className="section-title" style={{ marginBottom: '12px' }}>
-                Building in the open — Nigeria first
-              </h2>
-
-              <p>
-                VigilAfrica is being built milestone by milestone. The current focus (**v0.3**) is
-                the Localization Engine — mapping raw coordinates to Nigerian states. Data ingestion
-                and localized tagging are now live.
-              </p>
-
-              <nav aria-label="Milestone progress">
-                <ul className="milestone-list">
-                  {MILESTONES.map((m) => (
-                    <li
-                      key={m.label}
-                      className={`milestone${m.active ? ' milestone--active' : ''}${m.complete ? ' milestone--complete' : ''}`}
-                      aria-current={m.active ? 'step' : undefined}
+                  <div className="hero-cta">
+                    <a
+                      id="hero-github-cta"
+                      href={GITHUB_URL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn btn-primary"
                     >
-                      {m.label}
-                      {m.complete && (
-                         <span className="milestone-tag milestone-tag--complete">
-                          ✅ Complete
-                        </span>
-                      )}
-                      {m.active && (
-                        <span className="milestone-tag">
-                          🔄 In progress
-                        </span>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </nav>
+                      Follow on GitHub →
+                    </a>
+                    <span className="hero-cta-note">Open source · Apache 2.0</span>
+                  </div>
+                </div>
+              </section>
 
-              <a
-                id="status-github-cta"
-                href={GITHUB_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn btn-primary"
-              >
-                Follow progress on GitHub →
-              </a>
-            </div>
-          </div>
-        </section>
+              <EventsDashboard />
+
+              <section id="how-it-works" className="how-it-works" aria-labelledby="how-heading">
+                <div className="container">
+                  <span className="section-label">Architecture</span>
+                  <h2 id="how-heading" className="section-title">How it works</h2>
+                  <p className="section-subtitle">
+                    A simple three-stage pipeline turns satellite metadata into something any field
+                    coordinator can understand.
+                  </p>
+
+                  <div className="steps" role="list">
+                    {STEPS.map((step, i) => (
+                      <Fragment key={step.title}>
+                        <article className="step" role="listitem">
+                          <div className="step-icon" aria-hidden="true">{step.icon}</div>
+                          <h3>{step.title}</h3>
+                          <p>{step.desc}</p>
+                        </article>
+                        {i < STEPS.length - 1 && (
+                          <div className="step-arrow" aria-hidden="true">
+                            <ArrowRight size={20} />
+                          </div>
+                        )}
+                      </Fragment>
+                    ))}
+                  </div>
+                </div>
+              </section>
+
+              <section id="built-for" className="built-for" aria-labelledby="built-heading">
+                <div className="container">
+                  <span className="section-label">Use cases</span>
+                  <h2 id="built-heading" className="section-title">Built for people on the ground</h2>
+                  <p className="section-subtitle">
+                    Not for data scientists — for the people who need to act on events quickly.
+                  </p>
+
+                  <div className="audience-grid">
+                    {AUDIENCE.map((item) => (
+                      <article key={item.label} className="audience-card">
+                        <div className="audience-icon" aria-hidden="true">{item.icon}</div>
+                        <h3>{item.label}</h3>
+                        <p>{item.desc}</p>
+                      </article>
+                    ))}
+                  </div>
+                </div>
+              </section>
+
+              <section id="roadmap" className="status" aria-labelledby="status-heading">
+                <div className="container">
+                  <div className="status-card glass-effect">
+                    <div className="status-header">
+                      <span className="status-dot" aria-hidden="true" />
+                      <span>Project Status</span>
+                    </div>
+
+                    <h2 id="status-heading" className="section-title" style={{ marginBottom: '12px' }}>
+                      Building in the open — Nigeria first
+                    </h2>
+
+                    <p>
+                      VigilAfrica is being built milestone by milestone. The current focus (**v0.4**) is
+                      the Useful Prototype — featuring interactive maps and Near-Me IP-context. Data ingestion
+                      and localized tagging are live.
+                    </p>
+
+                    <nav aria-label="Milestone progress">
+                      <ul className="milestone-list">
+                        {MILESTONES.map((m) => (
+                          <li
+                            key={m.label}
+                            className={`milestone${m.active ? ' milestone--active' : ''}${m.complete ? ' milestone--complete' : ''}`}
+                            aria-current={m.active ? 'step' : undefined}
+                          >
+                            {m.label}
+                            {m.complete && (
+                               <span className="milestone-tag milestone-tag--complete">
+                                ✅ Complete
+                              </span>
+                            )}
+                            {m.active && (
+                              <span className="milestone-tag">
+                                🔄 In progress
+                              </span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </nav>
+
+                    <a
+                      id="status-github-cta"
+                      href={GITHUB_URL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn btn-primary"
+                    >
+                      Follow progress on GitHub →
+                    </a>
+                  </div>
+                </div>
+              </section>
+            </>
+          } />
+          <Route path="/events/:id" element={<EventDetail />} />
+        </Routes>
       </main>
 
       {/* ── Footer ── */}
@@ -278,7 +283,8 @@ function App() {
           </p>
         </div>
       </footer>
-    </div>
+      </div>
+    </Router>
   )
 }
 

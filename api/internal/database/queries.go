@@ -140,3 +140,59 @@ func (r *pgRepo) GetEventByID(ctx context.Context, id uuid.UUID) (*models.Event,
 	
 	return &e, nil
 }
+
+// GetNearbyEvents fetches events within a given radius (in kilometers) from a central coordinate.
+// It uses PostGIS ST_DWithin and Geography casting to accurately calculate distance over the sphere.
+func (r *pgRepo) GetNearbyEvents(ctx context.Context, lat, lng float64, radiusKm float64, limit int) ([]models.Event, error) {
+	radiusMeters := radiusKm * 1000
+
+	query := `
+		SELECT 
+			id, source_id, source, title, category, status,
+			geom_type, latitude, longitude, country_name, state_name,
+			event_date, source_url, ingested_at, enriched_at
+		FROM events 
+		WHERE geom IS NOT NULL
+		  AND ST_DWithin(
+				geom::geography, 
+				ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography, 
+				$3
+			)
+		ORDER BY ST_Distance(
+				geom::geography, 
+				ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography
+			) ASC, event_date DESC
+		LIMIT $4
+	`
+	
+	rows, err := r.pool.Query(ctx, query, lng, lat, radiusMeters, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to search nearby events: %w", err)
+	}
+	defer rows.Close()
+
+	var events []models.Event
+	for rows.Next() {
+		var e models.Event
+		err := rows.Scan(
+			&e.ID, &e.SourceID, &e.Source, &e.Title, &e.Category, &e.Status,
+			&e.GeomType, &e.Latitude, &e.Longitude, &e.CountryName, &e.StateName,
+			&e.EventDate, &e.SourceURL, &e.IngestedAt, &e.EnrichedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan nearby event row: %w", err)
+		}
+		events = append(events, e)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error in nearby events: %w", err)
+	}
+
+	if events == nil {
+		events = make([]models.Event, 0)
+	}
+
+	return events, nil
+}
+

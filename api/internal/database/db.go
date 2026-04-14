@@ -21,6 +21,7 @@ type Repository interface {
 	UpsertEvent(ctx context.Context, e models.Event, geoJSON string) error
 	ListEvents(ctx context.Context, filters EventFilters) ([]models.Event, int, error)
 	GetEventByID(ctx context.Context, id uuid.UUID) (*models.Event, error)
+	GetNearbyEvents(ctx context.Context, lat, lng float64, radiusKm float64, limit int) ([]models.Event, error)
 	Close()
 }
 

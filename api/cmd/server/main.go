@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"vigilafrica/api/internal/database"
+	"vigilafrica/api/internal/geoip"
 	"vigilafrica/api/internal/handlers"
 )
 
@@ -41,6 +42,20 @@ func main() {
 	healthHandler := handlers.NewHealthHandler(version)
 	eventHandler := handlers.NewEventHandler(repo)
 
+	// Context Engine (GeoIP)
+	var geoReader *geoip.Reader
+	GeoIPPath := os.Getenv("GEOIP_DB_PATH")
+	if GeoIPPath == "" {
+		GeoIPPath = "/usr/share/GeoIP/GeoLite2-City.mmdb"
+	}
+	r, err := geoip.NewReader(GeoIPPath)
+	if err != nil {
+		slog.Warn("GeoIP reader failed to initialize, context localization will gracefully degrade", "err", err)
+	} else {
+		geoReader = r
+		defer geoReader.Close()
+	}
+
 	// F-001: Health endpoint
 	// Spec: GET /health → {"status":"ok","version":"<semver>"}
 	mux.Handle("GET /health", healthHandler)
@@ -48,6 +63,9 @@ func main() {
 	// F-006, F-007: Events endpoints
 	mux.HandleFunc("GET /v1/events", eventHandler.ListEvents)
 	mux.HandleFunc("GET /v1/events/{id}", eventHandler.GetEventByID)
+
+	// F-008: Context endpoint (IP -> Location -> Nearby Events)
+	mux.HandleFunc("GET /v1/context", handlers.GetContext(repo, geoReader))
 
 	addr := fmt.Sprintf(":%s", port)
 	slog.Info("VigilAfrica API starting", "addr", addr, "version", version)
