@@ -55,7 +55,7 @@ func run() error {
 	governanceChanges := []string{}
 
 	for _, file := range files {
-		if strings.HasPrefix(file, changeDir) {
+		if strings.HasPrefix(file, changeDir) && !strings.Contains(file, "/archive/") {
 			governanceChanges = append(governanceChanges, file)
 			continue
 		}
