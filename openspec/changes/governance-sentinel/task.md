@@ -1,0 +1,6 @@
+- [ ] Setup dedicated branch `feat/gov-sentinel`.
+- [ ] Implement Go Auditor tool at `api/cmd/sentinel/main.go`.
+- [ ] Update CI workflow `.github/workflows/openspec-verify.yml` to include Sentinel check.
+- [ ] Register ADR-010 in `openspec/specs/vigilafrica/decisions.md`.
+- [ ] Verify enforcement locally (Trivial vs Critical changes).
+- [ ] Push to GitHub and create Pull Request to `development`.
