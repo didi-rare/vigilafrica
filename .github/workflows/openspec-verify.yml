@@ -23,7 +23,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.26'
+          go-version: '1.25'
 
       - name: Fetch Development Branch
         run: git fetch origin development:development
@@ -35,5 +35,5 @@ jobs:
         run: openspec validate --specs
 
       - name: VigilAfrica Sentinel Audit
-        run: go run ./api/cmd/sentinel/main.go
+        run: go run ./api/cmd/server/main.go
 

@@ -15,7 +15,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.26'          # Must match api/go.mod — see ADR-008
+          go-version: '1.25'          # Must match api/go.mod — see ADR-008
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
