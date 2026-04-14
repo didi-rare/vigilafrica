@@ -35,5 +35,6 @@ jobs:
         run: openspec validate --specs
 
       - name: VigilAfrica Sentinel Audit
-        run: go run ./api/cmd/server/main.go
+        working-directory: api
+        run: go run cmd/server/main.go
 
