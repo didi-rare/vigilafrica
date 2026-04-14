@@ -28,13 +28,37 @@ jobs:
       - name: Fetch Development Branch
         run: git fetch origin development:development
 
+      - name: Cache Npm Store
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          # Keyed on project lockfile hash as a dependency-era proxy.
+          # Global installs (@latest) do not have a lockfile, so this key
+          # acts as a rough cache invalidator when the wider dep tree changes.
+          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
+
       - name: Install OpenSpec CLI
+        # Global install — npm ci is not applicable here (no lockfile for globals).
+        # Cache above reduces download time on repeat runs.
         run: npm install -g @fission-ai/openspec@latest
 
       - name: OpenSpec Validate
         run: openspec validate --specs
 
-      - name: VigilAfrica Sentinel Audit
+      # Sentinel Audit: static analysis + compile check.
+      # go run cmd/server/main.go is intentionally NOT used here — the server
+      # requires DATABASE_URL and would os.Exit(1) immediately in a DB-less CI
+      # environment. These two steps provide the same governance signal without
+      # any runtime infrastructure. When governance-sentinel (cmd/sentinel/) is
+      # complete this block will be upgraded to a dedicated audit binary.
+      - name: Sentinel Audit — Static Analysis
         working-directory: api
-        run: go run cmd/server/main.go
+        run: go vet ./...
+
+      - name: Sentinel Audit — Binary Smoke Test
+        working-directory: api
+        # Mirrors the go build pattern in ci-cd.yml (ADR-007 entry point)
+        run: go build -o /dev/null ./cmd/server/
 

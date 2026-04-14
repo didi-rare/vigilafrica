@@ -20,12 +20,27 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # Node 22 LTS required: web/package.json pins @types/node@^24, vite@^8,
+          # and @vitejs/plugin-react@^6 — all require Node >=22. Node 22 is current
+          # LTS (since Oct 2024) and is the production-safe choice.
+          node-version: '22'
+
+      - name: Cache Npm Dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          # Key on package-lock.json across the whole tree for deterministic hits.
+          # Falls back to any prior npm cache for this OS on a miss.
+          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
 
       - name: Install Root & Web Dependencies
+        # npm ci installs exactly what is in package-lock.json — no range
+        # re-resolution, no silent version drift. Fails loudly on lockfile mismatch.
         run: |
-          npm install
-          cd web && npm install
+          npm ci
+          cd web && npm ci
 
       - name: Run Go Tests
         run: |
