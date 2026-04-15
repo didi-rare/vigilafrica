@@ -32,6 +32,9 @@ jobs:
           cd api
           go test ./...
 
+      - name: Generate milestone data
+        run: node scripts/generate-milestones.js
+
       - name: Build Web
         run: |
           cd web
@@ -71,3 +74,4 @@ jobs:
           vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           vercel-args: '--prod'
+

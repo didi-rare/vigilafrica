@@ -5,10 +5,12 @@
   "main": "index.js",
   "scripts": {
     "web:dev": "cd web && npm run dev",
-    "web:build": "cd web && npm run build",
+    "web:build": "npm run generate:milestones && cd web && npm run build",
     "api:dev": "go run ./api/cmd/server/",
     "build": "npm run web:build && go build -o vigilafrica ./api/cmd/server/",
-    "spec:validate": "openspec validate",
+    "generate:milestones": "node scripts/generate-milestones.js",
+    "prebuild:web": "npm run generate:milestones",
+    "spec:validate": "openspec validate --all",
     "spec:trace": "openspec trace"
   },
   "devDependencies": {
@@ -17,3 +19,4 @@
   "author": "",
   "license": "Apache-2.0"
 }
+

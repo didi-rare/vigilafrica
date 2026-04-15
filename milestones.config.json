@@ -1,0 +1,9 @@
+{
+  "milestones": [
+    { "version": "v0.1", "label": "v0.1 · Foundation" },
+    { "version": "v0.2", "label": "v0.2 · First real data flow" },
+    { "version": "v0.3", "label": "v0.3 · Localization engine" },
+    { "version": "v0.4", "label": "v0.4 · Map + near-me experience" },
+    { "version": "v0.5", "label": "v0.5 · Alert engine" }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs grep:*)",
+      "Read(//c/Users/Didi/.claude/**)",
+      "Read(//c/Users/Didi/.claude/skills/**)",
+      "Bash(gh run:*)",
+      "Bash(ls \"C:\\\\Users\\\\Didi\\\\Documents\\\\Projects\\\\VigilAfrica\\\\vigilafrica\"/*.json)",
+      "Bash(npm install:*)",
+      "Bash(gh pr:*)",
+      "Bash(git switch:*)",
+      "Bash(git fetch:*)",
+      "Bash(git pull:*)"
+    ]
+  }
+}

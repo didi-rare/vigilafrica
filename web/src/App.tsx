@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 
 import './App.css'
+import MILESTONES from './data/milestones.json'
 import { EventsDashboard } from './components/EventsDashboard'
 
 const GithubIcon = () => (
@@ -40,13 +41,6 @@ const GithubIcon = () => (
 )
 
 const GITHUB_URL = 'https://github.com/didi-rare/vigilafrica'
-
-const MILESTONES = [
-  { label: 'v0.1 · Foundation', active: false, complete: true },
-  { label: 'v0.2 · First real data flow', active: false, complete: true },
-  { label: 'v0.3 · Localization engine', active: true, complete: false },
-  { label: 'v0.4 · Map + near-me experience', active: false, complete: false },
-]
 
 const STEPS = [
   {
@@ -78,7 +72,7 @@ function App() {
     <div id="app">
       {/* ── Prototype Banner ── */}
       <div id="prototype-banner" className="prototype-banner" role="banner" aria-label="Project status">
-        🚧 Early Prototype — v0.3 Localization Engine live · Interactive maps coming in v0.4
+        🚧 Early Prototype — v0.4 useful prototype complete · v0.5 Alert Engine in progress
       </div>
 
       {/* ── Navigation ── */}
@@ -204,9 +198,9 @@ function App() {
               </h2>
 
               <p>
-                VigilAfrica is being built milestone by milestone. The current focus (**v0.3**) is
-                the Localization Engine — mapping raw coordinates to Nigerian states. Data ingestion
-                and localized tagging are now live.
+                VigilAfrica is being built milestone by milestone. The current focus (**v0.5**) is
+                the Alert Engine and operational prototype work, building on the completed
+                localization, map, and near-me milestones.
               </p>
 
               <nav aria-label="Milestone progress">
@@ -283,3 +277,5 @@ function App() {
 }
 
 export default App
+
+
