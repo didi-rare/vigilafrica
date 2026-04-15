@@ -24,14 +24,17 @@ VigilAfrica bridges that gap by combining:
 
 ## Current status
 
-> 🚧 **Early prototype — v0.1 in active development.** Not yet usable for real event monitoring.
+> 🛰️ **Useful Prototype — v0.4 complete. v0.5 Operational Prototype in active development.**
 
-This repository contains the foundation for a monorepo-based implementation with:
+v0.1 through v0.4 are shipped. The live prototype shows Nigerian floods and wildfires on an interactive map, localised to state names, with IP-based near-me context. The current focus is making the system run unattended — automated ingestion, deduplication, and production deployment documentation.
 
-- a **Go backend** for ingestion and API services
-- a **React + Vite + TypeScript frontend**
+This repository is a monorepo built with:
+
+- a **Go backend** for ingestion, enrichment, and API services
+- a **React + Vite + TypeScript frontend** with MapLibre GL JS
+- **PostgreSQL + PostGIS** for event storage and geographic enrichment
 - **OpenSpec-based project governance** — locked specs with drift detection on every PR
-- CI/CD workflow scaffolding for development, staging, and production branches
+- CI/CD workflows covering development, staging, and production branches
 
 ---
 
@@ -128,14 +131,15 @@ openspec.yaml     OpenSpec project configuration
 
 ## Roadmap
 
-| Milestone | Theme                        | Status     |
-|-----------|------------------------------|------------|
-| v0.1      | Foundation (this milestone)  | 🔄 In progress |
-| v0.2      | First real data flow         | Planned    |
-| v0.3      | Localization engine          | Planned    |
-| v0.4      | Map + near-me experience     | Planned    |
-| v0.5      | Operational prototype        | Planned    |
-| v1.0      | Credible public launch       | Planned    |
+| Milestone | Theme                        | Status          |
+|-----------|------------------------------|-----------------|
+| v0.1      | Foundation                   | ✅ Complete      |
+| v0.2      | First real data flow         | ✅ Complete      |
+| v0.3      | Localization engine          | ✅ Complete      |
+| v0.4      | Map + near-me experience     | ✅ Complete      |
+| v0.5      | Operational prototype        | 🔄 In progress  |
+| v0.6      | Country expansion model      | 🔴 Planned      |
+| v1.0      | Credible public launch       | 🔴 Planned      |
 
 Full roadmap with acceptance criteria: [`openspec/specs/vigilafrica/roadmap.md`](openspec/specs/vigilafrica/roadmap.md)
 
