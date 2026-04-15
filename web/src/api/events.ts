@@ -1,6 +1,18 @@
 export type EventCategory = 'floods' | 'wildfires'
 export type EventStatus = 'open' | 'closed'
 
+export interface GeoLocation {
+  country: string;
+  state: string;
+  lat: number;
+  lng: number;
+}
+
+export interface ContextResponse {
+  location: GeoLocation | null;
+  nearby_events: VigilEvent[];
+}
+
 export interface VigilEvent {
   id: string;
   source_id: string;
@@ -41,5 +53,21 @@ export async function fetchEvents(category?: EventCategory, stateName?: string):
     throw new Error('Failed to fetch events from VigilAfrica API')
   }
 
+  return res.json()
+}
+
+export async function fetchEventById(id: string): Promise<VigilEvent> {
+  const res = await fetch(`/v1/events/${id}`)
+  if (!res.ok) {
+    throw new Error(`Failed to fetch event ${id}`)
+  }
+  return res.json()
+}
+
+export async function fetchContext(): Promise<ContextResponse> {
+  const res = await fetch('/v1/context')
+  if (!res.ok) {
+    throw new Error('Failed to fetch user context')
+  }
   return res.json()
 }

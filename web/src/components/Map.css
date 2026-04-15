@@ -1,0 +1,117 @@
+.map-wrapper {
+  position: relative;
+  width: 100%;
+  height: 600px;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.map-container {
+  width: 100%;
+  height: 100%;
+}
+
+.map-hud-overlay {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  pointer-events: none;
+  background: rgba(10, 11, 14, 0.8);
+  backdrop-filter: blur(8px);
+  padding: 0.5rem 1rem;
+  border-left: 3px solid var(--color-primary);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  z-index: 10;
+}
+
+.hud-label {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--color-text-dim);
+  letter-spacing: 0.1em;
+}
+
+.hud-status {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.hud-status .online {
+  background: #10b981;
+  box-shadow: 0 0 10px #10b981;
+}
+
+/* Markers */
+.map-marker {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  cursor: pointer;
+  position: relative;
+}
+
+.pulse-fire {
+  background: var(--color-fire);
+  box-shadow: 0 0 15px var(--color-fire);
+}
+
+.pulse-fire::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  border-radius: 50%;
+  border: 2px solid var(--color-fire);
+  animation: radar-pulse-fire 2s infinite;
+}
+
+.pulse-flood {
+  background: var(--color-flood);
+  box-shadow: 0 0 15px var(--color-flood);
+}
+
+.pulse-flood::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  border-radius: 50%;
+  border: 2px solid var(--color-flood);
+  animation: radar-pulse-flood 2.5s infinite;
+}
+
+@keyframes radar-pulse-fire {
+  0% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(3.5); opacity: 0; }
+}
+
+@keyframes radar-pulse-flood {
+  0% { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(4); opacity: 0; }
+}
+
+/* MapLibre Overrides */
+.maplibregl-popup-content {
+  background: rgba(10, 11, 14, 0.95) !important;
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #fff !important;
+  padding: 1rem !important;
+  border-radius: var(--radius-md) !important;
+}
+
+.maplibregl-popup-anchor-bottom .maplibregl-popup-tip {
+  border-top-color: rgba(10, 11, 14, 0.95) !important;
+}

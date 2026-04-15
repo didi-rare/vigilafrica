@@ -16,6 +16,36 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: vigilafrica-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      geoipupdate:
+        condition: service_started
+    env_file: .env
+    environment:
+      - DATABASE_URL=postgres://vigilafrica:vigilafrica@postgres:5432/vigilafrica?sslmode=disable
+      - GEOIP_DB_PATH=/usr/share/GeoIP/GeoLite2-City.mmdb
+    ports:
+      - "8080:8080"
+    volumes:
+      - maxmind_data:/usr/share/GeoIP:ro
+    restart: unless-stopped
+  geoipupdate:
+    image: maxmindinc/geoipupdate
+    container_name: vigilafrica-geoip
+    environment:
+      - GEOIPUPDATE_ACCOUNT_ID=${MAXMIND_ACCOUNT_ID:-0}
+      - GEOIPUPDATE_LICENSE_KEY=${MAXMIND_LICENSE_KEY:-000000000000}
+      - GEOIPUPDATE_EDITION_IDS=GeoLite2-City
+      - GEOIPUPDATE_FREQUENCY=168 # update once a week
+    volumes:
+      - maxmind_data:/usr/share/GeoIP
 
 volumes:
   postgres_data:
+  maxmind_data:
