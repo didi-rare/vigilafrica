@@ -12,13 +12,16 @@
 
 | Milestone | Theme                        | Features                              | Status    |
 |-----------|------------------------------|---------------------------------------|-----------|
-| v0.1      | Something real exists        | F-001, F-009                          | 🔴 Planned |
+| v0.1      | Something real exists        | F-001, F-009                          | ✅ Complete |
 | v0.2      | First real data flow         | F-002, F-003, F-004                   | ✅ Complete |
-| v0.3      | Localization engine          | F-005, F-006, F-007, F-010, F-016    | 🔴 Planned |
-| v0.4      | Useful prototype             | F-008, F-011, F-014, F-015, F-017    | 🔴 Planned |
-| v0.5      | Operational prototype        | F-012, F-013 + operational hygiene   | 🔴 Planned |
+| v0.3      | Localization engine          | F-005, F-006, F-007, F-010, F-016    | ✅ Complete |
+| v0.4      | Useful prototype             | F-008, F-011, F-014, F-015, F-017    | ✅ Complete |
+| v0.5      | Operational prototype        | F-012, F-013 + operational hygiene   | 🔄 Active |
 | v0.6      | Country expansion model      | Process template (no new F-IDs)       | 🔴 Planned |
 | v1.0      | Credible public launch       | Quality gate (no new F-IDs)           | 🔴 Planned |
+
+
+> **Release-state note**: The milestone index above is the authoritative release-state source for milestone tracking. Historical checklist boxes below are preserved as delivery records and are not retroactively rewritten when a milestone is marked release-complete.
 
 ---
 
@@ -235,3 +238,4 @@ The following items are explicitly deferred. They must not be built before v1.0 
 | Fundraising / sustainability UI   | Deferred (ADR-005) — post v1.0 launch                         |
 | Multi-language support            | Post-v1.0                                                      |
 | Mobile native app                 | Post-v1.0                                                      |
+

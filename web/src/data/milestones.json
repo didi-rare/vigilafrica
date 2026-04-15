@@ -1,0 +1,37 @@
+[
+  {
+    "label": "v0.1 · Foundation",
+    "active": false,
+    "complete": true
+  },
+  {
+    "label": "v0.2 · First real data flow",
+    "active": false,
+    "complete": true
+  },
+  {
+    "label": "v0.3 · Localization engine",
+    "active": false,
+    "complete": true
+  },
+  {
+    "label": "v0.4 · Map + near-me experience",
+    "active": false,
+    "complete": true
+  },
+  {
+    "label": "v0.5 · Operational prototype",
+    "active": true,
+    "complete": false
+  },
+  {
+    "label": "v0.6 · Country expansion model",
+    "active": false,
+    "complete": false
+  },
+  {
+    "label": "v1.0 · Credible public launch",
+    "active": false,
+    "complete": false
+  }
+]

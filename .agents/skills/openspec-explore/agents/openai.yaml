@@ -1,0 +1,4 @@
+interface:
+  display_name: "openspec-explore"
+  short_description: "Draft an OpenSpec proposal and implementation spec"
+  default_prompt: "/openspec-explore <change request>"

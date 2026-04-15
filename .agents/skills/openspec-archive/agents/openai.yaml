@@ -1,0 +1,4 @@
+interface:
+  display_name: "openspec-archive"
+  short_description: "Archive a verified OpenSpec change"
+  default_prompt: "/openspec-archive <change-id>"
