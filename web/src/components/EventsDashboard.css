@@ -47,11 +47,56 @@
   to { transform: rotate(360deg); }
 }
 
-.events-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 1.5rem;
+.dashboard-layout {
+  display: flex;
+  gap: 2rem;
   margin-top: 40px;
+  height: 800px;
+}
+
+.dashboard-sidebar {
+  flex: 0 0 400px;
+  overflow-y: auto;
+  padding-right: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* Sidebar scrollbar styling */
+.dashboard-sidebar::-webkit-scrollbar {
+  width: 4px;
+}
+.dashboard-sidebar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+}
+.dashboard-sidebar::-webkit-scrollbar-thumb {
+  background: var(--accent-blue);
+  border-radius: 10px;
+}
+
+.dashboard-map-container {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+}
+
+.events-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.event-card-link {
+  text-decoration: none;
+  color: inherit;
+  display: block;
+}
+
+.event-card-link:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 4px;
+  border-radius: 16px;
 }
 
 .event-card {
@@ -59,6 +104,7 @@
   border: 1px solid var(--glass-border);
   border-radius: 16px;
   padding: 24px;
+  width: 100%;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   flex-direction: column;

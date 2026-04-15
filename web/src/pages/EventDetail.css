@@ -1,0 +1,90 @@
+.event-detail-page {
+  padding-top: 2rem;
+  min-height: 100vh;
+}
+
+.back-link {
+  color: var(--color-text-dim);
+  text-decoration: none;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  transition: color 0.2s;
+}
+
+.back-link:hover {
+  color: var(--color-primary);
+}
+
+.event-detail-header {
+  margin-top: 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 2rem;
+  margin-bottom: 2rem;
+}
+
+.header-main h1 {
+  margin: 0.75rem 0 0;
+  font-size: 2.5rem;
+  color: #fff;
+}
+
+.header-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.detail-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3rem;
+  align-items: start;
+}
+
+.info-group {
+  margin-bottom: 2.5rem;
+}
+
+.info-group label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--color-primary);
+  text-transform: uppercase;
+  margin-bottom: 1rem;
+}
+
+.telemetry-log {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.telemetry-log li {
+  font-size: 0.9rem;
+  color: var(--color-text-dim);
+}
+
+.telemetry-log code {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+}
+
+.detail-map {
+  position: sticky;
+  top: 2rem;
+}
+
+@media (max-width: 1024px) {
+  .detail-layout {
+    grid-template-columns: 1fr;
+  }
+}
