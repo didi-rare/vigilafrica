@@ -135,6 +135,9 @@ openspec.yaml     OpenSpec project configuration
 | v0.3      | Localization engine          | Planned    |
 | v0.4      | Map + near-me experience     | Planned    |
 | v0.5      | Operational prototype        | Planned    |
+| v0.6      | Country expansion model      | Planned    |
+| v0.7      | Second country stable        | Planned    |
+| v0.8      | Pre-demo setup               | Planned    |
 | v1.0      | Credible public launch       | Planned    |
 
 Full roadmap with acceptance criteria: [`openspec/specs/vigilafrica/roadmap.md`](openspec/specs/vigilafrica/roadmap.md)

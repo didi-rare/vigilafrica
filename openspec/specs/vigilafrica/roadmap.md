@@ -18,6 +18,8 @@
 | v0.4      | Useful prototype             | F-008, F-011, F-014, F-015, F-017    | ✅ Complete |
 | v0.5      | Operational prototype        | F-012, F-013 + operational hygiene   | 🔄 Active |
 | v0.6      | Country expansion model      | Process template (no new F-IDs)       | 🔴 Planned |
+| v0.7      | Second country stable        | Enrichment quality validation         | 🔴 Planned |
+| v0.8      | Pre-demo setup               | Demo environment + curated seed data  | 🔴 Planned |
 | v1.0      | Credible public launch       | Quality gate (no new F-IDs)           | 🔴 Planned |
 
 
@@ -169,15 +171,20 @@ These are blockers that must be resolved before v0.1 development begins. They ar
 
 **Operational requirements** (milestone blockers, not F-tagged):
 - [ ] Structured JSON logging for all ingestion runs (start, end, events fetched, events stored, errors)
+- [ ] `ingestion_runs` table — one row per run recording: started_at, completed_at, status, events_fetched, events_stored, error message
+- [ ] `/health` endpoint extended with `last_ingestion` block and `status: degraded` when last run failed (ADR-011)
+- [ ] Frontend "last updated" freshness indicator — reads `last_ingestion.completed_at` from `/health`; warns if > 2 hours stale
+- [ ] Resend email alert on every failed ingestion run — `RESEND_API_KEY` env var required (ADR-011)
+- [ ] Staleness watchdog goroutine — emails via Resend if no successful ingestion in > `ALERT_STALENESS_THRESHOLD_HOURS` (default: 2) (ADR-011)
 - [ ] API rate limiting (configurable via `RATE_LIMIT_RPM` env var; default: 60 requests/minute)
 - [ ] Response caching for `GET /v1/events` (5–15 min TTL, configurable)
 - [ ] CORS correctly configured for Vercel production domain via `CORS_ORIGIN` env var
 - [ ] VPS deployment fully documented (Caddy config example, Docker Compose production config)
 - [ ] Contributor setup instructions are complete, tested, and documented in `CONTRIBUTING.md`
-- [ ] Seed dataset committed at `api/db/seeds/sample_events_nigeria.sql` (local dev, no EONET connection needed)
+- [ ] Seed dataset committed at `api/db/seeds/sample_events_seed_dataset.sql` (local dev, no EONET connection needed — Nigeria data only at this stage)
 - [ ] `CODE_OF_CONDUCT.md` added to repo
 
-**Success signal**: The prototype runs on a VPS, automatically ingests new events every hour, and a contributor can reproduce the full local environment in under 30 minutes by following `CONTRIBUTING.md`.
+**Success signal**: The prototype runs on a VPS, automatically ingests new events every hour, and a contributor can reproduce the full local environment in under 30 minutes by following `CONTRIBUTING.md`. A failed or stalled ingestion triggers an email alert without manual log inspection.
 
 ---
 
@@ -200,25 +207,68 @@ These are blockers that must be resolved before v0.1 development begins. They ar
 
 ---
 
+## v0.7 — Second Country Stable
+
+**Goal**: The second country added in v0.6 meets the same production quality bar as Nigeria before v1.0 is within reach.
+
+**Acceptance criteria** (all must pass):
+- [ ] Second country enrichment achieves the same "before/after" proof as Nigeria: raw coordinates → state/province name displayed in the frontend
+- [ ] Enrichment success rate documented — percentage of ingested events successfully matched to ADM1 (target: ≥ 85%)
+- [ ] Border and edge cases documented: events near country borders, events outside all admin boundaries, geometry gaps in HDX source data
+- [ ] Any deviations from the country onboarding template recorded in a country-specific notes file or new ADR
+- [ ] EONET bounding box for second country validated — no significant overlap with Nigeria bounding box, no events incorrectly captured
+- [ ] Frontend state/province filter works for second country without UI changes
+- [ ] API `?country=` filter returns correct results for both Nigeria and second country independently
+
+**What this milestone is not:**
+- Not adding a third country
+- Not new event categories
+- Not UI redesign
+
+**Success signal**: A non-technical user visiting the site from the second country's IP sees correctly localised flood/wildfire events for their state — the same experience Nigeria delivers today.
+
+---
+
+## v0.8 — Pre-Demo Setup
+
+**Goal**: A stable, curated demo environment exists before v1.0 is attempted. The demo tells the project's story without depending on live EONET data or production infrastructure.
+
+**Acceptance criteria** (all must pass):
+- [ ] Demo deployment is separate from production — own Docker Compose config, own database, own Vercel project or preview URL
+- [ ] Demo database seeded with curated static data from `api/db/seeds/sample_events_seed_dataset.sql` (extended at this milestone to include second country events) — live ingestion does not overwrite demo data
+- [ ] Demo subdomain or URL is stable and shareable (e.g. `demo.vigilafrica.dev`)
+- [ ] Demo environment setup documented — a contributor can stand it up independently from `CONTRIBUTING.md` or a dedicated `DEMO.md`
+- [ ] At least one screenshot committed to the repository showing the demo state
+- [ ] 30-second demo GIF committed to the repository
+
+**What this milestone is not:**
+- Not a new feature
+- Not a third country
+- Not production hardening
+
+**Success signal**: A single URL can be sent to an NGO contact, journalist, or potential contributor and they can explore the product immediately — no setup, no "it's down right now."
+
+---
+
 ## v1.0 — Credible Public Launch
 
-**Goal**: A version that is genuinely useful, publicly defensible, and ready for community contributors, NGO partners, and potential funders.
+**Goal**: A version that is genuinely useful, publicly defensible, and ready for community contributors, NGO partners, and potential funders. This milestone is a quality gate — all v0.x work must be complete and stable before v1.0 is tagged.
 
 **Quality gate criteria** (all must pass before tagging v1.0):
-- [ ] At least 1–3 African countries supported in depth (enriched to ADM1 level)
+- [ ] At least 2 African countries supported in depth (enriched to ADM1 level) — Nigeria complete, second country validated at v0.7
 - [ ] At least 2 event categories supported (Floods + Wildfires minimum)
 - [ ] Localized enrichment working consistently for all supported countries
 - [ ] REST API is stable — documented in `api-contract.md` with no breaking changes since v0.3
 - [ ] Frontend is usable without technical knowledge by personas P-01 through P-03
-- [ ] Demo environment available (separate from production)
+- [ ] Demo environment live and stable (delivered at v0.8)
 - [ ] `CONTRIBUTING.md` is complete and tested
 - [ ] `CODE_OF_CONDUCT.md` is in place
-- [ ] At least one screenshot and a 30-second demo GIF are committed to the repository
+- [ ] Screenshot and 30-second demo GIF committed to repository (delivered at v0.8)
 - [ ] Public roadmap linked from `README.md`
 - [ ] GitHub Discussions enabled or a project contact email exists
 
 **Suggested v1.0 launch message**:
-> "Localized natural event awareness for [1–3 African countries] — floods and wildfires shown by state, not coordinates. Open-source and free to use."
+> "Localized natural event awareness for [2+ African countries] — floods and wildfires shown by state, not coordinates. Open-source and free to use."
 
 ---
 
