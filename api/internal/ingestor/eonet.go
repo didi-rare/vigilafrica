@@ -5,88 +5,141 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
 
 	"vigilafrica/api/internal/database"
+	"vigilafrica/api/internal/models"
 	"vigilafrica/api/internal/normalizer"
 )
 
 const eonetURL = "https://eonet.gsfc.nasa.gov/api/v3/events"
 
-// Default query parameters for Nigeria bounds and categories
-// bbox: [min_lon, min_lat, max_lon, max_lat] for Nigeria
+// Nigeria bounding box: [min_lon, min_lat, max_lon, max_lat]
 const queryParams = "?bbox=2.0,4.0,15.0,14.0&category=floods,wildfires&status=open,closed"
 
-// Ingest pulls events from NASA EONET and upserts them into the provided database repository.
-func Ingest(ctx context.Context, repo database.Repository) error {
-	client := &http.Client{
-		Timeout: 30 * time.Second,
+// IngestResult holds the outcome of a single ingestion run.
+type IngestResult struct {
+	EventsFetched int
+	EventsStored  int
+}
+
+// Ingest pulls events from NASA EONET, upserts them (F-013 deduplication),
+// and records the run in ingestion_runs (ADR-011).
+// It returns the run result and any fatal error.
+func Ingest(ctx context.Context, repo database.Repository) (*IngestResult, error) {
+	startedAt := time.Now()
+
+	// Open a run record (status=running) — ADR-011
+	runID, err := repo.CreateIngestionRun(ctx, startedAt)
+	if err != nil {
+		// If we can't write a run record, log and continue — do not abort ingestion
+		slog.Error("ingestion: failed to create run record", "err", err)
+		runID = 0
 	}
+
+	slog.Info("ingestion: run started", "run_id", runID, "started_at", startedAt.Format(time.RFC3339))
+
+	result, ingestErr := runIngest(ctx, repo)
+
+	duration := time.Since(startedAt)
+
+	if runID > 0 {
+		status := models.RunStatusSuccess
+		var errMsg *string
+		if ingestErr != nil {
+			status = models.RunStatusFailure
+			msg := ingestErr.Error()
+			errMsg = &msg
+		}
+		if completeErr := repo.CompleteIngestionRun(ctx, runID, status, result.EventsFetched, result.EventsStored, errMsg); completeErr != nil {
+			slog.Error("ingestion: failed to complete run record", "run_id", runID, "err", completeErr)
+		}
+	}
+
+	if ingestErr != nil {
+		slog.Error("ingestion: run failed",
+			"run_id", runID,
+			"duration_ms", duration.Milliseconds(),
+			"events_fetched", result.EventsFetched,
+			"events_stored", result.EventsStored,
+			"err", ingestErr,
+		)
+		return result, ingestErr
+	}
+
+	slog.Info("ingestion: run complete",
+		"run_id", runID,
+		"duration_ms", duration.Milliseconds(),
+		"events_fetched", result.EventsFetched,
+		"events_stored", result.EventsStored,
+	)
+	return result, nil
+}
+
+// runIngest is the core fetch-normalize-upsert loop.
+// Separated from Ingest so run record tracking wraps cleanly.
+func runIngest(ctx context.Context, repo database.Repository) (*IngestResult, error) {
+	result := &IngestResult{}
+
+	client := &http.Client{Timeout: 30 * time.Second}
 
 	reqURL := eonetURL + queryParams
-	log.Printf("Fetching events from NASA EONET: %s", reqURL)
+	slog.Info("ingestion: fetching from EONET", "url", reqURL)
 
-	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
-		return fmt.Errorf("failed to create http request: %w", err)
+		return result, fmt.Errorf("failed to create http request: %w", err)
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "VigilAfrica-Ingestor/1.0")
+	req.Header.Set("User-Agent", "VigilAfrica-Ingestor/0.5")
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("http request failed: %w", err)
+		return result, fmt.Errorf("http request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected status code %d from EONET", resp.StatusCode)
+		return result, fmt.Errorf("unexpected EONET status: %d", resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("failed to read response body: %w", err)
+		return result, fmt.Errorf("failed to read response body: %w", err)
 	}
 
 	var root struct {
-		Title  string                     `json:"title"`
 		Events []normalizer.RawEONETEvent `json:"events"`
 	}
-
 	if err := json.Unmarshal(body, &root); err != nil {
-		return fmt.Errorf("failed to decode JSON response: %w", err)
+		return result, fmt.Errorf("failed to decode EONET JSON: %w", err)
 	}
 
-	log.Printf("Fetched %d raw events from EONET. Normalizing and inserting...", len(root.Events))
+	result.EventsFetched = len(root.Events)
+	slog.Info("ingestion: events fetched", "count", result.EventsFetched)
 
-	successCount := 0
 	for _, rawEvt := range root.Events {
-		// Isolate individual raw payload for storage
 		rawEvtBytes, _ := json.Marshal(rawEvt)
 
 		event, geoJSON, err := normalizer.Normalize(rawEvt, rawEvtBytes)
 		if err != nil {
-			log.Printf("Warning: failed to normalize event %s: %v", rawEvt.ID, err)
+			slog.Warn("ingestion: normalize failed", "source_id", rawEvt.ID, "err", err)
 			continue
 		}
-
-		// Ensure we don't insert events without geometry (unless configured to do so)
 		if geoJSON == "" {
-			log.Printf("Skipping event %s: no geometry extracted", event.SourceID)
+			slog.Warn("ingestion: skipping event with no geometry", "source_id", event.SourceID)
 			continue
 		}
 
-		err = repo.UpsertEvent(ctx, event, geoJSON)
-		if err != nil {
-			log.Printf("Error: failed to upsert event %s: %v", event.SourceID, err)
+		// F-013: upsert on source_id — idempotent, no duplicates
+		if err := repo.UpsertEvent(ctx, event, geoJSON); err != nil {
+			slog.Error("ingestion: upsert failed", "source_id", event.SourceID, "err", err)
 			continue
 		}
-
-		successCount++
+		result.EventsStored++
 	}
 
-	log.Printf("Successfully ingested %d events.", successCount)
-	return nil
+	return result, nil
 }

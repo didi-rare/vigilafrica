@@ -40,9 +40,12 @@ func main() {
 	}
 	defer repo.Close()
 
-	if err := ingestor.Ingest(ctx, repo); err != nil {
+	result, err := ingestor.Ingest(ctx, repo)
+	if err != nil {
 		log.Fatalf("Ingestion run failed: %v", err)
 	}
 
-	log.Println("Ingestion run completed successfully.")
+	log.Printf("Ingestion run completed successfully. Fetched: %d, Stored: %d",
+		result.EventsFetched, result.EventsStored,
+	)
 }

@@ -11,7 +11,7 @@ import (
 
 // TestHandleHealth validates F-001 acceptance criteria using the real handler.
 func TestHandleHealth(t *testing.T) {
-	h := handlers.NewHealthHandler(version)
+	h := handlers.NewHealthHandler(version, nil)
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()
 
