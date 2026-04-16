@@ -21,15 +21,21 @@ const resendAPIURL = "https://api.resend.com/emails"
 type AlertConfig struct {
 	ResendAPIKey        string
 	AlertEmailTo        string
-	StalenessThresholdH int // hours before a staleness alert fires
+	AlertFromEmail      string // verified sender domain in Resend
+	StalenessThresholdH int    // hours before a staleness alert fires
 }
 
 // LoadAlertConfig reads alert configuration from environment variables.
 // Returns a config and a boolean indicating whether alerting is enabled.
 func LoadAlertConfig() (AlertConfig, bool) {
+	fromEmail := os.Getenv("ALERT_FROM_EMAIL")
+	if fromEmail == "" {
+		fromEmail = "VigilAfrica Alerts <alerts@vigilafrica.dev>"
+	}
 	cfg := AlertConfig{
 		ResendAPIKey:        os.Getenv("RESEND_API_KEY"),
 		AlertEmailTo:        os.Getenv("ALERT_EMAIL_TO"),
+		AlertFromEmail:      fromEmail,
 		StalenessThresholdH: 2,
 	}
 	if h := os.Getenv("ALERT_STALENESS_THRESHOLD_HOURS"); h != "" {
@@ -116,7 +122,7 @@ func SendStalenessAlert(cfg AlertConfig, lastSuccessAt time.Time, hoursStale int
 // Returns an error if the API call fails; does not panic.
 func sendEmail(cfg AlertConfig, subject, htmlBody string) error {
 	payload := map[string]any{
-		"from":    "VigilAfrica Alerts <alerts@vigilafrica.dev>",
+		"from":    cfg.AlertFromEmail,
 		"to":      []string{cfg.AlertEmailTo},
 		"subject": subject,
 		"html":    htmlBody,

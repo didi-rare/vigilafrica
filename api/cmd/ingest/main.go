@@ -25,11 +25,10 @@ func main() {
 		cancel()
 	}()
 
-	// Database URL from environment
+	// Database URL from environment — required, no fallback (matches cmd/server behaviour)
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
-		// Default to local docker-compose environment for simplicity during development
-		dbURL = "postgres://vigilafrica:vigilafrica@localhost:5432/vigilafrica?sslmode=disable"
+		log.Fatal("DATABASE_URL is not set")
 	}
 
 	log.Println("Starting VigilAfrica NASA EONET Ingestor run...")
