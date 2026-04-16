@@ -22,6 +22,7 @@
 | ADR-008 | Go Version: 1.26                          | ACCEPTED | 2026-04-12 |
 | ADR-009 | Database Driver: pgx (No ORM)             | ACCEPTED | 2026-04-12 |
 | ADR-010 | Automated Governance: The Sentinel        | ACCEPTED | 2026-04-14 |
+| ADR-011 | Ingestion Observability: Resend Alerting  | ACCEPTED | 2026-04-16 |
 
 ---
 
@@ -301,3 +302,64 @@ Implement an automated governance gate ("The Sentinel") that prevents code chang
 - **CI Failure**: Pull Requests that violate these rules will fail the `openspec-verify` workflow.
 - **Workflow Dependency**: Developers must run `/opsx-propose` before starting implementation on a new feature.
 - **Improved Scannability**: The `openspec/changes/archive` becomes a reliable history of *why* every part of the codebase exists.
+
+---
+
+## ADR-011 — Ingestion Observability: Resend Alerting
+
+**Date**: 2026-04-16
+**Status**: ACCEPTED
+
+### Decision
+
+Implement ingestion run tracking and email alerting via **Resend** as part of the v0.5 operational prototype. The system must be capable of detecting and reporting both immediate ingestion failures and prolonged ingestion staleness without manual log inspection.
+
+### Context
+
+v0.5 introduces scheduled ingestion via gocron. A scheduled job that fails silently — EONET unreachable, PostGIS enrichment broken, goroutine hung — presents stale data as current, which is worse than no data for target users (NGOs, journalists, civic responders). A solo-maintained VPS requires automated alerting to be operationally viable at zero cost.
+
+### Decision Components
+
+**1. Ingestion run tracking**
+- An `ingestion_runs` table records every run: `started_at`, `completed_at`, `status` (success/failure), `events_fetched`, `events_stored`, `error` message
+- Written by the ingestor at the start and end of each cycle
+
+**2. Extended `/health` endpoint**
+- Response includes a `last_ingestion` block with the most recent run record
+- Top-level `status` field returns `"degraded"` if the last run status is `"failure"`, `"ok"` otherwise
+- Frontend reads `last_ingestion.completed_at` to display a "last updated X min ago" freshness indicator — warns if > 2 hours stale
+
+**3. Failure alert**
+- On every failed ingestion run, an email is sent immediately via Resend
+- Subject: `[VigilAfrica] Ingestion failed at {time}`
+- Body includes: error message, events fetched, events stored, run duration
+
+**4. Staleness watchdog**
+- A separate goroutine runs on a configurable interval (default: every 30 minutes, offset from the ingestion schedule)
+- Queries `ingestion_runs` for the most recent successful run
+- If `last_success_at < now - ALERT_STALENESS_THRESHOLD_HOURS`, sends a staleness email
+- Catches failures the immediate alert misses: scheduler process died, gocron stopped, goroutine hung silently
+
+### Email Provider: Resend
+
+Four options evaluated: SMTP (self-configured), SendGrid, Mailgun, Resend.
+
+- **Resend chosen**: single `RESEND_API_KEY` env var, no SMTP config, 3,000 emails/month free tier — sufficient for hourly ingestion monitoring indefinitely
+- **SMTP rejected**: requires per-provider configuration (Gmail app password, port, TLS settings) — unnecessary complexity for a zero-cost operational goal
+- **SendGrid / Mailgun rejected**: more complex onboarding for equivalent free tier functionality
+
+### Environment Variables
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `RESEND_API_KEY` | — | Required. Resend API key for email delivery |
+| `ALERT_EMAIL_TO` | — | Required. Recipient address for all alerts |
+| `ALERT_STALENESS_THRESHOLD_HOURS` | `2` | Hours without successful ingestion before staleness alert fires |
+
+### Consequences
+
+- `RESEND_API_KEY` and `ALERT_EMAIL_TO` are required env vars from v0.5 onward — documented in `.env.example`
+- The `ingestion_runs` table requires a new migration: `api/db/migrations/` (numbered after existing migrations)
+- All ingestion observability logic lives in `api/internal/ingestor/` — no new top-level package
+- The `/health` handler in `api/internal/handlers/` queries `ingestion_runs` for the last run record
+- If Resend is unreachable when sending an alert, the failure is logged but does not crash the ingestor or scheduler
