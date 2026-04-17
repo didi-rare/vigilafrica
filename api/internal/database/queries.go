@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"vigilafrica/api/internal/models"
 )
 
@@ -194,5 +196,72 @@ func (r *pgRepo) GetNearbyEvents(ctx context.Context, lat, lng float64, radiusKm
 	}
 
 	return events, nil
+}
+
+// ─── Ingestion Run Methods (ADR-011) ─────────────────────────────────────────
+
+// CreateIngestionRun inserts a new run record with status=running and returns its ID.
+// Called at the start of every ingestion cycle.
+func (r *pgRepo) CreateIngestionRun(ctx context.Context, startedAt time.Time) (int64, error) {
+	query := `
+		INSERT INTO ingestion_runs (started_at, status)
+		VALUES ($1, 'running')
+		RETURNING id
+	`
+	var id int64
+	err := r.pool.QueryRow(ctx, query, startedAt).Scan(&id)
+	if err != nil {
+		return 0, fmt.Errorf("failed to create ingestion run: %w", err)
+	}
+	return id, nil
+}
+
+// CompleteIngestionRun updates an existing run record with final status, counts, and error.
+// Called at the end of every ingestion cycle (success or failure).
+func (r *pgRepo) CompleteIngestionRun(ctx context.Context, id int64, status models.IngestionRunStatus, fetched, stored int, errMsg *string) error {
+	query := `
+		UPDATE ingestion_runs
+		SET
+			completed_at   = NOW(),
+			status         = $2,
+			events_fetched = $3,
+			events_stored  = $4,
+			error          = $5
+		WHERE id = $1
+	`
+	_, err := r.pool.Exec(ctx, query, id, status, fetched, stored, errMsg)
+	if err != nil {
+		return fmt.Errorf("failed to complete ingestion run %d: %w", id, err)
+	}
+	return nil
+}
+
+// GetLastIngestionRun returns the most recent ingestion run record, or nil if none exist.
+// Used by: /health endpoint, staleness watchdog.
+func (r *pgRepo) GetLastIngestionRun(ctx context.Context) (*models.IngestionRun, error) {
+	query := `
+		SELECT id, started_at, completed_at, status, events_fetched, events_stored, error, created_at
+		FROM ingestion_runs
+		ORDER BY started_at DESC
+		LIMIT 1
+	`
+	var run models.IngestionRun
+	err := r.pool.QueryRow(ctx, query).Scan(
+		&run.ID,
+		&run.StartedAt,
+		&run.CompletedAt,
+		&run.Status,
+		&run.EventsFetched,
+		&run.EventsStored,
+		&run.Error,
+		&run.CreatedAt,
+	)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get last ingestion run: %w", err)
+	}
+	return &run, nil
 }
 

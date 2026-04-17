@@ -71,3 +71,28 @@ export async function fetchContext(): Promise<ContextResponse> {
   }
   return res.json()
 }
+
+// ── Health / ingestion freshness (v0.5 — ADR-011) ────────────────────────────
+
+export interface LastIngestion {
+  status: 'success' | 'failure' | 'running' | null
+  started_at: string | null
+  completed_at: string | null
+  events_fetched: number | null
+  events_stored: number | null
+  error: string | null
+}
+
+export interface HealthResponse {
+  status: 'ok' | 'degraded'
+  version: string
+  last_ingestion: LastIngestion | null
+}
+
+export async function fetchHealth(): Promise<HealthResponse> {
+  const res = await fetch('/health')
+  if (!res.ok) {
+    throw new Error('Failed to fetch health status')
+  }
+  return res.json()
+}

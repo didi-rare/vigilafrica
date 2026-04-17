@@ -181,7 +181,7 @@ These are blockers that must be resolved before v0.1 development begins. They ar
 - [ ] CORS correctly configured for Vercel production domain via `CORS_ORIGIN` env var
 - [ ] VPS deployment fully documented (Caddy config example, Docker Compose production config)
 - [ ] Contributor setup instructions are complete, tested, and documented in `CONTRIBUTING.md`
-- [ ] Seed dataset committed at `api/db/seeds/sample_events_seed_dataset.sql` (local dev, no EONET connection needed — Nigeria data only at this stage)
+- [ ] Seed dataset committed at `api/db/seeds/sample_events_nigeria.sql` (local dev, no EONET connection needed — Nigeria data only at this stage)
 - [ ] `CODE_OF_CONDUCT.md` added to repo
 
 **Success signal**: The prototype runs on a VPS, automatically ingests new events every hour, and a contributor can reproduce the full local environment in under 30 minutes by following `CONTRIBUTING.md`. A failed or stalled ingestion triggers an email alert without manual log inspection.
@@ -235,7 +235,7 @@ These are blockers that must be resolved before v0.1 development begins. They ar
 
 **Acceptance criteria** (all must pass):
 - [ ] Demo deployment is separate from production — own Docker Compose config, own database, own Vercel project or preview URL
-- [ ] Demo database seeded with curated static data from `api/db/seeds/sample_events_seed_dataset.sql` (extended at this milestone to include second country events) — live ingestion does not overwrite demo data
+- [ ] Demo database seeded with curated static data from `api/db/seeds/sample_events_nigeria.sql` (extended at this milestone to include second country events) — live ingestion does not overwrite demo data
 - [ ] Demo subdomain or URL is stable and shareable (e.g. `demo.vigilafrica.dev`)
 - [ ] Demo environment setup documented — a contributor can stand it up independently from `CONTRIBUTING.md` or a dedicated `DEMO.md`
 - [ ] At least one screenshot committed to the repository showing the demo state

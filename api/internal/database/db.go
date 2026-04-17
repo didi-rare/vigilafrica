@@ -18,10 +18,17 @@ import (
 
 // Repository defines the data access methods for VigilAfrica.
 type Repository interface {
+	// Event methods
 	UpsertEvent(ctx context.Context, e models.Event, geoJSON string) error
 	ListEvents(ctx context.Context, filters EventFilters) ([]models.Event, int, error)
 	GetEventByID(ctx context.Context, id uuid.UUID) (*models.Event, error)
 	GetNearbyEvents(ctx context.Context, lat, lng float64, radiusKm float64, limit int) ([]models.Event, error)
+
+	// Ingestion run methods (ADR-011)
+	CreateIngestionRun(ctx context.Context, startedAt time.Time) (int64, error)
+	CompleteIngestionRun(ctx context.Context, id int64, status models.IngestionRunStatus, fetched, stored int, errMsg *string) error
+	GetLastIngestionRun(ctx context.Context) (*models.IngestionRun, error)
+
 	Close()
 }
 
