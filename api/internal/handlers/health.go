@@ -71,11 +71,9 @@ func (h *HealthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	statusCode := http.StatusOK
-	if resp.Status == "degraded" {
-		statusCode = http.StatusOK // Still 200 — degraded is informational, not an HTTP error
-	}
-	w.WriteHeader(statusCode)
+	// Always 200 — "degraded" is informational, not an HTTP error.
+	// Monitoring systems should inspect the JSON body for operational state.
+	w.WriteHeader(http.StatusOK)
 
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		slog.Error("health: failed to encode response", "err", err)

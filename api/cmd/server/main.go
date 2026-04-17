@@ -72,24 +72,22 @@ func main() {
 	eventHandler := handlers.NewEventHandler(repo)
 
 	// ── Router ────────────────────────────────────────────────────────────────
-	mux := http.NewServeMux()
-
-	// /health — exempt from rate limit and cache (monitoring must always respond)
-	mux.Handle("GET /health", healthHandler)
-
-	// /v1/events — rate limited + cached
-	mux.Handle("GET /v1/events",
+	// v1 sub-mux: all /v1/* routes go through rate limiting.
+	// /health is registered on the root mux so it is never rate-limited —
+	// uptime monitors and watchdogs must always be able to reach it.
+	v1Mux := http.NewServeMux()
+	v1Mux.Handle("GET /v1/events",
 		cache.CacheMiddleware(http.HandlerFunc(eventHandler.ListEvents)),
 	)
-	mux.HandleFunc("GET /v1/events/{id}", eventHandler.GetEventByID)
+	v1Mux.HandleFunc("GET /v1/events/{id}", eventHandler.GetEventByID)
+	v1Mux.HandleFunc("GET /v1/context", handlers.GetContext(repo, geoReader))
 
-	// /v1/context
-	mux.HandleFunc("GET /v1/context", handlers.GetContext(repo, geoReader))
+	mux := http.NewServeMux()
+	mux.Handle("GET /health", healthHandler)                               // exempt from rate limit
+	mux.Handle("/v1/", handlers.RateLimitMiddleware(v1Mux))                // rate-limited v1 routes
 
-	// Global middleware chain: CORS → rate limit → router
-	var globalHandler http.Handler = mux
-	globalHandler = handlers.RateLimitMiddleware(globalHandler)
-	globalHandler = handlers.CORSMiddleware(globalHandler)
+	// Global middleware chain: CORS wraps everything (health + v1)
+	globalHandler := handlers.CORSMiddleware(mux)
 
 	// ── HTTP server ───────────────────────────────────────────────────────────
 	port := os.Getenv("API_PORT")

@@ -1,6 +1,6 @@
 ---
 change_id: feat-v0.5-implementation
-status: implementing
+status: complete
 created_date: 2026-04-16
 author: Claude Code
 spec_ref: openspec/specs/vigilafrica/roadmap.md#v05--operational-prototype
@@ -23,7 +23,7 @@ root config files. No changes to `web/src/*`.
 - `api/internal/ingestor/alerter.go`
 - `api/internal/ingestor/scheduler.go`
 - `api/internal/handlers/middleware.go`
-- `api/db/seeds/sample_events_seed_dataset.sql`
+- `api/db/seeds/sample_events_nigeria.sql`
 
 ### Modified files
 - `api/internal/database/db.go` — extend Repository interface + pgRepo
@@ -31,7 +31,7 @@ root config files. No changes to `web/src/*`.
 - `api/internal/ingestor/eonet.go` — slog + run record tracking
 - `api/internal/handlers/health.go` — last_ingestion block
 - `api/cmd/server/main.go` — scheduler wiring + graceful shutdown
-- `api/go.mod` / `api/go.sum` — add gocron v2, fix go version to 1.26
+- `api/go.mod` — fix go version to 1.26; stdlib `time.Ticker` used for fixed-interval scheduling (no external scheduler dependency)
 - `.env.example` — new v0.5 env vars
 
 ## Traceability

@@ -5,7 +5,7 @@
 -- Geometry is stored as GeoJSON Points; PostGIS trigger enriches state_name automatically
 --
 -- Usage:
---   psql $DATABASE_URL -f api/db/seeds/sample_events_seed_dataset.sql
+--   psql $DATABASE_URL -f api/db/seeds/sample_events_nigeria.sql
 --
 -- Safe to run multiple times — uses ON CONFLICT (source_id) DO NOTHING
 

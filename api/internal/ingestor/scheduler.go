@@ -14,11 +14,11 @@ import (
 // StartScheduler launches a background goroutine that runs ingestion at a
 // configurable interval (F-012). Uses stdlib time.Ticker — no external deps.
 //
-// Default interval: 60 minutes, configurable via INGESTION_INTERVAL_MINUTES.
+// Default interval: 60 minutes, configurable via INGEST_INTERVAL_MIN.
 // The goroutine exits cleanly when ctx is cancelled (SIGTERM/SIGINT).
 func StartScheduler(ctx context.Context, repo database.Repository, alertCfg AlertConfig) {
 	intervalMin := 60
-	if v := os.Getenv("INGESTION_INTERVAL_MINUTES"); v != "" {
+	if v := os.Getenv("INGEST_INTERVAL_MIN"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			intervalMin = n
 		}

@@ -257,3 +257,34 @@
 .event-link:hover {
   color: var(--text-primary);
 }
+
+/* ── Ingestion Freshness Indicator (v0.5 — ADR-011) ──────────────────────── */
+
+.freshness-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-bottom: 8px;
+  border: 1px solid;
+}
+
+.freshness-banner--warn {
+  background: rgba(245, 158, 11, 0.08);
+  border-color: rgba(245, 158, 11, 0.3);
+  color: #fbbf24;
+}
+
+.freshness-banner--error {
+  background: rgba(244, 63, 94, 0.08);
+  border-color: rgba(244, 63, 94, 0.3);
+  color: #fb7185;
+}
+
+.freshness-icon {
+  flex-shrink: 0;
+  font-size: 1rem;
+}

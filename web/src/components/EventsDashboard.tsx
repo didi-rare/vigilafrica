@@ -1,8 +1,49 @@
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { fetchEvents, fetchContext } from '../api/events'
+import { fetchEvents, fetchContext, fetchHealth } from '../api/events'
 import { Map } from './Map'
 import './EventsDashboard.css'
+
+const STALENESS_THRESHOLD_HOURS = 2
+
+function FreshnessIndicator() {
+  const { data: health } = useQuery({
+    queryKey: ['health'],
+    queryFn: fetchHealth,
+    refetchInterval: 5 * 60 * 1000, // re-check every 5 minutes
+    staleTime: 60 * 1000,
+  })
+
+  if (!health?.last_ingestion?.completed_at) return null
+
+  const lastSuccess = health.last_ingestion.status === 'success'
+    ? new Date(health.last_ingestion.completed_at)
+    : null
+
+  const hoursStale = lastSuccess
+    ? (Date.now() - lastSuccess.getTime()) / (1000 * 60 * 60)
+    : null
+
+  const isStale = hoursStale !== null && hoursStale > STALENESS_THRESHOLD_HOURS
+  const isDegraded = health.status === 'degraded'
+
+  if (!isStale && !isDegraded) return null
+
+  return (
+    <div className={`freshness-banner ${isDegraded ? 'freshness-banner--error' : 'freshness-banner--warn'}`}
+      role="alert"
+      aria-live="polite"
+    >
+      <span className="freshness-icon" aria-hidden="true">
+        {isDegraded ? '⚠️' : '🕐'}
+      </span>
+      {isDegraded
+        ? 'Last ingestion run failed — data may be outdated. Check system logs.'
+        : `Data last updated ${Math.floor(hoursStale!)} hours ago — ingestion may be stalled.`
+      }
+    </div>
+  )
+}
 
 export function EventsDashboard() {
   const { data: eventsData, isLoading: eventsLoading, error: eventsError } = useQuery({
@@ -43,6 +84,8 @@ export function EventsDashboard() {
         <p className="section-subtitle">
           These events are continuously ingested from NASA EONET and automatically tagged with Nigerian administrative boundaries.
         </p>
+
+        <FreshnessIndicator />
 
         <div className="dashboard-layout">
           <div className="dashboard-sidebar">

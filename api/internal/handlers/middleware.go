@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"strconv"
@@ -36,22 +37,19 @@ func CORSMiddleware(next http.Handler) http.Handler {
 
 // ─── Rate Limiter ─────────────────────────────────────────────────────────────
 
-// rateLimiter implements a simple global token-bucket rate limiter.
-// Tokens refill at rpm/minute. All requests share a single bucket (global limit).
-type rateLimiter struct {
+// tokenBucket implements a per-client token-bucket rate limiter.
+// Tokens refill at rpm/minute.
+type tokenBucket struct {
 	mu       sync.Mutex
 	tokens   float64
 	maxToken float64
-	refillPS float64 // tokens per second
+	refillPS float64
 	lastTime time.Time
 }
 
-func newRateLimiter(rpm int) *rateLimiter {
-	if rpm <= 0 {
-		rpm = 60
-	}
+func newTokenBucket(rpm int) *tokenBucket {
 	rps := float64(rpm) / 60.0
-	return &rateLimiter{
+	return &tokenBucket{
 		tokens:   float64(rpm),
 		maxToken: float64(rpm),
 		refillPS: rps,
@@ -59,29 +57,91 @@ func newRateLimiter(rpm int) *rateLimiter {
 	}
 }
 
-func (rl *rateLimiter) allow() bool {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
+func (tb *tokenBucket) allow() bool {
+	tb.mu.Lock()
+	defer tb.mu.Unlock()
 
 	now := time.Now()
-	elapsed := now.Sub(rl.lastTime).Seconds()
-	rl.lastTime = now
+	elapsed := now.Sub(tb.lastTime).Seconds()
+	tb.lastTime = now
 
-	rl.tokens += elapsed * rl.refillPS
-	if rl.tokens > rl.maxToken {
-		rl.tokens = rl.maxToken
+	tb.tokens += elapsed * tb.refillPS
+	if tb.tokens > tb.maxToken {
+		tb.tokens = tb.maxToken
 	}
 
-	if rl.tokens >= 1 {
-		rl.tokens--
+	if tb.tokens >= 1 {
+		tb.tokens--
 		return true
 	}
 	return false
 }
 
-// RateLimitMiddleware wraps a handler with a token-bucket rate limiter.
-// The limit is read from RATE_LIMIT_RPM (default: 60 requests/min).
-// Returns HTTP 429 when the bucket is empty.
+// ipRateLimiter holds a per-IP token bucket. Buckets are created lazily on
+// first request from a given IP and kept for the lifetime of the process.
+type ipRateLimiter struct {
+	mu      sync.Mutex
+	rpm     int
+	buckets map[string]*tokenBucket
+}
+
+func newIPRateLimiter(rpm int) *ipRateLimiter {
+	if rpm <= 0 {
+		rpm = 60
+	}
+	return &ipRateLimiter{
+		rpm:     rpm,
+		buckets: make(map[string]*tokenBucket),
+	}
+}
+
+func (l *ipRateLimiter) bucketFor(ip string) *tokenBucket {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	tb, ok := l.buckets[ip]
+	if !ok {
+		tb = newTokenBucket(l.rpm)
+		l.buckets[ip] = tb
+	}
+	return tb
+}
+
+// clientIP extracts the client IP from the request. Prefers X-Forwarded-For
+// (first hop) when present — required behind reverse proxies like Caddy.
+func clientIP(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		// First entry is the originating client
+		for i := 0; i < len(xff); i++ {
+			if xff[i] == ',' {
+				return trimSpace(xff[:i])
+			}
+		}
+		return trimSpace(xff)
+	}
+	if xr := r.Header.Get("X-Real-IP"); xr != "" {
+		return trimSpace(xr)
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
+}
+
+func trimSpace(s string) string {
+	start, end := 0, len(s)
+	for start < end && (s[start] == ' ' || s[start] == '\t') {
+		start++
+	}
+	for end > start && (s[end-1] == ' ' || s[end-1] == '\t') {
+		end--
+	}
+	return s[start:end]
+}
+
+// RateLimitMiddleware wraps a handler with a per-IP token-bucket rate limiter.
+// The limit is read from RATE_LIMIT_RPM (default: 60 requests/min per IP).
+// Returns HTTP 429 when a client's bucket is empty.
 func RateLimitMiddleware(next http.Handler) http.Handler {
 	rpm := 60
 	if v := os.Getenv("RATE_LIMIT_RPM"); v != "" {
@@ -89,11 +149,12 @@ func RateLimitMiddleware(next http.Handler) http.Handler {
 			rpm = n
 		}
 	}
-	limiter := newRateLimiter(rpm)
-	slog.Info("rate limiter: initialised", "rpm", rpm)
+	limiter := newIPRateLimiter(rpm)
+	slog.Info("rate limiter: initialised", "rpm_per_ip", rpm)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !limiter.allow() {
+		ip := clientIP(r)
+		if !limiter.bucketFor(ip).allow() {
 			w.Header().Set("Content-Type", "application/json")
 			w.Header().Set("Retry-After", "1")
 			w.WriteHeader(http.StatusTooManyRequests)
@@ -122,16 +183,16 @@ type ResponseCache struct {
 }
 
 // NewResponseCache returns a cache with the given TTL.
-// TTL is read from EVENTS_CACHE_TTL_MINUTES (default: 10 minutes).
+// TTL is read from CACHE_TTL_SECONDS (default: 300 seconds).
 func NewResponseCache() *ResponseCache {
-	ttlMin := 10
-	if v := os.Getenv("EVENTS_CACHE_TTL_MINUTES"); v != "" {
+	ttlSec := 300
+	if v := os.Getenv("CACHE_TTL_SECONDS"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			ttlMin = n
+			ttlSec = n
 		}
 	}
-	ttl := time.Duration(ttlMin) * time.Minute
-	slog.Info("response cache: initialised", "ttl_minutes", ttlMin)
+	ttl := time.Duration(ttlSec) * time.Second
+	slog.Info("response cache: initialised", "ttl_seconds", ttlSec)
 	return &ResponseCache{
 		entries: make(map[string]*cacheEntry),
 		ttl:     ttl,

@@ -19,7 +19,7 @@
 - [x] Handlers: extend `health.go` — `last_ingestion` block + `degraded` status
 - [x] Handlers: create `middleware.go` — rate limiting, response caching, CORS
 - [x] Main: update `cmd/server/main.go` — wire scheduler + middleware + graceful shutdown
-- [x] Seeds: create `api/db/seeds/sample_events_seed_dataset.sql`
+- [x] Seeds: create `api/db/seeds/sample_events_nigeria.sql`
 - [x] Config: update `.env.example` with v0.5 env vars
 - [x] Fix go.mod version to `go 1.26` (ADR-008)
 - [x] Verify: `cd api && go build ./...` ✅ + `go vet ./...` ✅
