@@ -40,13 +40,12 @@ export interface EventsResponse {
   };
 }
 
-export async function fetchEvents(category?: EventCategory, stateName?: string): Promise<EventsResponse> {
-  // Use absolute URL since Vite proxy might not be configured yet, but usually we use relative
-  // Assuming API runs on 8080 locally if proxy fails, for now use relative URL assuming Vite proxy is configured.
+export async function fetchEvents(category?: EventCategory, stateName?: string, country?: string): Promise<EventsResponse> {
   const url = new URL('/v1/events', window.location.origin)
-  
+
   if (category) url.searchParams.set('category', category)
   if (stateName) url.searchParams.set('state', stateName)
+  if (country) url.searchParams.set('country', country)
 
   const res = await fetch(url.toString())
   if (!res.ok) {

@@ -13,6 +13,7 @@ import (
 
 type EventFilters struct {
 	Category string
+	Country  string
 	State    string
 	Status   string
 	Limit    int
@@ -32,9 +33,15 @@ func (r *pgRepo) ListEvents(ctx context.Context, filters EventFilters) ([]models
 		argID++
 	}
 
+	if filters.Country != "" {
+		conditions = append(conditions, fmt.Sprintf("country_name ILIKE $%d", argID))
+		args = append(args, filters.Country)
+		argID++
+	}
+
 	if filters.State != "" {
 		conditions = append(conditions, fmt.Sprintf("state_name ILIKE $%d", argID))
-		args = append(args, filters.State) // Exact match but case insensitive
+		args = append(args, filters.State)
 		argID++
 	}
 
