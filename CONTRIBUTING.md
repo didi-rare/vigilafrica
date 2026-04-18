@@ -106,6 +106,18 @@ Expected response:
 {"status":"ok","version":"0.5.0","last_ingestion":null}
 ```
 
+Admin boundary data (Nigeria + Ghana ADM1 regions) is loaded automatically by migration `000005` on first startup — no manual step required.
+
+Verify enrichment is working after the first ingestion run:
+
+```bash
+# Nigeria events — should have state_name populated
+curl "http://localhost:8080/v1/events?country=Nigeria" | jq '.data[0].state_name'
+
+# Ghana events — should have state_name populated
+curl "http://localhost:8080/v1/events?country=Ghana" | jq '.data[0].state_name'
+```
+
 ### 7. (Optional) Seed sample data
 
 If you want events without waiting for the scheduler to run:
@@ -158,14 +170,21 @@ vigilafrica/
 
 ## Development Workflow
 
+### Coding Standards
+
+All Go code in `api/` follows [`docs/standards/developers-go.md`](docs/standards/developers-go.md) — 11 numbered sections covering package layout, error handling, the repository pattern, HTTP handlers, concurrency, logging, testing, dependencies, and migrations. Reviewers cite specific rules (e.g. `§5.3`) in `/openspec-review` findings, so it's worth reading top-to-bottom before your first PR.
+
+The document is a **living standard**: if you hit a case the rules don't cover, or disagree with one, open a PR updating `developers-go.md` alongside your code change.
+
 ### Branches
 
 | Branch | Purpose |
 |---|---|
-| `main` | Production-ready, protected |
-| `development` | Integration branch — merge feature branches here |
+| `releases` | Production environment — protected, merge from `main` only |
+| `main` | Staging environment — integration testing before promotion to `releases` |
+| `development` | Active development — merge feature and fix branches here |
 | `feat/*` | Feature branches — branch from `development` |
-| `fix/*` | Bug fix branches |
+| `fix/*` | Bug fix branches — branch from `development` |
 
 ### Typical flow
 
@@ -176,6 +195,9 @@ git checkout -b feat/my-feature
 # ... make changes ...
 git push -u origin feat/my-feature
 # open PR targeting development
+
+# When development is stable → PR to main (staging)
+# When main is verified in staging → PR to releases (production)
 ```
 
 ### Sentinel CI Gate
@@ -223,7 +245,7 @@ Key documents:
 
 ## Pull Request Guidelines
 
-1. **Target `development`**, not `main`
+1. **Target `development`** for feature and fix PRs — not `main` or `releases`
 2. **One feature per PR** — keep diffs reviewable
 3. **Include a change record** in `openspec/changes/` for any `api/internal/*` or `api/cmd/*` changes
 4. **Tests must pass** — `go test ./...` and `go vet ./...` clean

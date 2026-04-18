@@ -11,8 +11,9 @@ import (
 	"vigilafrica/api/internal/models"
 )
 
-// StartScheduler launches a background goroutine that runs ingestion at a
-// configurable interval (F-012). Uses stdlib time.Ticker — no external deps.
+// StartScheduler launches a background goroutine that runs ingestion for all
+// countries in DefaultCountries at a configurable interval (F-012).
+// Uses stdlib time.Ticker — no external deps.
 //
 // Default interval: 60 minutes, configurable via INGEST_INTERVAL_MIN.
 // The goroutine exits cleanly when ctx is cancelled (SIGTERM/SIGINT).
@@ -25,12 +26,15 @@ func StartScheduler(ctx context.Context, repo database.Repository, alertCfg Aler
 	}
 
 	interval := time.Duration(intervalMin) * time.Minute
-	slog.Info("scheduler: starting", "interval_minutes", intervalMin)
+	slog.Info("scheduler: starting",
+		"interval_minutes", intervalMin,
+		"countries", len(DefaultCountries),
+	)
 
 	go func() {
 		// Run once immediately on startup so there is data on first boot
 		slog.Info("scheduler: running initial ingestion on startup")
-		runScheduledIngest(ctx, repo, alertCfg)
+		runAllCountries(ctx, repo, alertCfg)
 
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
@@ -42,16 +46,24 @@ func StartScheduler(ctx context.Context, repo database.Repository, alertCfg Aler
 				return
 			case <-ticker.C:
 				slog.Info("scheduler: tick — starting scheduled ingestion")
-				runScheduledIngest(ctx, repo, alertCfg)
+				runAllCountries(ctx, repo, alertCfg)
 			}
 		}
 	}()
 }
 
-// runScheduledIngest executes a single ingestion cycle and fires a Resend
-// failure alert if the run fails.
-func runScheduledIngest(ctx context.Context, repo database.Repository, alertCfg AlertConfig) {
-	result, err := Ingest(ctx, repo)
+// runAllCountries iterates over DefaultCountries and ingests each in sequence.
+// A failure for one country is logged and alerted but does not abort the others.
+func runAllCountries(ctx context.Context, repo database.Repository, alertCfg AlertConfig) {
+	for _, country := range DefaultCountries {
+		runScheduledIngest(ctx, repo, alertCfg, country)
+	}
+}
+
+// runScheduledIngest executes a single ingestion cycle for one country and fires
+// a Resend failure alert if the run fails.
+func runScheduledIngest(ctx context.Context, repo database.Repository, alertCfg AlertConfig, country CountryConfig) {
+	result, err := Ingest(ctx, repo, country)
 	if err == nil {
 		return
 	}
