@@ -16,9 +16,9 @@
 | v0.2      | First real data flow         | F-002, F-003, F-004                   | ✅ Complete |
 | v0.3      | Localization engine          | F-005, F-006, F-007, F-010, F-016    | ✅ Complete |
 | v0.4      | Useful prototype             | F-008, F-011, F-014, F-015, F-017    | ✅ Complete |
-| v0.5      | Operational prototype        | F-012, F-013 + operational hygiene   | 🔄 Active |
-| v0.6      | Country expansion model      | Process template (no new F-IDs)       | 🔴 Planned |
-| v0.7      | Second country stable        | Enrichment quality validation         | 🔴 Planned |
+| v0.5      | Operational prototype        | F-012, F-013 + operational hygiene   | ✅ Complete |
+| v0.6      | Country expansion model      | Process template (no new F-IDs)       | ✅ Complete |
+| v0.7      | Second country stable        | Enrichment quality validation         | 🔄 Active |
 | v0.8      | Pre-demo setup               | Demo environment + curated seed data  | 🔴 Planned |
 | v1.0      | Credible public launch       | Quality gate (no new F-IDs)           | 🔴 Planned |
 
