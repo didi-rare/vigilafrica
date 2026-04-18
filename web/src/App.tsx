@@ -48,7 +48,7 @@ const STEPS = [
   {
     icon: <Satellite size={20} />,
     title: 'Poll',
-    desc: 'Fetches natural event data from NASA\u2019s EONET feed \u2014 floods and wildfires, filtered to Nigeria.',
+    desc: 'Fetches natural event data from NASA\u2019s EONET feed \u2014 floods and wildfires, filtered to Nigeria and Ghana.',
   },
   {
     icon: <Map size={20} />,
@@ -75,7 +75,7 @@ function App() {
       <div id="app">
       {/* ── Prototype Banner ── */}
       <div id="prototype-banner" className="prototype-banner" role="banner" aria-label="Project status">
-        🛰️ Useful Prototype — v0.4 complete · v0.5 Operational Prototype active
+        🛰️ Active Development — v0.6 complete · v0.7 Second Country Stable active
       </div>
 
       {/* ── Navigation ── */}
@@ -118,7 +118,7 @@ function App() {
                   <p className="hero-desc">
                     VigilAfrica translates raw NASA satellite event data into local African context &mdash;
                     showing floods and wildfires by country and state, not just coordinates.
-                    Open-source. Nigeria first.
+                    Open-source. Nigeria and Ghana live.
                   </p>
 
                   <div className="hero-cta">
@@ -195,13 +195,13 @@ function App() {
                     </div>
 
                     <h2 id="status-heading" className="section-title" style={{ marginBottom: '12px' }}>
-                      Building in the open — Nigeria first
+                      Building in the open — Nigeria &amp; Ghana live
                     </h2>
 
                     <p>
-                      VigilAfrica is being built milestone by milestone. The current focus (**v0.5**) is
-                      the Operational Prototype — automated ingestion, deduplication, and production
-                      readiness. v0.1 through v0.4 are complete.
+                      VigilAfrica is being built milestone by milestone. v0.6 (Country Expansion Model)
+                      is complete — Ghana is live alongside Nigeria. **v0.7** (Second Country Stable)
+                      is active: enrichment quality validation and full Ghana experience in progress.
                     </p>
 
                     <nav aria-label="Milestone progress">

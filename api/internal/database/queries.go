@@ -209,14 +209,14 @@ func (r *pgRepo) GetNearbyEvents(ctx context.Context, lat, lng float64, radiusKm
 
 // CreateIngestionRun inserts a new run record with status=running and returns its ID.
 // Called at the start of every ingestion cycle.
-func (r *pgRepo) CreateIngestionRun(ctx context.Context, startedAt time.Time) (int64, error) {
+func (r *pgRepo) CreateIngestionRun(ctx context.Context, startedAt time.Time, countryCode string) (int64, error) {
 	query := `
-		INSERT INTO ingestion_runs (started_at, status)
-		VALUES ($1, 'running')
+		INSERT INTO ingestion_runs (started_at, status, country_code)
+		VALUES ($1, 'running', $2)
 		RETURNING id
 	`
 	var id int64
-	err := r.pool.QueryRow(ctx, query, startedAt).Scan(&id)
+	err := r.pool.QueryRow(ctx, query, startedAt, countryCode).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("failed to create ingestion run: %w", err)
 	}
@@ -243,11 +243,11 @@ func (r *pgRepo) CompleteIngestionRun(ctx context.Context, id int64, status mode
 	return nil
 }
 
-// GetLastIngestionRun returns the most recent ingestion run record, or nil if none exist.
-// Used by: /health endpoint, staleness watchdog.
+// GetLastIngestionRun returns the most recent ingestion run record across all countries.
+// Used by: staleness watchdog, failure alerter.
 func (r *pgRepo) GetLastIngestionRun(ctx context.Context) (*models.IngestionRun, error) {
 	query := `
-		SELECT id, started_at, completed_at, status, events_fetched, events_stored, error, created_at
+		SELECT id, country_code, started_at, completed_at, status, events_fetched, events_stored, error, created_at
 		FROM ingestion_runs
 		ORDER BY started_at DESC
 		LIMIT 1
@@ -255,6 +255,7 @@ func (r *pgRepo) GetLastIngestionRun(ctx context.Context) (*models.IngestionRun,
 	var run models.IngestionRun
 	err := r.pool.QueryRow(ctx, query).Scan(
 		&run.ID,
+		&run.CountryCode,
 		&run.StartedAt,
 		&run.CompletedAt,
 		&run.Status,
@@ -270,5 +271,139 @@ func (r *pgRepo) GetLastIngestionRun(ctx context.Context) (*models.IngestionRun,
 		return nil, fmt.Errorf("failed to get last ingestion run: %w", err)
 	}
 	return &run, nil
+}
+
+// GetLastIngestionRunAllCountries returns the most recent run per country.
+// Used by: /health last_ingestion_by_country map.
+func (r *pgRepo) GetLastIngestionRunAllCountries(ctx context.Context) (map[string]*models.IngestionRun, error) {
+	query := `
+		SELECT DISTINCT ON (country_code)
+			id, country_code, started_at, completed_at, status, events_fetched, events_stored, error, created_at
+		FROM ingestion_runs
+		ORDER BY country_code, started_at DESC
+	`
+	rows, err := r.pool.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query runs by country: %w", err)
+	}
+	defer rows.Close()
+
+	result := make(map[string]*models.IngestionRun)
+	for rows.Next() {
+		var run models.IngestionRun
+		if err := rows.Scan(
+			&run.ID,
+			&run.CountryCode,
+			&run.StartedAt,
+			&run.CompletedAt,
+			&run.Status,
+			&run.EventsFetched,
+			&run.EventsStored,
+			&run.Error,
+			&run.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan ingestion run row: %w", err)
+		}
+		cp := run
+		result[cp.CountryCode] = &cp
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error in GetLastIngestionRunAllCountries: %w", err)
+	}
+	return result, nil
+}
+
+// EnrichmentStat holds per-country enrichment quality metrics.
+type EnrichmentStat struct {
+	CountryName    *string `json:"country_name"`
+	TotalEvents    int     `json:"total_events"`
+	EnrichedEvents int     `json:"enriched_events"`
+	SuccessRatePct float64 `json:"success_rate_pct"`
+}
+
+// GetEnrichmentStats returns per-country enrichment success rates.
+// Used by: GET /v1/enrichment-stats
+func (r *pgRepo) GetEnrichmentStats(ctx context.Context) ([]EnrichmentStat, error) {
+	query := `
+		SELECT
+			country_name,
+			COUNT(*)                                                   AS total_events,
+			COUNT(*) FILTER (WHERE state_name IS NOT NULL)             AS enriched_events,
+			ROUND(
+				COUNT(*) FILTER (WHERE state_name IS NOT NULL)::numeric /
+				NULLIF(COUNT(*), 0) * 100, 1
+			)                                                          AS success_rate_pct
+		FROM events
+		GROUP BY country_name
+		ORDER BY country_name NULLS LAST
+	`
+	rows, err := r.pool.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query enrichment stats: %w", err)
+	}
+	defer rows.Close()
+
+	var stats []EnrichmentStat
+	for rows.Next() {
+		var s EnrichmentStat
+		if err := rows.Scan(&s.CountryName, &s.TotalEvents, &s.EnrichedEvents, &s.SuccessRatePct); err != nil {
+			return nil, fmt.Errorf("failed to scan enrichment stat row: %w", err)
+		}
+		stats = append(stats, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error in GetEnrichmentStats: %w", err)
+	}
+	if stats == nil {
+		stats = make([]EnrichmentStat, 0)
+	}
+	return stats, nil
+}
+
+// GetDistinctStatesByCountry returns distinct state names for a given country.
+// Used by: GET /v1/states
+func (r *pgRepo) GetDistinctStatesByCountry(ctx context.Context, country string) ([]string, error) {
+	var query string
+	var args []interface{}
+
+	if country != "" {
+		query = `
+			SELECT DISTINCT state_name
+			FROM events
+			WHERE country_name ILIKE $1
+			  AND state_name IS NOT NULL
+			ORDER BY state_name
+		`
+		args = append(args, country)
+	} else {
+		query = `
+			SELECT DISTINCT state_name
+			FROM events
+			WHERE state_name IS NOT NULL
+			ORDER BY state_name
+		`
+	}
+
+	rows, err := r.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query distinct states: %w", err)
+	}
+	defer rows.Close()
+
+	var states []string
+	for rows.Next() {
+		var s string
+		if err := rows.Scan(&s); err != nil {
+			return nil, fmt.Errorf("failed to scan state row: %w", err)
+		}
+		states = append(states, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error in GetDistinctStatesByCountry: %w", err)
+	}
+	if states == nil {
+		states = make([]string, 0)
+	}
+	return states, nil
 }
 

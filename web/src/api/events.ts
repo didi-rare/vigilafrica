@@ -95,3 +95,29 @@ export async function fetchHealth(): Promise<HealthResponse> {
   }
   return res.json()
 }
+
+// ── Query key factories (§5.2) ───────────────────────────────────────────────
+
+export const eventKeys = {
+  all:  ['events'] as const,
+  list: (country: string, category: string, state: string) =>
+    [...eventKeys.all, 'list', { country, category, state }] as const,
+}
+
+export const stateKeys = {
+  list: (country: string) => ['states', country] as const,
+}
+
+// ── States endpoint (v0.7) ───────────────────────────────────────────────────
+
+export async function fetchStates(country?: string): Promise<string[]> {
+  const url = new URL('/v1/states', window.location.origin)
+  if (country) url.searchParams.set('country', country)
+
+  const res = await fetch(url.toString())
+  if (!res.ok) {
+    throw new Error('Failed to fetch states')
+  }
+  const data: { states: string[] } = await res.json()
+  return data.states
+}

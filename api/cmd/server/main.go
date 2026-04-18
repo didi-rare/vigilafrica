@@ -18,7 +18,7 @@ import (
 
 // version is injected at build time via:
 // go build -ldflags "-X main.version=0.5.0" ./cmd/server/
-var version = "0.5.0"
+var version = "0.7.0"
 
 func main() {
 	// ── Structured JSON logging ───────────────────────────────────────────────
@@ -75,12 +75,16 @@ func main() {
 	// v1 sub-mux: all /v1/* routes go through rate limiting.
 	// /health is registered on the root mux so it is never rate-limited —
 	// uptime monitors and watchdogs must always be able to reach it.
+	enrichmentStatsHandler := handlers.NewEnrichmentStatsHandler(repo)
+
 	v1Mux := http.NewServeMux()
 	v1Mux.Handle("GET /v1/events",
 		cache.CacheMiddleware(http.HandlerFunc(eventHandler.ListEvents)),
 	)
 	v1Mux.HandleFunc("GET /v1/events/{id}", eventHandler.GetEventByID)
 	v1Mux.HandleFunc("GET /v1/context", handlers.GetContext(repo, geoReader))
+	v1Mux.Handle("GET /v1/enrichment-stats", enrichmentStatsHandler)
+	v1Mux.HandleFunc("GET /v1/states", handlers.StatesHandler(repo))
 
 	mux := http.NewServeMux()
 	mux.Handle("GET /health", healthHandler)                               // exempt from rate limit

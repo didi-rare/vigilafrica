@@ -44,7 +44,7 @@ type IngestResult struct {
 func Ingest(ctx context.Context, repo database.Repository, country CountryConfig) (*IngestResult, error) {
 	startedAt := time.Now()
 
-	runID, err := repo.CreateIngestionRun(ctx, startedAt)
+	runID, err := repo.CreateIngestionRun(ctx, startedAt, country.Code)
 	if err != nil {
 		slog.Error("ingestion: failed to create run record", "country", country.Code, "err", err)
 		runID = 0
