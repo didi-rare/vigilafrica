@@ -170,6 +170,12 @@ vigilafrica/
 
 ## Development Workflow
 
+### Coding Standards
+
+All Go code in `api/` follows [`docs/standards/developers-go.md`](docs/standards/developers-go.md) — 11 numbered sections covering package layout, error handling, the repository pattern, HTTP handlers, concurrency, logging, testing, dependencies, and migrations. Reviewers cite specific rules (e.g. `§5.3`) in `/openspec-review` findings, so it's worth reading top-to-bottom before your first PR.
+
+The document is a **living standard**: if you hit a case the rules don't cover, or disagree with one, open a PR updating `developers-go.md` alongside your code change.
+
 ### Branches
 
 | Branch | Purpose |
