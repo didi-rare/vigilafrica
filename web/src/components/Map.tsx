@@ -22,8 +22,10 @@ export function Map({ events, center = [8.6753, 9.082], zoom = 5 }: MapProps) {
   const map = useRef<maplibregl.Map | null>(null)
   const markers = useRef<maplibregl.Marker[]>([])
   const [isLoaded, setIsLoaded] = useState(false)
+  const initialCenter = useRef(center)
+  const initialZoom = useRef(zoom)
 
-  // Initialization - Run only once
+  // Initialization - Run only once; uses refs for initial center/zoom to satisfy exhaustive-deps
   useEffect(() => {
     if (!mapContainer.current) return
 
@@ -58,8 +60,8 @@ export function Map({ events, center = [8.6753, 9.082], zoom = 5 }: MapProps) {
           }
         ]
       },
-      center: center,
-      zoom: zoom
+      center: initialCenter.current,
+      zoom: initialZoom.current
     })
 
     map.current.on('load', () => {

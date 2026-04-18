@@ -1,32 +1,39 @@
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { fetchEvents, fetchContext, fetchHealth } from '../api/events'
+import type { HealthResponse } from '../api/events'
 import { Map } from './Map'
 import './EventsDashboard.css'
 
 const STALENESS_THRESHOLD_HOURS = 2
 
-function FreshnessIndicator() {
-  const { data: health } = useQuery({
-    queryKey: ['health'],
-    queryFn: fetchHealth,
-    refetchInterval: 5 * 60 * 1000, // re-check every 5 minutes
-    staleTime: 60 * 1000,
-  })
-
+// Module-level selector — Date.now() is called outside React render
+function selectFreshness(health: HealthResponse) {
   if (!health?.last_ingestion?.completed_at) return null
-
   const lastSuccess = health.last_ingestion.status === 'success'
     ? new Date(health.last_ingestion.completed_at)
     : null
-
   const hoursStale = lastSuccess
     ? (Date.now() - lastSuccess.getTime()) / (1000 * 60 * 60)
     : null
+  return {
+    hoursStale,
+    isStale: hoursStale !== null && hoursStale > STALENESS_THRESHOLD_HOURS,
+    isDegraded: health.status === 'degraded',
+  }
+}
 
-  const isStale = hoursStale !== null && hoursStale > STALENESS_THRESHOLD_HOURS
-  const isDegraded = health.status === 'degraded'
+function FreshnessIndicator() {
+  const { data } = useQuery({
+    queryKey: ['health'],
+    queryFn: fetchHealth,
+    refetchInterval: 5 * 60 * 1000,
+    staleTime: 60 * 1000,
+    select: selectFreshness,
+  })
 
+  if (!data) return null
+  const { hoursStale, isStale, isDegraded } = data
   if (!isStale && !isDegraded) return null
 
   return (
