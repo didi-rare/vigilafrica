@@ -49,3 +49,36 @@ func TestStalenessReferenceTime_ReturnsFalseWhenNoRunsExist(t *testing.T) {
 		t.Fatal("Expected no reference time when there are no runs")
 	}
 }
+
+func TestShouldSendStalenessAlert_OnlyAlertsOncePerReferenceTime(t *testing.T) {
+	threshold := 2 * time.Hour
+	referenceTime := time.Now().Add(-3 * time.Hour)
+
+	if !shouldSendStalenessAlert(referenceTime, threshold, time.Time{}) {
+		t.Fatal("Expected stale reference time to trigger an alert")
+	}
+
+	if shouldSendStalenessAlert(referenceTime, threshold, referenceTime) {
+		t.Fatal("Expected duplicate alert for the same stale reference time to be suppressed")
+	}
+}
+
+func TestShouldSendStalenessAlert_AllowsFreshReferenceTimesToResetSuppression(t *testing.T) {
+	threshold := 2 * time.Hour
+	lastAlertReference := time.Now().Add(-4 * time.Hour)
+	freshReferenceTime := time.Now().Add(-30 * time.Minute)
+
+	if shouldSendStalenessAlert(freshReferenceTime, threshold, lastAlertReference) {
+		t.Fatal("Expected fresh reference time not to trigger an alert")
+	}
+}
+
+func TestShouldSendStalenessAlert_AllowsNewStaleReferenceTimeAfterPreviousAlert(t *testing.T) {
+	threshold := 2 * time.Hour
+	lastAlertReference := time.Now().Add(-4 * time.Hour)
+	newReferenceTime := time.Now().Add(-3 * time.Hour)
+
+	if !shouldSendStalenessAlert(newReferenceTime, threshold, lastAlertReference) {
+		t.Fatal("Expected a new stale reference time to trigger a fresh alert")
+	}
+}

@@ -88,9 +88,9 @@ func SendFailureAlert(cfg AlertConfig, run *models.IngestionRun) {
 
 // SendStalenessAlert sends an email when no successful ingestion has occurred
 // within the configured threshold window.
-func SendStalenessAlert(cfg AlertConfig, lastSuccessAt time.Time, hoursStale int) {
+func SendStalenessAlert(cfg AlertConfig, lastSuccessAt time.Time, hoursStale int) error {
 	if cfg.ResendAPIKey == "" || cfg.AlertEmailTo == "" {
-		return
+		return nil
 	}
 
 	subject := fmt.Sprintf("[VigilAfrica] No successful ingestion in %d hours", hoursStale)
@@ -109,13 +109,15 @@ func SendStalenessAlert(cfg AlertConfig, lastSuccessAt time.Time, hoursStale int
 
 	if err := sendEmail(cfg, subject, body); err != nil {
 		slog.Error("alerter: failed to send staleness alert", "err", err)
-	} else {
-		slog.Warn("alerter: staleness alert sent",
-			"last_success_at", lastSuccessAt.Format(time.RFC3339),
-			"hours_stale", hoursStale,
-			"to", cfg.AlertEmailTo,
-		)
+		return err
 	}
+
+	slog.Warn("alerter: staleness alert sent",
+		"last_success_at", lastSuccessAt.Format(time.RFC3339),
+		"hours_stale", hoursStale,
+		"to", cfg.AlertEmailTo,
+	)
+	return nil
 }
 
 // sendEmail sends a single email via the Resend API.
@@ -171,6 +173,18 @@ func stalenessReferenceTime(lastSuccessRun, firstRun *models.IngestionRun) (time
 	return time.Time{}, false
 }
 
+func shouldSendStalenessAlert(referenceTime time.Time, threshold time.Duration, lastAlertReference time.Time) bool {
+	if time.Since(referenceTime) <= threshold {
+		return false
+	}
+
+	if !lastAlertReference.IsZero() && lastAlertReference.Equal(referenceTime) {
+		return false
+	}
+
+	return true
+}
+
 // StartStalenessWatchdog launches a goroutine that periodically checks whether
 // a successful ingestion has occurred within the threshold window.
 // If stale, it fires a Resend alert. The goroutine exits when ctx is cancelled.
@@ -191,6 +205,7 @@ func StartStalenessWatchdog(ctx context.Context, repo database.Repository, cfg A
 	go func() {
 		ticker := time.NewTicker(checkInterval)
 		defer ticker.Stop()
+		var lastAlertReference time.Time
 
 		for {
 			select {
@@ -219,9 +234,16 @@ func StartStalenessWatchdog(ctx context.Context, repo database.Repository, cfg A
 					continue
 				}
 
-				if time.Since(referenceTime) > threshold {
-					hoursStale := int(time.Since(referenceTime).Hours())
-					SendStalenessAlert(cfg, referenceTime, hoursStale)
+				if !shouldSendStalenessAlert(referenceTime, threshold, lastAlertReference) {
+					if time.Since(referenceTime) <= threshold {
+						lastAlertReference = time.Time{}
+					}
+					continue
+				}
+
+				hoursStale := int(time.Since(referenceTime).Hours())
+				if err := SendStalenessAlert(cfg, referenceTime, hoursStale); err == nil {
+					lastAlertReference = referenceTime
 				}
 			}
 		}

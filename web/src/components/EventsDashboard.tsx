@@ -24,17 +24,30 @@ const COUNTRY_CENTERS: Record<SupportedCountry, [number, number]> = {
 
 // Module-level selector — Date.now() is called outside React render
 function selectFreshness(health: HealthResponse) {
-  if (!health?.last_ingestion?.completed_at) return null
-  const lastSuccess = health.last_ingestion.status === 'success'
-    ? new Date(health.last_ingestion.completed_at)
+  const completedAt = health?.last_ingestion?.completed_at
+  const lastSuccess = health?.last_ingestion?.status === 'success' && completedAt
+    ? new Date(completedAt)
     : null
   const hoursStale = lastSuccess
     ? (Date.now() - lastSuccess.getTime()) / (1000 * 60 * 60)
     : null
+  const isStale = hoursStale !== null && hoursStale > STALENESS_THRESHOLD_HOURS
+  const isDegraded = health.status === 'degraded'
+
+  let message: string | null = null
+  if (isDegraded) {
+    message = health.last_ingestion?.status === 'failure'
+      ? 'Last ingestion run failed — data may be outdated. Check system logs.'
+      : 'One or more country ingestion runs failed — some regional data may be outdated.'
+  } else if (isStale) {
+    message = `Data last updated ${Math.floor(hoursStale!)} hours ago — ingestion may be stalled.`
+  }
+
   return {
     hoursStale,
-    isStale: hoursStale !== null && hoursStale > STALENESS_THRESHOLD_HOURS,
-    isDegraded: health.status === 'degraded',
+    isStale,
+    isDegraded,
+    message,
   }
 }
 
@@ -47,9 +60,8 @@ function FreshnessIndicator() {
     select: selectFreshness,
   })
 
-  if (!data) return null
-  const { hoursStale, isStale, isDegraded } = data
-  if (!isStale && !isDegraded) return null
+  if (!data?.message) return null
+  const { isDegraded, message } = data
 
   return (
     <div className={`freshness-banner ${isDegraded ? 'freshness-banner--error' : 'freshness-banner--warn'}`}
@@ -59,10 +71,7 @@ function FreshnessIndicator() {
       <span className="freshness-icon" aria-hidden="true">
         {isDegraded ? '⚠️' : '🕐'}
       </span>
-      {isDegraded
-        ? 'Last ingestion run failed — data may be outdated. Check system logs.'
-        : `Data last updated ${Math.floor(hoursStale!)} hours ago — ingestion may be stalled.`
-      }
+      {message}
     </div>
   )
 }
@@ -291,4 +300,5 @@ export function EventsDashboard() {
     </section>
   )
 }
+
 
