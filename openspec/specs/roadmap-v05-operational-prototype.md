@@ -111,7 +111,7 @@ In-memory cache for `GET /v1/events` using a simple `sync.Map` with TTL:
 
 | Variable | Required | Description |
 |---|---|---|
-| `CORS_ORIGIN` | Yes | Allowed origin (e.g. `https://vigilafrica.vercel.app`) |
+| `CORS_ORIGIN` | Yes | Allowed origin (e.g. `https://vigilafrica.org` or `https://staging.vigilafrica.org`) |
 
 ### Seed Dataset
 
@@ -145,7 +145,7 @@ RATE_LIMIT_RPM=60
 CACHE_TTL_SECONDS=300
 
 # CORS
-CORS_ORIGIN=https://your-vercel-domain.vercel.app
+CORS_ORIGIN=https://vigilafrica.org
 ```
 
 ---

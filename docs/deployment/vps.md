@@ -32,7 +32,7 @@ Internet ─┼─► Caddy :443 ──► Go API :8080 ──► Postgres :5432
           │                                              │
           └──────────────────────────────────────────────┘
 
-Frontend (Vercel) ── fetch() ──► https://api.vigilafrica.io
+Frontend (Vercel) ── fetch() ──► https://api.vigilafrica.org
 ```
 
 - **Caddy** terminates TLS, serves a free Let's Encrypt cert, and proxies to the API container.

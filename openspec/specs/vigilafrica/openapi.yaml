@@ -13,9 +13,9 @@ info:
 servers:
   - url: http://localhost:8080
     description: Local Development
-  - url: https://api-staging.vigilafrica.io
+  - url: https://api-staging.vigilafrica.org
     description: Staging Environment
-  - url: https://api.vigilafrica.io
+  - url: https://api.vigilafrica.org
     description: Production Environment
 
 paths:

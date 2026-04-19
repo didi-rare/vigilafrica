@@ -236,7 +236,7 @@ These are blockers that must be resolved before v0.1 development begins. They ar
 **Acceptance criteria** (all must pass):
 - [ ] Demo deployment is separate from production — own Docker Compose config, own database, own Vercel project or preview URL
 - [ ] Demo database seeded with curated static data from `api/db/seeds/sample_events_nigeria.sql` (extended at this milestone to include second country events) — live ingestion does not overwrite demo data
-- [ ] Demo subdomain or URL is stable and shareable (e.g. `demo.vigilafrica.dev`)
+- [ ] Demo subdomain or URL is stable and shareable (e.g. `demo.vigilafrica.org`)
 - [ ] Demo environment setup documented — a contributor can stand it up independently from `CONTRIBUTING.md` or a dedicated `DEMO.md`
 - [ ] At least one screenshot committed to the repository showing the demo state
 - [ ] 30-second demo GIF committed to the repository

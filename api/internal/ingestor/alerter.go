@@ -30,7 +30,7 @@ type AlertConfig struct {
 func LoadAlertConfig() (AlertConfig, bool) {
 	fromEmail := os.Getenv("ALERT_FROM_EMAIL")
 	if fromEmail == "" {
-		fromEmail = "VigilAfrica Alerts <alerts@vigilafrica.dev>"
+		fromEmail = "VigilAfrica Alerts <alerts@vigilafrica.org>"
 	}
 	cfg := AlertConfig{
 		ResendAPIKey:        os.Getenv("RESEND_API_KEY"),
