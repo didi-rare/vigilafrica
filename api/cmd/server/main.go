@@ -70,13 +70,12 @@ func main() {
 	// ── Handlers ──────────────────────────────────────────────────────────────
 	healthHandler := handlers.NewHealthHandler(version, repo)
 	eventHandler := handlers.NewEventHandler(repo)
+	enrichmentStatsHandler := handlers.NewEnrichmentStatsHandler(repo)
 
 	// ── Router ────────────────────────────────────────────────────────────────
 	// v1 sub-mux: all /v1/* routes go through rate limiting.
-	// /health is registered on the root mux so it is never rate-limited —
-	// uptime monitors and watchdogs must always be able to reach it.
-	enrichmentStatsHandler := handlers.NewEnrichmentStatsHandler(repo)
-
+	// /health and local API docs are registered on the root mux so they are never rate-limited —
+	// uptime monitors and local manual testing must always be able to reach them.
 	v1Mux := http.NewServeMux()
 	v1Mux.Handle("GET /v1/events",
 		cache.CacheMiddleware(http.HandlerFunc(eventHandler.ListEvents)),
@@ -87,10 +86,13 @@ func main() {
 	v1Mux.HandleFunc("GET /v1/states", handlers.StatesHandler(repo))
 
 	mux := http.NewServeMux()
-	mux.Handle("GET /health", healthHandler)                               // exempt from rate limit
-	mux.Handle("/v1/", handlers.RateLimitMiddleware(v1Mux))                // rate-limited v1 routes
+	mux.Handle("GET /health", healthHandler)                       // exempt from rate limit
+	mux.Handle("GET /openapi.yaml", handlers.OpenAPISpecHandler()) // local docs/testing
+	mux.Handle("GET /docs", handlers.SwaggerUIHandler())           // local docs/testing
+	mux.Handle("GET /docs/", handlers.SwaggerUIHandler())          // local docs/testing
+	mux.Handle("/v1/", handlers.RateLimitMiddleware(v1Mux))        // rate-limited v1 routes
 
-	// Global middleware chain: CORS wraps everything (health + v1)
+	// Global middleware chain: CORS wraps everything (health + v1 + docs)
 	globalHandler := handlers.CORSMiddleware(mux)
 
 	// ── HTTP server ───────────────────────────────────────────────────────────

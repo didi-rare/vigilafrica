@@ -50,56 +50,106 @@
 
 /* Markers */
 .map-marker {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  border: 2px solid #fff;
-  cursor: pointer;
   position: relative;
+  display: inline-flex;
+  width: 40px;
+  height: 52px;
+  align-items: flex-start;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
 }
 
-.pulse-fire {
-  background: var(--color-fire);
-  box-shadow: 0 0 15px var(--color-fire);
-}
-
-.pulse-fire::after {
-  content: '';
+.map-marker__pulse {
   position: absolute;
-  top: -2px;
-  left: -2px;
-  right: -2px;
-  bottom: -2px;
-  border-radius: 50%;
-  border: 2px solid var(--color-fire);
-  animation: radar-pulse-fire 2s infinite;
+  top: 3px;
+  width: 38px;
+  height: 38px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--marker-glow) 28%, transparent);
+  filter: blur(12px);
+  opacity: 0.9;
+  animation: marker-pulse 2.6s ease-out infinite;
 }
 
-.pulse-flood {
-  background: var(--color-flood);
-  box-shadow: 0 0 15px var(--color-flood);
+.map-marker__badge {
+  position: relative;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 2px solid rgba(255, 255, 255, 0.95);
+  background: linear-gradient(180deg, var(--marker-bg-top), var(--marker-bg-bottom));
+  box-shadow:
+    0 10px 20px rgba(0, 0, 0, 0.3),
+    0 0 18px color-mix(in srgb, var(--marker-glow) 55%, transparent);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-.pulse-flood::after {
-  content: '';
+.map-marker:hover .map-marker__badge {
+  transform: translateY(-1px) scale(1.05);
+  box-shadow:
+    0 14px 26px rgba(0, 0, 0, 0.34),
+    0 0 24px color-mix(in srgb, var(--marker-glow) 72%, transparent);
+}
+
+.map-marker__glyph {
+  width: 16px;
+  height: 16px;
+  color: #f8fafc;
+}
+
+.map-marker__glyph svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.map-marker__pointer {
   position: absolute;
-  top: -2px;
-  left: -2px;
-  right: -2px;
-  bottom: -2px;
-  border-radius: 50%;
-  border: 2px solid var(--color-flood);
-  animation: radar-pulse-flood 2.5s infinite;
+  top: 26px;
+  z-index: 1;
+  width: 14px;
+  height: 14px;
+  border-right: 2px solid rgba(255, 255, 255, 0.95);
+  border-bottom: 2px solid rgba(255, 255, 255, 0.95);
+  background: linear-gradient(180deg, var(--marker-bg-top), var(--marker-bg-bottom));
+  transform: rotate(45deg);
+  border-bottom-right-radius: 3px;
 }
 
-@keyframes radar-pulse-fire {
-  0% { transform: scale(1); opacity: 1; }
-  100% { transform: scale(3.5); opacity: 0; }
+.map-marker--fire {
+  --marker-bg-top: #9fd96d;
+  --marker-bg-bottom: #7dc955;
+  --marker-glow: #9fd96d;
 }
 
-@keyframes radar-pulse-flood {
-  0% { transform: scale(1); opacity: 0.8; }
-  100% { transform: scale(4); opacity: 0; }
+.map-marker--flood {
+  --marker-bg-top: #6fd4ff;
+  --marker-bg-bottom: #38bdf8;
+  --marker-glow: #6fd4ff;
+}
+
+@keyframes marker-pulse {
+  0% {
+    transform: scale(0.88);
+    opacity: 0.9;
+  }
+
+  70% {
+    transform: scale(1.55);
+    opacity: 0;
+  }
+
+  100% {
+    transform: scale(1.7);
+    opacity: 0;
+  }
 }
 
 /* MapLibre Overrides */
