@@ -94,7 +94,7 @@ function App() {
       <div id="app">
       {/* ── Prototype Banner ── */}
       <div id="prototype-banner" className="prototype-banner" role="banner" aria-label="Project status">
-        🛰️ Active Development — v0.6 complete · v0.7 Second Country Stable active
+        🛰️ Active Development — v0.7 complete · v0.8 Pre-demo Setup planned
       </div>
 
       {/* ── Navigation ── */}

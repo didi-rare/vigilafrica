@@ -1,6 +1,6 @@
 ---
 change_id: feat-v0.7-second-country-stable
-status: proposed
+status: implemented
 created_date: 2026-04-18
 author: Claude Code
 roadmap_ref: openspec/specs/vigilafrica/roadmap.md §v0.7
