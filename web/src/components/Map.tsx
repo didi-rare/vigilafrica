@@ -94,10 +94,15 @@ export function Map({ events, center = [8.6753, 9.082], zoom = 5 }: MapProps) {
     events.forEach(event => {
       const el = document.createElement('div')
       el.className = `map-marker pulse-${event.category === 'floods' ? 'flood' : 'fire'}`
+
+      const popupContent = document.createElement('div')
+      const title = document.createElement('h3')
+      title.textContent = event.title
+      popupContent.appendChild(title)
       
       const marker = new maplibregl.Marker({ element: el })
         .setLngLat([event.lng, event.lat])
-        .setPopup(new maplibregl.Popup({ offset: 25 }).setHTML(`<h3>${event.title}</h3>`))
+        .setPopup(new maplibregl.Popup({ offset: 25 }).setDOMContent(popupContent))
         .addTo(map.current!)
       
       markers.current.push(marker)

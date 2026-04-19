@@ -156,6 +156,21 @@ func sendEmail(cfg AlertConfig, subject, htmlBody string) error {
 	return nil
 }
 
+func stalenessReferenceTime(lastSuccessRun, firstRun *models.IngestionRun) (time.Time, bool) {
+	if lastSuccessRun != nil {
+		if lastSuccessRun.CompletedAt != nil {
+			return *lastSuccessRun.CompletedAt, true
+		}
+		return lastSuccessRun.StartedAt, true
+	}
+
+	if firstRun != nil {
+		return firstRun.StartedAt, true
+	}
+
+	return time.Time{}, false
+}
+
 // StartStalenessWatchdog launches a goroutine that periodically checks whether
 // a successful ingestion has occurred within the threshold window.
 // If stale, it fires a Resend alert. The goroutine exits when ctx is cancelled.
@@ -183,26 +198,30 @@ func StartStalenessWatchdog(ctx context.Context, repo database.Repository, cfg A
 				slog.Info("watchdog: stopped")
 				return
 			case <-ticker.C:
-				run, err := repo.GetLastIngestionRun(ctx)
+				lastSuccessRun, err := repo.GetLastSuccessfulIngestionRun(ctx)
 				if err != nil {
-					slog.Error("watchdog: failed to query last ingestion run", "err", err)
+					slog.Error("watchdog: failed to query last successful ingestion run", "err", err)
 					continue
 				}
-				if run == nil {
+
+				var firstRun *models.IngestionRun
+				if lastSuccessRun == nil {
+					firstRun, err = repo.GetFirstIngestionRun(ctx)
+					if err != nil {
+						slog.Error("watchdog: failed to query first ingestion run", "err", err)
+						continue
+					}
+				}
+
+				referenceTime, ok := stalenessReferenceTime(lastSuccessRun, firstRun)
+				if !ok {
 					slog.Warn("watchdog: no ingestion runs found yet")
 					continue
 				}
 
-				// Find most recent successful run
-				if run.Status != models.RunStatusSuccess {
-					// Last run was not success; check if we've exceeded threshold
-					hoursStale := int(time.Since(run.StartedAt).Hours())
-					if time.Since(run.StartedAt) > threshold {
-						SendStalenessAlert(cfg, run.StartedAt, hoursStale)
-					}
-				} else if run.CompletedAt != nil && time.Since(*run.CompletedAt) > threshold {
-					hoursStale := int(time.Since(*run.CompletedAt).Hours())
-					SendStalenessAlert(cfg, *run.CompletedAt, hoursStale)
+				if time.Since(referenceTime) > threshold {
+					hoursStale := int(time.Since(referenceTime).Hours())
+					SendStalenessAlert(cfg, referenceTime, hoursStale)
 				}
 			}
 		}

@@ -80,7 +80,7 @@ func (r *pgRepo) ListEvents(ctx context.Context, filters EventFilters) ([]models
 
 	// Add pagination parameters
 	args = append(args, limit, offset)
-	
+
 	// Second query: fetch actual data
 	query := fmt.Sprintf(`
 		SELECT 
@@ -135,18 +135,18 @@ func (r *pgRepo) GetEventByID(ctx context.Context, id uuid.UUID) (*models.Event,
 		FROM events 
 		WHERE id = $1
 	`
-	
+
 	var e models.Event
 	err := r.pool.QueryRow(ctx, query, id).Scan(
 		&e.ID, &e.SourceID, &e.Source, &e.Title, &e.Category, &e.Status,
 		&e.GeomType, &e.Latitude, &e.Longitude, &e.CountryName, &e.StateName,
 		&e.EventDate, &e.SourceURL, &e.IngestedAt, &e.EnrichedAt,
 	)
-	
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to get event by id: %w", err)
 	}
-	
+
 	return &e, nil
 }
 
@@ -173,7 +173,7 @@ func (r *pgRepo) GetNearbyEvents(ctx context.Context, lat, lng float64, radiusKm
 			) ASC, event_date DESC
 		LIMIT $4
 	`
-	
+
 	rows, err := r.pool.Query(ctx, query, lng, lat, radiusMeters, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search nearby events: %w", err)
@@ -269,6 +269,67 @@ func (r *pgRepo) GetLastIngestionRun(ctx context.Context) (*models.IngestionRun,
 			return nil, nil
 		}
 		return nil, fmt.Errorf("failed to get last ingestion run: %w", err)
+	}
+	return &run, nil
+}
+
+// GetLastSuccessfulIngestionRun returns the most recent successful ingestion run.
+// Used by: staleness watchdog.
+func (r *pgRepo) GetLastSuccessfulIngestionRun(ctx context.Context) (*models.IngestionRun, error) {
+	query := `
+		SELECT id, country_code, started_at, completed_at, status, events_fetched, events_stored, error, created_at
+		FROM ingestion_runs
+		WHERE status = 'success'
+		ORDER BY completed_at DESC NULLS LAST, started_at DESC
+		LIMIT 1
+	`
+	var run models.IngestionRun
+	err := r.pool.QueryRow(ctx, query).Scan(
+		&run.ID,
+		&run.CountryCode,
+		&run.StartedAt,
+		&run.CompletedAt,
+		&run.Status,
+		&run.EventsFetched,
+		&run.EventsStored,
+		&run.Error,
+		&run.CreatedAt,
+	)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get last successful ingestion run: %w", err)
+	}
+	return &run, nil
+}
+
+// GetFirstIngestionRun returns the oldest recorded ingestion run.
+// Used by: staleness watchdog when the system has not had a successful run yet.
+func (r *pgRepo) GetFirstIngestionRun(ctx context.Context) (*models.IngestionRun, error) {
+	query := `
+		SELECT id, country_code, started_at, completed_at, status, events_fetched, events_stored, error, created_at
+		FROM ingestion_runs
+		ORDER BY started_at ASC
+		LIMIT 1
+	`
+	var run models.IngestionRun
+	err := r.pool.QueryRow(ctx, query).Scan(
+		&run.ID,
+		&run.CountryCode,
+		&run.StartedAt,
+		&run.CompletedAt,
+		&run.Status,
+		&run.EventsFetched,
+		&run.EventsStored,
+		&run.Error,
+		&run.CreatedAt,
+	)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get first ingestion run: %w", err)
 	}
 	return &run, nil
 }
@@ -406,4 +467,3 @@ func (r *pgRepo) GetDistinctStatesByCountry(ctx context.Context, country string)
 	}
 	return states, nil
 }
-

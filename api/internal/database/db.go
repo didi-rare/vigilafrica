@@ -28,6 +28,8 @@ type Repository interface {
 	CreateIngestionRun(ctx context.Context, startedAt time.Time, countryCode string) (int64, error)
 	CompleteIngestionRun(ctx context.Context, id int64, status models.IngestionRunStatus, fetched, stored int, errMsg *string) error
 	GetLastIngestionRun(ctx context.Context) (*models.IngestionRun, error)
+	GetLastSuccessfulIngestionRun(ctx context.Context) (*models.IngestionRun, error)
+	GetFirstIngestionRun(ctx context.Context) (*models.IngestionRun, error)
 	GetLastIngestionRunAllCountries(ctx context.Context) (map[string]*models.IngestionRun, error)
 
 	// Enrichment + filter helpers (v0.7)

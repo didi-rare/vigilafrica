@@ -8,6 +8,10 @@ function getApiBaseUrl(): string {
   return import.meta.env.VITE_API_BASE_URL || window.location.origin
 }
 
+function buildApiUrl(path: string): string {
+  return new URL(path, getApiBaseUrl()).toString()
+}
+
 export interface GeoLocation {
   country: string;
   state: string;
@@ -63,7 +67,7 @@ export async function fetchEvents(category?: EventCategory, stateName?: string, 
 }
 
 export async function fetchEventById(id: string): Promise<VigilEvent> {
-  const res = await fetch(`/v1/events/${id}`)
+  const res = await fetch(buildApiUrl(`/v1/events/${id}`))
   if (!res.ok) {
     throw new Error(`Failed to fetch event ${id}`)
   }
@@ -71,7 +75,7 @@ export async function fetchEventById(id: string): Promise<VigilEvent> {
 }
 
 export async function fetchContext(): Promise<ContextResponse> {
-  const res = await fetch('/v1/context')
+  const res = await fetch(buildApiUrl('/v1/context'))
   if (!res.ok) {
     throw new Error('Failed to fetch user context')
   }
@@ -96,7 +100,7 @@ export interface HealthResponse {
 }
 
 export async function fetchHealth(): Promise<HealthResponse> {
-  const res = await fetch('/health')
+  const res = await fetch(buildApiUrl('/health'))
   if (!res.ok) {
     throw new Error('Failed to fetch health status')
   }

@@ -83,6 +83,16 @@
   top: 2rem;
 }
 
+.map-unavailable {
+  min-height: 24rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  text-align: center;
+  color: var(--color-text-dim);
+}
+
 @media (max-width: 1024px) {
   .detail-layout {
     grid-template-columns: 1fr;

@@ -16,6 +16,9 @@ export function EventDetail() {
   if (error || !event) return <div className="container section">Event not found in Command Center.</div>
 
   const categoryClass = event.category === 'floods' ? 'flood' : 'fire'
+  const coordinates = event.latitude !== null && event.longitude !== null
+    ? { lat: event.latitude, lng: event.longitude }
+    : null
 
   return (
     <div className="event-detail-page">
@@ -45,7 +48,11 @@ export function EventDetail() {
               <label>Location Context</label>
               <div className="event-location glass-effect">
                 <strong>{event.state_name}</strong>, {event.country_name}
-                <small>Coordinates: {event.latitude?.toFixed(4)}, {event.longitude?.toFixed(4)}</small>
+                <small>
+                  {coordinates
+                    ? `Coordinates: ${coordinates.lat.toFixed(4)}, ${coordinates.lng.toFixed(4)}`
+                    : 'Area geometry available; point coordinates were not provided for this event.'}
+                </small>
               </div>
             </section>
 
@@ -66,17 +73,23 @@ export function EventDetail() {
           </div>
 
           <div className="detail-map">
-             <Map 
+            {coordinates ? (
+              <Map
                 events={[{
                   id: event.id,
-                  lat: event.latitude!,
-                  lng: event.longitude!,
+                  lat: coordinates.lat,
+                  lng: coordinates.lng,
                   category: event.category,
                   title: event.title
-                }]} 
-                center={[event.longitude!, event.latitude!]} 
-                zoom={10} 
-             />
+                }]}
+                center={[coordinates.lng, coordinates.lat]}
+                zoom={10}
+              />
+            ) : (
+              <div className="map-unavailable glass-effect">
+                Detailed map view unavailable for area-based geometry events.
+              </div>
+            )}
           </div>
         </div>
       </div>
