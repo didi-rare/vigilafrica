@@ -1,6 +1,13 @@
 export type EventCategory = 'floods' | 'wildfires'
 export type EventStatus = 'open' | 'closed'
 
+// ── API Base URL ─────────────────────────────────────────────────────────────
+// Configurable for deployments where frontend and API are on separate hosts.
+// Falls back to window.location.origin for local development or same-origin proxy.
+function getApiBaseUrl(): string {
+  return import.meta.env.VITE_API_BASE_URL || window.location.origin
+}
+
 export interface GeoLocation {
   country: string;
   state: string;
@@ -41,7 +48,7 @@ export interface EventsResponse {
 }
 
 export async function fetchEvents(category?: EventCategory, stateName?: string, country?: string): Promise<EventsResponse> {
-  const url = new URL('/v1/events', window.location.origin)
+  const url = new URL('/v1/events', getApiBaseUrl())
 
   if (category) url.searchParams.set('category', category)
   if (stateName) url.searchParams.set('state', stateName)
@@ -111,7 +118,7 @@ export const stateKeys = {
 // ── States endpoint (v0.7) ───────────────────────────────────────────────────
 
 export async function fetchStates(country?: string): Promise<string[]> {
-  const url = new URL('/v1/states', window.location.origin)
+  const url = new URL('/v1/states', getApiBaseUrl())
   if (country) url.searchParams.set('country', country)
 
   const res = await fetch(url.toString())
