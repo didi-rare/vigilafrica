@@ -1,7 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { fetchEvents, fetchContext, fetchHealth, fetchStates, eventKeys, stateKeys } from '../api/events'
+import { fetchEvents, fetchContext, fetchHealth, fetchStates, eventKeys, stateKeys, healthKeys, contextKeys } from '../api/events'
 import type { HealthResponse, EventCategory } from '../api/events'
 
 import './EventsDashboard.css'
@@ -53,7 +53,7 @@ function selectFreshness(health: HealthResponse) {
 
 function FreshnessIndicator() {
   const { data } = useQuery({
-    queryKey: ['health'],
+    queryKey: healthKeys.all,
     queryFn: fetchHealth,
     refetchInterval: 5 * 60 * 1000,
     staleTime: 60 * 1000,
@@ -126,7 +126,7 @@ export function EventsDashboard() {
   })
 
   const { data: contextData } = useQuery({
-    queryKey: ['context'],
+    queryKey: contextKeys.all,
     queryFn: () => fetchContext(),
   })
 

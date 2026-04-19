@@ -470,8 +470,9 @@ Cross-ref: ADR-009 (pgx chosen over `database/sql` + driver with explicit ration
 **§10.3 — Pin exact versions in `go.mod`. Do not use `latest` or floating pseudo-versions without a recorded reason.**
 *Why:* Reproducible builds. `go mod tidy` + committed `go.sum` is the baseline.
 
-**§10.4 — Current approved non-stdlib dependencies: `jackc/pgx/v5`, `google/uuid`, `golang-migrate/migrate/v4`, `resend/resend-go/v2`, `oschwald/maxminddb-golang`. Adding to this list requires §10.2.**
+**§10.4 — Current approved non-stdlib dependencies: `jackc/pgx/v5`, `google/uuid`, `golang-migrate/migrate/v4`, `oschwald/geoip2-golang`. Adding to this list requires §10.2.**
 *Why:* One place to audit the external surface. Keep this list up to date when deps change.
+Note: Resend email alerts use stdlib `net/http` against the Resend REST API directly (no SDK dependency). `oschwald/maxminddb-golang` is an indirect transitive dep of `geoip2-golang`.
 
 **§10.5 — `go mod tidy` runs clean before every commit that touches `.go` files. `go.sum` is committed.**
 *Why:* Divergent `go.sum` breaks other contributors' builds and CI.

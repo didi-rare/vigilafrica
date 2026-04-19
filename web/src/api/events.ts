@@ -110,13 +110,22 @@ export async function fetchHealth(): Promise<HealthResponse> {
 // ── Query key factories (§5.2) ───────────────────────────────────────────────
 
 export const eventKeys = {
-  all:  ['events'] as const,
-  list: (country: string, category: string, state: string) =>
+  all:    ['events'] as const,
+  list:   (country: string, category: string, state: string) =>
     [...eventKeys.all, 'list', { country, category, state }] as const,
+  detail: (id: string) => [...eventKeys.all, 'detail', id] as const,
 }
 
 export const stateKeys = {
   list: (country: string) => ['states', country] as const,
+}
+
+export const healthKeys = {
+  all: ['health'] as const,
+}
+
+export const contextKeys = {
+  all: ['context'] as const,
 }
 
 // ── States endpoint (v0.7) ───────────────────────────────────────────────────

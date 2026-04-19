@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -265,7 +266,7 @@ func (r *pgRepo) GetLastIngestionRun(ctx context.Context) (*models.IngestionRun,
 		&run.CreatedAt,
 	)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("failed to get last ingestion run: %w", err)
@@ -296,7 +297,7 @@ func (r *pgRepo) GetLastSuccessfulIngestionRun(ctx context.Context) (*models.Ing
 		&run.CreatedAt,
 	)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("failed to get last successful ingestion run: %w", err)
@@ -326,7 +327,7 @@ func (r *pgRepo) GetFirstIngestionRun(ctx context.Context) (*models.IngestionRun
 		&run.CreatedAt,
 	)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("failed to get first ingestion run: %w", err)

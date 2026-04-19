@@ -66,22 +66,22 @@ export function Map({ events, center = [8.6753, 9.082], zoom = 5 }: MapProps) {
   const initialCenter = useRef(center)
   const initialZoom = useRef(zoom)
 
-  // Initialization - Run only once; uses refs for initial center/zoom to satisfy exhaustive-deps
+  // Initialization - Run once per mount. Guard prevents StrictMode double-invoke (§12.3).
   useEffect(() => {
-    if (!mapContainer.current) return
+    if (map.current || !mapContainer.current) return
 
     map.current = new maplibregl.Map({
       container: mapContainer.current,
       style: {
         version: 8,
         sources: {
-          osm: {
+          'map-osm': {
             type: 'raster',
             tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
             tileSize: 256,
             attribution: '© OpenStreetMap contributors',
           },
-          satellite: {
+          'map-satellite': {
             type: 'raster',
             tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
             tileSize: 256,
@@ -90,9 +90,9 @@ export function Map({ events, center = [8.6753, 9.082], zoom = 5 }: MapProps) {
         },
         layers: [
           {
-            id: 'satellite-layer',
+            id: 'map-satellite-layer',
             type: 'raster',
-            source: 'satellite',
+            source: 'map-satellite',
             paint: {
               'raster-brightness-max': 0.6,
               'raster-saturation': -0.4,
@@ -111,7 +111,7 @@ export function Map({ events, center = [8.6753, 9.082], zoom = 5 }: MapProps) {
 
     return () => {
       map.current?.remove()
-      map.current = null
+      // Do not null map.current — the guard above relies on it to prevent StrictMode double-invoke
     }
   }, [])
 

@@ -1,7 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { fetchEventById } from '../api/events'
+import { fetchEventById, eventKeys } from '../api/events'
 
 import './EventDetail.css'
 
@@ -12,13 +12,13 @@ const Map = lazy(async () => {
 
 export function EventDetail() {
   const { id } = useParams<{ id: string }>()
-  const { data: event, isLoading, error } = useQuery({
-    queryKey: ['event', id],
-    queryFn: () => fetchEventById(id!),
-    enabled: !!id
+  const { data: event, isPending, error } = useQuery({
+    queryKey: eventKeys.detail(id ?? ''),
+    queryFn: () => fetchEventById(id!), // enabled only when id is defined (enabled: !!id below)
+    enabled: !!id,
   })
 
-  if (isLoading) return <div className="container section">Loading event telemetry...</div>
+  if (isPending) return <div className="container section">Loading event telemetry...</div>
   if (error || !event) return <div className="container section">Event not found in Command Center.</div>
 
   const categoryClass = event.category === 'floods' ? 'flood' : 'fire'

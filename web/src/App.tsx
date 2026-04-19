@@ -19,9 +19,21 @@ import {
   ArrowRight
 } from 'lucide-react'
 
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, useRouteError } from 'react-router-dom'
 import './App.css'
 import MILESTONES from './data/milestones.json'
+
+function PageError() {
+  const error = useRouteError()
+  const message = error instanceof Error ? error.message : 'Something went wrong. Please try again.'
+  return (
+    <div className="container section" role="alert">
+      <h2>Something went wrong</h2>
+      <p>{message}</p>
+      <a href="/" className="btn btn-outline">← Back to Dashboard</a>
+    </div>
+  )
+}
 
 const GithubIcon = () => (
   <svg
@@ -106,7 +118,7 @@ function App() {
 
       <main>
         <Routes>
-          <Route path="/" element={
+          <Route path="/" errorElement={<PageError />} element={
             <>
               <section id="hero" className="hero" aria-labelledby="hero-heading">
                 <div className="hero-glow hero-glow--blue" aria-hidden="true" />
@@ -258,6 +270,7 @@ function App() {
                 <EventDetail />
               </Suspense>
             }
+            errorElement={<PageError />}
           />
         </Routes>
       </main>
