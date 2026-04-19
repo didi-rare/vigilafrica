@@ -7,7 +7,7 @@
 //   - Links to GitHub repository
 //   - Responsive at 375px and 1280px
 //   - No API calls (static component only)
-import { Fragment } from 'react'
+import { Fragment, Suspense, lazy } from 'react'
 import {
   Satellite,
   Map,
@@ -19,11 +19,21 @@ import {
   ArrowRight
 } from 'lucide-react'
 
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, useRouteError } from 'react-router-dom'
 import './App.css'
 import MILESTONES from './data/milestones.json'
-import { EventsDashboard } from './components/EventsDashboard'
-import { EventDetail } from './pages/EventDetail'
+
+function PageError() {
+  const error = useRouteError()
+  const message = error instanceof Error ? error.message : 'Something went wrong. Please try again.'
+  return (
+    <div className="container section" role="alert">
+      <h2>Something went wrong</h2>
+      <p>{message}</p>
+      <a href="/" className="btn btn-outline">← Back to Dashboard</a>
+    </div>
+  )
+}
 
 const GithubIcon = () => (
   <svg
@@ -44,11 +54,20 @@ const GithubIcon = () => (
 
 const GITHUB_URL = 'https://github.com/didi-rare/vigilafrica'
 
+const EventsDashboard = lazy(async () => {
+  const module = await import('./components/EventsDashboard')
+  return { default: module.EventsDashboard }
+})
+
+const EventDetail = lazy(async () => {
+  const module = await import('./pages/EventDetail')
+  return { default: module.EventDetail }
+})
 const STEPS = [
   {
     icon: <Satellite size={20} />,
     title: 'Poll',
-    desc: 'Fetches natural event data from NASA\u2019s EONET feed \u2014 floods and wildfires, filtered to Nigeria.',
+    desc: 'Fetches natural event data from NASA\u2019s EONET feed \u2014 floods and wildfires, filtered to Nigeria and Ghana.',
   },
   {
     icon: <Map size={20} />,
@@ -75,7 +94,7 @@ function App() {
       <div id="app">
       {/* ── Prototype Banner ── */}
       <div id="prototype-banner" className="prototype-banner" role="banner" aria-label="Project status">
-        🛰️ Useful Prototype — v0.4 complete · v0.5 Operational Prototype active
+        🛰️ Active Development — v0.7 complete · v0.8 Pre-demo Setup planned
       </div>
 
       {/* ── Navigation ── */}
@@ -99,7 +118,7 @@ function App() {
 
       <main>
         <Routes>
-          <Route path="/" element={
+          <Route path="/" errorElement={<PageError />} element={
             <>
               <section id="hero" className="hero" aria-labelledby="hero-heading">
                 <div className="hero-glow hero-glow--blue" aria-hidden="true" />
@@ -118,7 +137,7 @@ function App() {
                   <p className="hero-desc">
                     VigilAfrica translates raw NASA satellite event data into local African context &mdash;
                     showing floods and wildfires by country and state, not just coordinates.
-                    Open-source. Nigeria first.
+                    Open-source. Nigeria and Ghana live.
                   </p>
 
                   <div className="hero-cta">
@@ -136,7 +155,9 @@ function App() {
                 </div>
               </section>
 
-              <EventsDashboard />
+              <Suspense fallback={<div className="container section">Loading dashboard telemetry...</div>}>
+                <EventsDashboard />
+              </Suspense>
 
               <section id="how-it-works" className="how-it-works" aria-labelledby="how-heading">
                 <div className="container">
@@ -195,13 +216,13 @@ function App() {
                     </div>
 
                     <h2 id="status-heading" className="section-title" style={{ marginBottom: '12px' }}>
-                      Building in the open — Nigeria first
+                      Building in the open — Nigeria &amp; Ghana live
                     </h2>
 
                     <p>
-                      VigilAfrica is being built milestone by milestone. The current focus (**v0.5**) is
-                      the Operational Prototype — automated ingestion, deduplication, and production
-                      readiness. v0.1 through v0.4 are complete.
+                      VigilAfrica is being built milestone by milestone. v0.6 (Country Expansion Model)
+                      is complete — Ghana is live alongside Nigeria. **v0.7** (Second Country Stable)
+                      is active: enrichment quality validation and full Ghana experience in progress.
                     </p>
 
                     <nav aria-label="Milestone progress">
@@ -242,7 +263,15 @@ function App() {
               </section>
             </>
           } />
-          <Route path="/events/:id" element={<EventDetail />} />
+          <Route
+            path="/events/:id"
+            element={
+              <Suspense fallback={<div className="container section">Loading event telemetry...</div>}>
+                <EventDetail />
+              </Suspense>
+            }
+            errorElement={<PageError />}
+          />
         </Routes>
       </main>
 
@@ -283,3 +312,6 @@ function App() {
 }
 
 export default App
+
+
+

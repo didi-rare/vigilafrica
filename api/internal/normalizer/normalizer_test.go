@@ -3,6 +3,7 @@ package normalizer_test
 import (
 	"encoding/json"
 	"testing"
+	"time"
 
 	"vigilafrica/api/internal/models"
 	"vigilafrica/api/internal/normalizer"
@@ -114,4 +115,48 @@ func TestNormalizeEvent_MissingGeometry(t *testing.T) {
 	if geoJSON != "" {
 		t.Errorf("Expected empty GeoJSON, got %s", geoJSON)
 	}
+}
+
+func TestNormalizeEvent_UsesMostRecentGeometryByDate(t *testing.T) {
+	rawPayload := []byte(`{
+		"id": "EONET_999",
+		"title": "Multi-snapshot flood event",
+		"categories": [{ "id": "floods", "title": "Floods" }],
+		"geometry": [
+			{ "type": "Point", "coordinates": [1.0, 1.0], "date": "2026-04-01T00:00:00Z" },
+			{ "type": "Point", "coordinates": [2.0, 2.0], "date": "2026-04-12T00:00:00Z" },
+			{ "type": "Point", "coordinates": [3.0, 3.0], "date": "2026-04-05T00:00:00Z" }
+		]
+	}`)
+
+	var rawEvent normalizer.RawEONETEvent
+	if err := json.Unmarshal(rawPayload, &rawEvent); err != nil {
+		t.Fatalf("Failed to unmarshal raw payload: %v", err)
+	}
+
+	event, _, err := normalizer.Normalize(rawEvent, rawPayload)
+	if err != nil {
+		t.Fatalf("Normalize() returned error: %v", err)
+	}
+
+	if event.Longitude == nil || *event.Longitude != 2.0 {
+		t.Errorf("Expected Longitude 2.0 from most recent geometry, got %v", event.Longitude)
+	}
+	if event.Latitude == nil || *event.Latitude != 2.0 {
+		t.Errorf("Expected Latitude 2.0 from most recent geometry, got %v", event.Latitude)
+	}
+	if event.EventDate == nil || !event.EventDate.Equal(mustParseTime(t, "2026-04-12T00:00:00Z")) {
+		t.Errorf("Expected EventDate from most recent geometry, got %v", event.EventDate)
+	}
+}
+
+func mustParseTime(t *testing.T, value string) time.Time {
+	t.Helper()
+
+	parsed, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		t.Fatalf("Failed to parse time %q: %v", value, err)
+	}
+
+	return parsed
 }

@@ -16,6 +16,7 @@ const (
 // Used by: /health endpoint, Resend failure alerter, staleness watchdog.
 type IngestionRun struct {
 	ID            int64              `json:"id"`
+	CountryCode   string             `json:"country_code"`
 	StartedAt     time.Time          `json:"started_at"`
 	CompletedAt   *time.Time         `json:"completed_at"`
 	Status        IngestionRunStatus `json:"status"`

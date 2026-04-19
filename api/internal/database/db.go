@@ -25,9 +25,16 @@ type Repository interface {
 	GetNearbyEvents(ctx context.Context, lat, lng float64, radiusKm float64, limit int) ([]models.Event, error)
 
 	// Ingestion run methods (ADR-011)
-	CreateIngestionRun(ctx context.Context, startedAt time.Time) (int64, error)
+	CreateIngestionRun(ctx context.Context, startedAt time.Time, countryCode string) (int64, error)
 	CompleteIngestionRun(ctx context.Context, id int64, status models.IngestionRunStatus, fetched, stored int, errMsg *string) error
 	GetLastIngestionRun(ctx context.Context) (*models.IngestionRun, error)
+	GetLastSuccessfulIngestionRun(ctx context.Context) (*models.IngestionRun, error)
+	GetFirstIngestionRun(ctx context.Context) (*models.IngestionRun, error)
+	GetLastIngestionRunAllCountries(ctx context.Context) (map[string]*models.IngestionRun, error)
+
+	// Enrichment + filter helpers (v0.7)
+	GetEnrichmentStats(ctx context.Context) ([]EnrichmentStat, error)
+	GetDistinctStatesByCountry(ctx context.Context, country string) ([]string, error)
 
 	Close()
 }

@@ -30,7 +30,7 @@ type AlertConfig struct {
 func LoadAlertConfig() (AlertConfig, bool) {
 	fromEmail := os.Getenv("ALERT_FROM_EMAIL")
 	if fromEmail == "" {
-		fromEmail = "VigilAfrica Alerts <alerts@vigilafrica.dev>"
+		fromEmail = "VigilAfrica Alerts <alerts@vigilafrica.org>"
 	}
 	cfg := AlertConfig{
 		ResendAPIKey:        os.Getenv("RESEND_API_KEY"),
@@ -88,9 +88,9 @@ func SendFailureAlert(cfg AlertConfig, run *models.IngestionRun) {
 
 // SendStalenessAlert sends an email when no successful ingestion has occurred
 // within the configured threshold window.
-func SendStalenessAlert(cfg AlertConfig, lastSuccessAt time.Time, hoursStale int) {
+func SendStalenessAlert(cfg AlertConfig, lastSuccessAt time.Time, hoursStale int) error {
 	if cfg.ResendAPIKey == "" || cfg.AlertEmailTo == "" {
-		return
+		return nil
 	}
 
 	subject := fmt.Sprintf("[VigilAfrica] No successful ingestion in %d hours", hoursStale)
@@ -109,13 +109,15 @@ func SendStalenessAlert(cfg AlertConfig, lastSuccessAt time.Time, hoursStale int
 
 	if err := sendEmail(cfg, subject, body); err != nil {
 		slog.Error("alerter: failed to send staleness alert", "err", err)
-	} else {
-		slog.Warn("alerter: staleness alert sent",
-			"last_success_at", lastSuccessAt.Format(time.RFC3339),
-			"hours_stale", hoursStale,
-			"to", cfg.AlertEmailTo,
-		)
+		return err
 	}
+
+	slog.Warn("alerter: staleness alert sent",
+		"last_success_at", lastSuccessAt.Format(time.RFC3339),
+		"hours_stale", hoursStale,
+		"to", cfg.AlertEmailTo,
+	)
+	return nil
 }
 
 // sendEmail sends a single email via the Resend API.
@@ -156,6 +158,33 @@ func sendEmail(cfg AlertConfig, subject, htmlBody string) error {
 	return nil
 }
 
+func stalenessReferenceTime(lastSuccessRun, firstRun *models.IngestionRun) (time.Time, bool) {
+	if lastSuccessRun != nil {
+		if lastSuccessRun.CompletedAt != nil {
+			return *lastSuccessRun.CompletedAt, true
+		}
+		return lastSuccessRun.StartedAt, true
+	}
+
+	if firstRun != nil {
+		return firstRun.StartedAt, true
+	}
+
+	return time.Time{}, false
+}
+
+func shouldSendStalenessAlert(referenceTime time.Time, threshold time.Duration, lastAlertReference time.Time) bool {
+	if time.Since(referenceTime) <= threshold {
+		return false
+	}
+
+	if !lastAlertReference.IsZero() && lastAlertReference.Equal(referenceTime) {
+		return false
+	}
+
+	return true
+}
+
 // StartStalenessWatchdog launches a goroutine that periodically checks whether
 // a successful ingestion has occurred within the threshold window.
 // If stale, it fires a Resend alert. The goroutine exits when ctx is cancelled.
@@ -176,6 +205,7 @@ func StartStalenessWatchdog(ctx context.Context, repo database.Repository, cfg A
 	go func() {
 		ticker := time.NewTicker(checkInterval)
 		defer ticker.Stop()
+		var lastAlertReference time.Time
 
 		for {
 			select {
@@ -183,26 +213,37 @@ func StartStalenessWatchdog(ctx context.Context, repo database.Repository, cfg A
 				slog.Info("watchdog: stopped")
 				return
 			case <-ticker.C:
-				run, err := repo.GetLastIngestionRun(ctx)
+				lastSuccessRun, err := repo.GetLastSuccessfulIngestionRun(ctx)
 				if err != nil {
-					slog.Error("watchdog: failed to query last ingestion run", "err", err)
+					slog.Error("watchdog: failed to query last successful ingestion run", "err", err)
 					continue
 				}
-				if run == nil {
+
+				var firstRun *models.IngestionRun
+				if lastSuccessRun == nil {
+					firstRun, err = repo.GetFirstIngestionRun(ctx)
+					if err != nil {
+						slog.Error("watchdog: failed to query first ingestion run", "err", err)
+						continue
+					}
+				}
+
+				referenceTime, ok := stalenessReferenceTime(lastSuccessRun, firstRun)
+				if !ok {
 					slog.Warn("watchdog: no ingestion runs found yet")
 					continue
 				}
 
-				// Find most recent successful run
-				if run.Status != models.RunStatusSuccess {
-					// Last run was not success; check if we've exceeded threshold
-					hoursStale := int(time.Since(run.StartedAt).Hours())
-					if time.Since(run.StartedAt) > threshold {
-						SendStalenessAlert(cfg, run.StartedAt, hoursStale)
+				if !shouldSendStalenessAlert(referenceTime, threshold, lastAlertReference) {
+					if time.Since(referenceTime) <= threshold {
+						lastAlertReference = time.Time{}
 					}
-				} else if run.CompletedAt != nil && time.Since(*run.CompletedAt) > threshold {
-					hoursStale := int(time.Since(*run.CompletedAt).Hours())
-					SendStalenessAlert(cfg, *run.CompletedAt, hoursStale)
+					continue
+				}
+
+				hoursStale := int(time.Since(referenceTime).Hours())
+				if err := SendStalenessAlert(cfg, referenceTime, hoursStale); err == nil {
+					lastAlertReference = referenceTime
 				}
 			}
 		}

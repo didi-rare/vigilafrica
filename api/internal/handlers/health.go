@@ -12,6 +12,7 @@ import (
 
 // lastIngestionResponse is the nested block in the health response (ADR-011).
 type lastIngestionResponse struct {
+	CountryCode   string     `json:"country_code,omitempty"`
 	Status        *string    `json:"status"`
 	StartedAt     *time.Time `json:"started_at"`
 	CompletedAt   *time.Time `json:"completed_at"`
@@ -22,9 +23,10 @@ type lastIngestionResponse struct {
 
 // HealthResponse is the response body for GET /health.
 type HealthResponse struct {
-	Status        string                 `json:"status"`
-	Version       string                 `json:"version"`
-	LastIngestion *lastIngestionResponse `json:"last_ingestion"`
+	Status                   string                            `json:"status"`
+	Version                  string                            `json:"version"`
+	LastIngestion            *lastIngestionResponse            `json:"last_ingestion"`
+	LastIngestionByCountry   map[string]*lastIngestionResponse `json:"last_ingestion_by_country,omitempty"`
 }
 
 // HealthHandler encapsulates the health check logic.
@@ -39,6 +41,19 @@ func NewHealthHandler(version string, repo database.Repository) *HealthHandler {
 	return &HealthHandler{Version: version, repo: repo}
 }
 
+func runToResponse(run *models.IngestionRun) *lastIngestionResponse {
+	statusStr := string(run.Status)
+	return &lastIngestionResponse{
+		CountryCode:   run.CountryCode,
+		Status:        &statusStr,
+		StartedAt:     &run.StartedAt,
+		CompletedAt:   run.CompletedAt,
+		EventsFetched: &run.EventsFetched,
+		EventsStored:  &run.EventsStored,
+		Error:         run.Error,
+	}
+}
+
 // ServeHTTP implements http.Handler for GET /health.
 // Returns status "degraded" if the last ingestion run failed.
 func (h *HealthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -50,29 +65,34 @@ func (h *HealthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if h.repo != nil {
+		// Global last run (backward compat)
 		run, err := h.repo.GetLastIngestionRun(r.Context())
 		if err != nil {
 			slog.Error("health: failed to query last ingestion run", "err", err)
-			// Do not fail health check on DB query error — return ok with no block
 		} else if run != nil {
-			statusStr := string(run.Status)
-			resp.LastIngestion = &lastIngestionResponse{
-				Status:        &statusStr,
-				StartedAt:     &run.StartedAt,
-				CompletedAt:   run.CompletedAt,
-				EventsFetched: &run.EventsFetched,
-				EventsStored:  &run.EventsStored,
-				Error:         run.Error,
-			}
-			// Top-level degraded if last run failed
+			resp.LastIngestion = runToResponse(run)
 			if run.Status == models.RunStatusFailure {
 				resp.Status = "degraded"
+			}
+		}
+
+		// Per-country map
+		byCountry, err := h.repo.GetLastIngestionRunAllCountries(r.Context())
+		if err != nil {
+			slog.Error("health: failed to query per-country runs", "err", err)
+		} else if len(byCountry) > 0 {
+			resp.LastIngestionByCountry = make(map[string]*lastIngestionResponse, len(byCountry))
+			for code, cr := range byCountry {
+				resp.LastIngestionByCountry[code] = runToResponse(cr)
+				// Upgrade to degraded if any country's last run failed
+				if cr.Status == models.RunStatusFailure && resp.Status != "degraded" {
+					resp.Status = "degraded"
+				}
 			}
 		}
 	}
 
 	// Always 200 — "degraded" is informational, not an HTTP error.
-	// Monitoring systems should inspect the JSON body for operational state.
 	w.WriteHeader(http.StatusOK)
 
 	if err := json.NewEncoder(w).Encode(resp); err != nil {

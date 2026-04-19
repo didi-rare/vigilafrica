@@ -83,7 +83,7 @@ graph TD
       ▼
 [Vercel CDN Edge]
   React static build (HTML/JS/CSS)
-  VITE_API_BASE_URL = https://api.vigilafrica.io
+  VITE_API_BASE_URL = https://api.vigilafrica.org
       │
       │ API calls: GET /health, GET /v1/events, GET /v1/context
       ▼
