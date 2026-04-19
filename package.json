@@ -6,7 +6,7 @@
   "scripts": {
     "web:dev": "cd web && npm run dev",
     "web:build": "npm run generate:milestones && cd web && npm run build",
-    "api:dev": "go run ./api/cmd/server/",
+    "api:dev": "cd api && go run ./cmd/server/",
     "build": "npm run web:build && go build -o vigilafrica ./api/cmd/server/",
     "generate:milestones": "node scripts/generate-milestones.js",
     "prebuild:web": "npm run generate:milestones",
