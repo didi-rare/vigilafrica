@@ -7,7 +7,7 @@
 //   - Links to GitHub repository
 //   - Responsive at 375px and 1280px
 //   - No API calls (static component only)
-import { Fragment } from 'react'
+import { Fragment, Suspense, lazy } from 'react'
 import {
   Satellite,
   Map,
@@ -22,8 +22,6 @@ import {
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import './App.css'
 import MILESTONES from './data/milestones.json'
-import { EventsDashboard } from './components/EventsDashboard'
-import { EventDetail } from './pages/EventDetail'
 
 const GithubIcon = () => (
   <svg
@@ -44,6 +42,15 @@ const GithubIcon = () => (
 
 const GITHUB_URL = 'https://github.com/didi-rare/vigilafrica'
 
+const EventsDashboard = lazy(async () => {
+  const module = await import('./components/EventsDashboard')
+  return { default: module.EventsDashboard }
+})
+
+const EventDetail = lazy(async () => {
+  const module = await import('./pages/EventDetail')
+  return { default: module.EventDetail }
+})
 const STEPS = [
   {
     icon: <Satellite size={20} />,
@@ -136,7 +143,9 @@ function App() {
                 </div>
               </section>
 
-              <EventsDashboard />
+              <Suspense fallback={<div className="container section">Loading dashboard telemetry...</div>}>
+                <EventsDashboard />
+              </Suspense>
 
               <section id="how-it-works" className="how-it-works" aria-labelledby="how-heading">
                 <div className="container">
@@ -242,7 +251,14 @@ function App() {
               </section>
             </>
           } />
-          <Route path="/events/:id" element={<EventDetail />} />
+          <Route
+            path="/events/:id"
+            element={
+              <Suspense fallback={<div className="container section">Loading event telemetry...</div>}>
+                <EventDetail />
+              </Suspense>
+            }
+          />
         </Routes>
       </main>
 
@@ -283,3 +299,6 @@ function App() {
 }
 
 export default App
+
+
+

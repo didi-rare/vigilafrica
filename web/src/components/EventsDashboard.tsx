@@ -1,11 +1,17 @@
+import { lazy, Suspense } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { fetchEvents, fetchContext, fetchHealth, fetchStates, eventKeys, stateKeys } from '../api/events'
 import type { HealthResponse, EventCategory } from '../api/events'
-import { Map } from './Map'
+
 import './EventsDashboard.css'
 
 const STALENESS_THRESHOLD_HOURS = 2
+
+const Map = lazy(async () => {
+  const module = await import('./Map')
+  return { default: module.Map }
+})
 
 // Supported countries with their map centroids [lng, lat].
 const SUPPORTED_COUNTRIES = ['Nigeria', 'Ghana'] as const
@@ -276,10 +282,13 @@ export function EventsDashboard() {
           </div>
 
           <div className="dashboard-map-container">
-            <Map events={mapEvents} center={mapCenter} />
+            <Suspense fallback={<div className="dashboard-state loading"><div className="spinner"></div><p>Loading map telemetry...</p></div>}>
+              <Map events={mapEvents} center={mapCenter} />
+            </Suspense>
           </div>
         </div>
       </div>
     </section>
   )
 }
+

@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import maplibregl from 'maplibre-gl'
+import maplibregl from 'maplibre-gl/dist/maplibre-gl-csp'
+import { setWorkerUrl } from 'maplibre-gl/dist/maplibre-gl-csp'
+import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-csp-worker.js?url'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import './Map.css'
+
+setWorkerUrl(maplibreWorkerUrl)
 
 interface EventMarker {
   id: string
@@ -34,18 +38,18 @@ export function Map({ events, center = [8.6753, 9.082], zoom = 5 }: MapProps) {
       style: {
         version: 8,
         sources: {
-          'osm': {
+          osm: {
             type: 'raster',
             tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
             tileSize: 256,
-            attribution: '© OpenStreetMap contributors'
+            attribution: '© OpenStreetMap contributors',
           },
-          'satellite': {
+          satellite: {
             type: 'raster',
             tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
             tileSize: 256,
-            attribution: '© ESRI World Imagery'
-          }
+            attribution: '© ESRI World Imagery',
+          },
         },
         layers: [
           {
@@ -55,13 +59,13 @@ export function Map({ events, center = [8.6753, 9.082], zoom = 5 }: MapProps) {
             paint: {
               'raster-brightness-max': 0.6,
               'raster-saturation': -0.4,
-              'raster-contrast': 0.2
-            }
-          }
-        ]
+              'raster-contrast': 0.2,
+            },
+          },
+        ],
       },
       center: initialCenter.current,
-      zoom: initialZoom.current
+      zoom: initialZoom.current,
     })
 
     map.current.on('load', () => {
@@ -72,14 +76,15 @@ export function Map({ events, center = [8.6753, 9.082], zoom = 5 }: MapProps) {
       map.current?.remove()
       map.current = null
     }
-  }, []) // Empty dependency array for init
+  }, [])
 
   // Fly-to when center changes (e.g., context loaded)
   useEffect(() => {
     if (!map.current || !isLoaded) return
+
     // Guard against invalid coordinates that would crash flyTo
     if (typeof center[0] !== 'number' || typeof center[1] !== 'number') return
-    
+
     map.current.flyTo({ center, zoom: 7, speed: 0.8 })
   }, [center, isLoaded])
 
@@ -88,10 +93,10 @@ export function Map({ events, center = [8.6753, 9.082], zoom = 5 }: MapProps) {
     if (!map.current || !isLoaded) return
 
     // Clear existing markers properly
-    markers.current.forEach(m => m.remove())
+    markers.current.forEach((marker) => marker.remove())
     markers.current = []
 
-    events.forEach(event => {
+    events.forEach((event) => {
       const el = document.createElement('div')
       el.className = `map-marker pulse-${event.category === 'floods' ? 'flood' : 'fire'}`
 
@@ -99,12 +104,12 @@ export function Map({ events, center = [8.6753, 9.082], zoom = 5 }: MapProps) {
       const title = document.createElement('h3')
       title.textContent = event.title
       popupContent.appendChild(title)
-      
+
       const marker = new maplibregl.Marker({ element: el })
         .setLngLat([event.lng, event.lat])
         .setPopup(new maplibregl.Popup({ offset: 25 }).setDOMContent(popupContent))
         .addTo(map.current!)
-      
+
       markers.current.push(marker)
     })
   }, [events, isLoaded])

@@ -1,8 +1,14 @@
+import { lazy, Suspense } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { fetchEventById } from '../api/events'
-import { Map } from '../components/Map'
+
 import './EventDetail.css'
+
+const Map = lazy(async () => {
+  const module = await import('../components/Map')
+  return { default: module.Map }
+})
 
 export function EventDetail() {
   const { id } = useParams<{ id: string }>()
@@ -74,17 +80,19 @@ export function EventDetail() {
 
           <div className="detail-map">
             {coordinates ? (
-              <Map
-                events={[{
+              <Suspense fallback={<div className="map-unavailable glass-effect">Loading map telemetry...</div>}>
+                <Map
+                  events={[{
                   id: event.id,
                   lat: coordinates.lat,
                   lng: coordinates.lng,
                   category: event.category,
                   title: event.title
                 }]}
-                center={[coordinates.lng, coordinates.lat]}
-                zoom={10}
-              />
+                  center={[coordinates.lng, coordinates.lat]}
+                  zoom={10}
+                />
+              </Suspense>
             ) : (
               <div className="map-unavailable glass-effect">
                 Detailed map view unavailable for area-based geometry events.
@@ -96,3 +104,4 @@ export function EventDetail() {
     </div>
   )
 }
+
