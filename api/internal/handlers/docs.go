@@ -48,15 +48,7 @@ func scalarHTML(specURL string) string {
           "title": "VigilAfrica API Docs",
           "description": "Enriched NASA EONET natural event data for Africa"
         },
-        "customCss": "
-          :root, .dark-mode {
-            --scalar-color-accent: #38bdf8;
-            --scalar-background-1: #050714;
-            --scalar-background-2: #090b1f;
-            --scalar-background-3: rgba(15,23,42,0.7);
-          }
-          .sidebar { border-right: 1px solid rgba(255,255,255,0.08); }
-        "
+        "customCss": ":root, .dark-mode { --scalar-color-accent: #38bdf8; --scalar-background-1: #050714; --scalar-background-2: #090b1f; --scalar-background-3: rgba(15,23,42,0.7); } .sidebar { border-right: 1px solid rgba(255,255,255,0.08); }"
       }'
     ></script>
     <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
