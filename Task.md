@@ -50,3 +50,12 @@
 - [x] 7.1 Run `docker compose -f docker-compose.demo.yml up -d` from a clean clone — confirm the full flow works without prior setup
 - [x] 7.2 Confirm all v0.8 roadmap acceptance criteria are met (checklist in `roadmap.md §v0.8`)
 - [x] 7.3 Commit all changes under conventional commit format: `feat(demo): add v0.8 pre-demo setup`
+
+## 8. Graceful EONET Rate Limiting (feature-eonet-rate-limiting)
+
+- [x] 8.1 Implement retry loop in `runIngest` (max 3 retries)
+- [x] 8.2 Parse `retry_after` JSON payload for 429/503 status codes and calculate backoff
+- [x] 8.3 Implement exponential backoff fallback for missing/invalid `retry_after`
+- [x] 8.4 Update React dashboard to present ingestion errors natively from `/health`
+- [x] 8.5 Add unit tests for rate-limiting simulation in Go
+- [ ] 8.6 Commit changes: `feat(ingestor): graceful EONET rate limit retries`

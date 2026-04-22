@@ -14,7 +14,7 @@ import (
 	"vigilafrica/api/internal/normalizer"
 )
 
-const eonetURL = "https://eonet.gsfc.nasa.gov/api/v3/events"
+var eonetURL = "https://eonet.gsfc.nasa.gov/api/v3/events"
 
 // CountryConfig defines a country's ingestion parameters.
 // BBox is [min_lon, min_lat, max_lon, max_lat] in WGS84 (EPSG:4326).
@@ -109,26 +109,62 @@ func runIngest(ctx context.Context, repo database.Repository, country CountryCon
 
 	slog.Info("ingestion: fetching from EONET", "country", country.Code, "url", reqURL)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
-	if err != nil {
-		return result, fmt.Errorf("failed to create http request: %w", err)
-	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "VigilAfrica-Ingestor/0.6")
+	var body []byte
+	var reqErr error
+	var resp *http.Response
+	maxRetries := 3
 
-	resp, err := client.Do(req)
-	if err != nil {
-		return result, fmt.Errorf("http request failed: %w", err)
-	}
-	defer resp.Body.Close()
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+		if err != nil {
+			return result, fmt.Errorf("failed to create http request: %w", err)
+		}
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("User-Agent", "VigilAfrica-Ingestor/0.6")
 
-	if resp.StatusCode != http.StatusOK {
+		resp, reqErr = client.Do(req)
+		if reqErr != nil {
+			return result, fmt.Errorf("http request failed: %w", reqErr)
+		}
+
+		if resp.StatusCode == http.StatusOK {
+			body, reqErr = io.ReadAll(resp.Body)
+			resp.Body.Close()
+			if reqErr != nil {
+				return result, fmt.Errorf("failed to read response body: %w", reqErr)
+			}
+			break
+		}
+
+		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusServiceUnavailable {
+			bodyBytes, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+
+			if attempt == maxRetries {
+				return result, fmt.Errorf("unexpected EONET status after %d retries: %d", maxRetries, resp.StatusCode)
+			}
+
+			var rateLimitData struct {
+				RetryAfter int `json:"retry_after"`
+			}
+			
+			sleepSeconds := 5 * (1 << attempt) // exponential backoff fallback: 5s, 10s, 20s
+			if err := json.Unmarshal(bodyBytes, &rateLimitData); err == nil && rateLimitData.RetryAfter > 0 {
+				sleepSeconds = rateLimitData.RetryAfter + 5
+			}
+			
+			slog.Warn("ingestion: high demand, retrying", "country", country.Code, "status", resp.StatusCode, "attempt", attempt+1, "sleep_sec", sleepSeconds)
+			
+			select {
+			case <-ctx.Done():
+				return result, ctx.Err()
+			case <-time.After(time.Duration(sleepSeconds) * time.Second):
+			}
+			continue
+		}
+
+		resp.Body.Close()
 		return result, fmt.Errorf("unexpected EONET status: %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return result, fmt.Errorf("failed to read response body: %w", err)
 	}
 
 	var root struct {
