@@ -58,4 +58,4 @@
 - [x] 8.3 Implement exponential backoff fallback for missing/invalid `retry_after`
 - [x] 8.4 Update React dashboard to present ingestion errors natively from `/health`
 - [x] 8.5 Add unit tests for rate-limiting simulation in Go
-- [ ] 8.6 Commit changes: `feat(ingestor): graceful EONET rate limit retries`
+- [x] 8.6 Commit changes: `feat(ingestor): graceful EONET rate limit retries`
