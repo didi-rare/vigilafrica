@@ -20,8 +20,14 @@ import (
 func StartScheduler(ctx context.Context, repo database.Repository, alertCfg AlertConfig) {
 	intervalMin := 60
 	if v := os.Getenv("INGEST_INTERVAL_MIN"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			intervalMin = n
+		if n, err := strconv.Atoi(v); err == nil {
+			if n == 0 {
+				slog.Info("scheduler: disabled via INGEST_INTERVAL_MIN=0")
+				return
+			}
+			if n > 0 {
+				intervalMin = n
+			}
 		}
 	}
 

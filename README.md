@@ -10,6 +10,17 @@ Instead of asking users to interpret coordinates and satellite metadata, VigilAf
 
 ---
 
+## Demo
+
+![VigilAfrica Demo](docs/screenshots/demo.gif)
+
+A fully isolated, seeded demo environment of VigilAfrica is available for evaluation:
+> **Hosted Demo**: TBD — see project README once deployed
+
+For instructions on running the demo locally, see the [Demo Environment Guide](DEMO.md).
+
+---
+
 ## Why this project exists
 
 Across Africa, environmental and natural event data is often available globally, but not always presented in ways that are easy for local communities, responders, researchers, journalists, or civic organisations to act on.
