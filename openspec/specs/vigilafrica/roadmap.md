@@ -19,7 +19,7 @@
 | v0.5      | Operational prototype        | F-012, F-013 + operational hygiene   | ✅ Complete |
 | v0.6      | Country expansion model      | Process template (no new F-IDs)       | ✅ Complete |
 | v0.7      | Second country stable        | Enrichment quality validation         | ✅ Complete |
-| v0.8      | Pre-demo setup               | Demo environment + curated seed data  | 🔴 Planned |
+| v0.8      | Pre-demo setup               | Demo environment + curated seed data  | ✅ Complete |
 | v1.0      | Credible public launch       | Quality gate (no new F-IDs)           | 🔴 Planned |
 
 
@@ -247,6 +247,13 @@ These are blockers that must be resolved before v0.1 development begins. They ar
 - Not production hardening
 
 **Success signal**: A single URL can be sent to an NGO contact, journalist, or potential contributor and they can explore the product immediately — no setup, no "it's down right now."
+
+**Delivered** (2026-04-22):
+- `docker-compose.demo.yml` with Ghana + Nigeria seed data, migrations on first boot, and `INGEST_INTERVAL_MIN=0` to prevent live ingestion overwriting demo data
+- `DEMO.md` documenting start/stop/reset
+- `docs/screenshots/demo.png` + `docs/screenshots/demo.gif` committed
+- `README.md §Demo` section with embedded GIF
+- **Sub-feature**: Graceful EONET rate limiting (`feature-eonet-rate-limiting`) — adaptive retry loop (max 3 attempts), dynamic `retry_after + 5s` backoff, exponential fallback, and frontend error surfacing. Archived: `openspec/archive/spec-feature-eonet-rate-limiting.md`.
 
 ---
 

@@ -36,9 +36,23 @@ function selectFreshness(health: HealthResponse) {
 
   let message: string | null = null
   if (isDegraded) {
-    message = health.last_ingestion?.status === 'failure'
-      ? 'Last ingestion run failed — data may be outdated. Check system logs.'
-      : 'One or more country ingestion runs failed — some regional data may be outdated.'
+    let apiError = health.last_ingestion?.error
+    if (!apiError && health.last_ingestion_by_country) {
+      for (const key of Object.keys(health.last_ingestion_by_country)) {
+        if (health.last_ingestion_by_country[key]?.error) {
+          apiError = health.last_ingestion_by_country[key]!.error
+          break
+        }
+      }
+    }
+
+    if (apiError) {
+      message = `NASA EONET Ingestion Error: ${apiError}`
+    } else {
+      message = health.last_ingestion?.status === 'failure'
+        ? 'Last ingestion run failed — data may be outdated. Check system logs.'
+        : 'One or more country ingestion runs failed — some regional data may be outdated.'
+    }
   } else if (isStale) {
     message = `Data last updated ${Math.floor(hoursStale!)} hours ago — ingestion may be stalled.`
   }

@@ -1,4 +1,4 @@
-FROM golang:1.25-alpine AS builder
+FROM golang:1.26-alpine AS builder
 
 WORKDIR /app
 
@@ -12,7 +12,7 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Tidy the module for Go 1.25
+# Tidy the module for Go 1.26
 RUN go mod tidy
 
 # Build the binary

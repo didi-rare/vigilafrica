@@ -97,6 +97,7 @@ export interface HealthResponse {
   status: 'ok' | 'degraded'
   version: string
   last_ingestion: LastIngestion | null
+  last_ingestion_by_country?: Record<string, LastIngestion | null>
 }
 
 export async function fetchHealth(): Promise<HealthResponse> {

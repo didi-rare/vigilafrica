@@ -14,7 +14,22 @@ import (
 	"vigilafrica/api/internal/normalizer"
 )
 
-const eonetURL = "https://eonet.gsfc.nasa.gov/api/v3/events"
+// eonetURL is the NASA EONET v3 events endpoint.
+// Declared as var (not const) to allow override in tests via eonetURL = server.URL.
+// TODO(future): refactor into an Ingestor struct field to avoid global mutation (openspec-review §9.5).
+var eonetURL = "https://eonet.gsfc.nasa.gov/api/v3/events"
+
+// eonetSleepFn is the sleep function used between retries.
+// Replaced in tests to avoid real wall-clock waits (openspec-review §9.11).
+// TODO(future): inject via Ingestor struct rather than package-level var.
+var eonetSleepFn = func(ctx context.Context, d time.Duration) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(d):
+		return nil
+	}
+}
 
 // CountryConfig defines a country's ingestion parameters.
 // BBox is [min_lon, min_lat, max_lon, max_lat] in WGS84 (EPSG:4326).
@@ -109,26 +124,67 @@ func runIngest(ctx context.Context, repo database.Repository, country CountryCon
 
 	slog.Info("ingestion: fetching from EONET", "country", country.Code, "url", reqURL)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
-	if err != nil {
-		return result, fmt.Errorf("failed to create http request: %w", err)
-	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "VigilAfrica-Ingestor/0.6")
+	var body []byte
+	var reqErr error
+	var resp *http.Response
+	maxRetries := 3
 
-	resp, err := client.Do(req)
-	if err != nil {
-		return result, fmt.Errorf("http request failed: %w", err)
-	}
-	defer resp.Body.Close()
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+		if err != nil {
+			return result, fmt.Errorf("failed to create http request: %w", err)
+		}
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("User-Agent", "VigilAfrica-Ingestor")
 
-	if resp.StatusCode != http.StatusOK {
+		resp, reqErr = client.Do(req)
+		if reqErr != nil {
+			return result, fmt.Errorf("http request failed: %w", reqErr)
+		}
+
+		if resp.StatusCode == http.StatusOK {
+			body, reqErr = io.ReadAll(resp.Body)
+			resp.Body.Close()
+			if reqErr != nil {
+				return result, fmt.Errorf("failed to read response body: %w", reqErr)
+			}
+			break
+		}
+
+		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusServiceUnavailable {
+			bodyBytes, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+
+			if attempt == maxRetries {
+				return result, fmt.Errorf("unexpected EONET status after %d retries: %d", maxRetries, resp.StatusCode)
+			}
+
+			var rateLimitData struct {
+				RetryAfter int `json:"retry_after"`
+			}
+
+			// Exponential fallback: 5s, 10s, 20s if retry_after is absent or unparseable.
+			sleepSeconds := 5 * (1 << attempt)
+			if err := json.Unmarshal(bodyBytes, &rateLimitData); err == nil && rateLimitData.RetryAfter > 0 {
+				// Dynamic backoff: honour the server's hint + 5s buffer for clock drift.
+				sleepSeconds = rateLimitData.RetryAfter + 5
+			}
+
+			slog.Warn("ingestion: high demand, retrying",
+				"country", country.Code,
+				"status", resp.StatusCode,
+				"attempt", attempt+1,
+				"sleep_sec", sleepSeconds,
+			)
+
+			if err := eonetSleepFn(ctx, time.Duration(sleepSeconds)*time.Second); err != nil {
+				return result, err
+			}
+			continue
+		}
+
+		resp.Body.Close()
 		return result, fmt.Errorf("unexpected EONET status: %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return result, fmt.Errorf("failed to read response body: %w", err)
 	}
 
 	var root struct {

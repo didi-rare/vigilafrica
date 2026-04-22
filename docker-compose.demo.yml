@@ -1,0 +1,75 @@
+services:
+  demo-db:
+    image: postgis/postgis:15-3.3
+    container_name: vigilafrica-demo-db
+    environment:
+      - POSTGRES_USER=vigilafrica
+      - POSTGRES_PASSWORD=vigilafrica
+      - POSTGRES_DB=vigilafrica
+    ports:
+      - "5433:5432"
+    volumes:
+      - vigil-demo-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vigilafrica"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  demo-api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: vigilafrica-demo-api
+    depends_on:
+      demo-db:
+        condition: service_healthy
+      geoipupdate:
+        condition: service_started
+    env_file: .env
+    environment:
+      - DATABASE_URL=postgres://vigilafrica:vigilafrica@demo-db:5432/vigilafrica?sslmode=disable
+      - INGEST_INTERVAL_MIN=0
+      - GEOIP_DB_PATH=/usr/share/GeoIP/GeoLite2-City.mmdb
+    ports:
+      - "8080:8080"
+    volumes:
+      - maxmind_data:/usr/share/GeoIP:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  demo-seeder:
+    image: postgis/postgis:15-3.3
+    container_name: vigilafrica-demo-seeder
+    depends_on:
+      demo-api:
+        condition: service_healthy
+    environment:
+      - PGPASSWORD=vigilafrica
+    volumes:
+      - ./api/db/seeds:/seeds:ro
+    command: >
+      sh -c "
+      psql -h demo-db -U vigilafrica -d vigilafrica -f /seeds/sample_events_nigeria.sql &&
+      psql -h demo-db -U vigilafrica -d vigilafrica -f /seeds/sample_events_ghana.sql
+      "
+
+  geoipupdate:
+    image: maxmindinc/geoipupdate
+    container_name: vigilafrica-demo-geoip
+    environment:
+      - GEOIPUPDATE_ACCOUNT_ID=${MAXMIND_ACCOUNT_ID:-0}
+      - GEOIPUPDATE_LICENSE_KEY=${MAXMIND_LICENSE_KEY:-000000000000}
+      - GEOIPUPDATE_EDITION_IDS=GeoLite2-City
+      - GEOIPUPDATE_FREQUENCY=168 # update once a week
+    volumes:
+      - maxmind_data:/usr/share/GeoIP
+
+volumes:
+  vigil-demo-data:
+  maxmind_data:

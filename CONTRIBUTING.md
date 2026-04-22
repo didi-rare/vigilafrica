@@ -9,6 +9,7 @@ Thank you for your interest in contributing. VigilAfrica is an open-source natur
 - [Code of Conduct](#code-of-conduct)
 - [Prerequisites](#prerequisites)
 - [Local Setup](#local-setup)
+- [Demo Environment](#demo-environment)
 - [Project Structure](#project-structure)
 - [Development Workflow](#development-workflow)
 - [Running Tests](#running-tests)
@@ -124,7 +125,10 @@ If you want events without waiting for the scheduler to run:
 
 ```bash
 psql $DATABASE_URL -f api/db/seeds/sample_events_nigeria.sql
+psql $DATABASE_URL -f api/db/seeds/sample_events_ghana.sql
 ```
+
+> **Note**: Seed events use relative dates (e.g., `NOW() - INTERVAL '1 day'`) so the demo data always stays fresh across reboots.
 
 ### 8. Start the frontend
 
@@ -133,6 +137,12 @@ npm run web:dev
 ```
 
 Open [http://localhost:5173](http://localhost:5173).
+
+---
+
+## Demo Environment
+
+If you want to evaluate the project without setting up the full ingestion loop, you can quickly spin up an isolated demo instance with pre-seeded data. See the **[Demo Environment Guide](DEMO.md)** for instructions.
 
 ---
 
