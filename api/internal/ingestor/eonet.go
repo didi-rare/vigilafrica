@@ -14,7 +14,22 @@ import (
 	"vigilafrica/api/internal/normalizer"
 )
 
+// eonetURL is the NASA EONET v3 events endpoint.
+// Declared as var (not const) to allow override in tests via eonetURL = server.URL.
+// TODO(future): refactor into an Ingestor struct field to avoid global mutation (openspec-review §9.5).
 var eonetURL = "https://eonet.gsfc.nasa.gov/api/v3/events"
+
+// eonetSleepFn is the sleep function used between retries.
+// Replaced in tests to avoid real wall-clock waits (openspec-review §9.11).
+// TODO(future): inject via Ingestor struct rather than package-level var.
+var eonetSleepFn = func(ctx context.Context, d time.Duration) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(d):
+		return nil
+	}
+}
 
 // CountryConfig defines a country's ingestion parameters.
 // BBox is [min_lon, min_lat, max_lon, max_lat] in WGS84 (EPSG:4326).
@@ -120,7 +135,7 @@ func runIngest(ctx context.Context, repo database.Repository, country CountryCon
 			return result, fmt.Errorf("failed to create http request: %w", err)
 		}
 		req.Header.Set("Accept", "application/json")
-		req.Header.Set("User-Agent", "VigilAfrica-Ingestor/0.6")
+		req.Header.Set("User-Agent", "VigilAfrica-Ingestor")
 
 		resp, reqErr = client.Do(req)
 		if reqErr != nil {
@@ -147,18 +162,23 @@ func runIngest(ctx context.Context, repo database.Repository, country CountryCon
 			var rateLimitData struct {
 				RetryAfter int `json:"retry_after"`
 			}
-			
-			sleepSeconds := 5 * (1 << attempt) // exponential backoff fallback: 5s, 10s, 20s
+
+			// Exponential fallback: 5s, 10s, 20s if retry_after is absent or unparseable.
+			sleepSeconds := 5 * (1 << attempt)
 			if err := json.Unmarshal(bodyBytes, &rateLimitData); err == nil && rateLimitData.RetryAfter > 0 {
+				// Dynamic backoff: honour the server's hint + 5s buffer for clock drift.
 				sleepSeconds = rateLimitData.RetryAfter + 5
 			}
-			
-			slog.Warn("ingestion: high demand, retrying", "country", country.Code, "status", resp.StatusCode, "attempt", attempt+1, "sleep_sec", sleepSeconds)
-			
-			select {
-			case <-ctx.Done():
-				return result, ctx.Err()
-			case <-time.After(time.Duration(sleepSeconds) * time.Second):
+
+			slog.Warn("ingestion: high demand, retrying",
+				"country", country.Code,
+				"status", resp.StatusCode,
+				"attempt", attempt+1,
+				"sleep_sec", sleepSeconds,
+			)
+
+			if err := eonetSleepFn(ctx, time.Duration(sleepSeconds)*time.Second); err != nil {
+				return result, err
 			}
 			continue
 		}
