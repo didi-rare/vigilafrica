@@ -23,10 +23,10 @@ VigilAfrica uses PostgreSQL with the PostGIS extension for managing geospatial d
 ## Acceptance Criteria
 - [ ] `api/go.mod` contains the `testcontainers-go` dependencies.
 - [ ] `api/internal/database` test coverage reaches a minimum of 70%.
-- [ ] Tests execute successfully in both local environments and CI via `go test`.
+- [ ] Tests execute successfully in both local environments and CI via `go test -tags=integration`.
 - [ ] Running tests leaves no orphaned Docker containers running.
 
 ## Verification Plan
-1.  Run `go test -v -cover ./internal/database/` locally.
+1.  Run `go test -v -cover -tags=integration ./internal/database/` locally.
 2.  Verify output reports successful test passes and lists coverage > 70%.
 3.  Run `docker ps` after tests to ensure the ephemeral PostGIS container was cleanly terminated.

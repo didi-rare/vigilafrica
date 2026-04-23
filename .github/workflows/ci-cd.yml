@@ -15,7 +15,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25'          # Must match api/go.mod — see ADR-008
+          go-version: '1.26'          # Must match api/go.mod — see ADR-008
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -46,6 +46,11 @@ jobs:
         run: |
           cd api
           go test ./...
+
+      - name: Run Database Integration Tests
+        run: |
+          cd api
+          go test -v -cover -tags=integration ./internal/database/
 
       - name: Generate milestone data
         run: node scripts/generate-milestones.js
