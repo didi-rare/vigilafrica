@@ -52,6 +52,11 @@ jobs:
           cd api
           go test -v -cover -tags=integration ./internal/database/
 
+      - name: Run Frontend Tests
+        run: |
+          cd web
+          npm run test
+
       - name: Generate milestone data
         run: node scripts/generate-milestones.js
 
