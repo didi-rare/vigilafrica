@@ -59,3 +59,10 @@
 - [x] 8.4 Update React dashboard to present ingestion errors natively from `/health`
 - [x] 8.5 Add unit tests for rate-limiting simulation in Go
 - [x] 8.6 Commit changes: `feat(ingestor): graceful EONET rate limit retries`
+
+## 9. Backend DB Test Review Remediation (chore-backend-db-tests)
+
+- [x] 9.1 Add tagged database integration test execution to CI
+- [x] 9.2 Update OpenSpec verification instructions to include `-tags=integration`
+- [x] 9.3 Run `go mod tidy` so `api/go.mod` and `api/go.sum` are stable
+- [x] 9.4 Re-run database integration tests and confirm Docker cleanup
