@@ -10,6 +10,7 @@
     "build": "npm run web:build && go build -o vigilafrica ./api/cmd/server/",
     "generate:milestones": "node scripts/generate-milestones.js",
     "prebuild:web": "npm run generate:milestones",
+    "test:load": "k6 run tests/performance/load-test.js",
     "spec:validate": "openspec validate --all",
     "spec:trace": "openspec trace"
   },
