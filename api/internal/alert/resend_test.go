@@ -29,7 +29,7 @@ func TestClientSendIngestFailurePostsToResend(t *testing.T) {
 	client := NewClient(Config{
 		ResendAPIKey: "re_test",
 		FromEmail:    "alerts@vigilafrica.org",
-		ToEmail:      "maintainer@example.com",
+		ToEmails:     []string{"ops@example.com", "maintainer@example.com"},
 		Endpoint:     server.URL,
 	}, nil)
 
@@ -52,8 +52,45 @@ func TestClientSendIngestFailurePostsToResend(t *testing.T) {
 	if payload["subject"] == "" || !strings.Contains(payload["subject"].(string), "Ingestion failed") {
 		t.Fatalf("unexpected subject: %v", payload["subject"])
 	}
+	recipients, ok := payload["to"].([]any)
+	if !ok {
+		t.Fatalf("expected to payload to be an array, got %T", payload["to"])
+	}
+	if len(recipients) != 2 || recipients[0] != "ops@example.com" || recipients[1] != "maintainer@example.com" {
+		t.Fatalf("unexpected recipients: %#v", recipients)
+	}
 	if !strings.Contains(payload["html"].(string), "upstream unavailable") {
 		t.Fatalf("html body did not contain error: %v", payload["html"])
+	}
+}
+
+func TestParseRecipientsTrimsAndDropsEmptyEntries(t *testing.T) {
+	got := ParseRecipients(" ops@example.com, , maintainer@example.com ,,")
+	want := []string{"ops@example.com", "maintainer@example.com"}
+	if len(got) != len(want) {
+		t.Fatalf("expected %d recipients, got %d: %#v", len(want), len(got), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("recipient %d: expected %q, got %q", i, want[i], got[i])
+		}
+	}
+}
+
+func TestClientNoOpsWhenMissingRecipients(t *testing.T) {
+	called := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+	}))
+	defer server.Close()
+
+	client := NewClient(Config{ResendAPIKey: "re_test", Endpoint: server.URL}, nil)
+	err := client.SendStalenessAlert(context.Background(), time.Now().Add(-3*time.Hour), 2*time.Hour)
+	if err != nil {
+		t.Fatalf("expected no-op without error, got %v", err)
+	}
+	if called {
+		t.Fatal("expected missing recipients to skip HTTP call")
 	}
 }
 
@@ -64,7 +101,7 @@ func TestClientNoOpsWhenMissingAPIKey(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient(Config{ToEmail: "maintainer@example.com", Endpoint: server.URL}, nil)
+	client := NewClient(Config{ToEmails: []string{"maintainer@example.com"}, Endpoint: server.URL}, nil)
 	err := client.SendStalenessAlert(context.Background(), time.Now().Add(-3*time.Hour), 2*time.Hour)
 	if err != nil {
 		t.Fatalf("expected no-op without error, got %v", err)
@@ -82,7 +119,7 @@ func TestClientReturnsErrorForResendFailure(t *testing.T) {
 
 	client := NewClient(Config{
 		ResendAPIKey: "re_test",
-		ToEmail:      "maintainer@example.com",
+		ToEmails:     []string{"maintainer@example.com"},
 		Endpoint:     server.URL,
 	}, nil)
 

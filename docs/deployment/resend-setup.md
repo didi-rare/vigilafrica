@@ -28,12 +28,23 @@ Store master copies in the maintainer password manager. Do not commit them to th
 ```env
 RESEND_API_KEY=re_...
 ALERT_FROM_EMAIL=VigilAfrica Alerts <alerts@vigilafrica.org>
-ALERT_EMAIL_TO=maintainer@example.com
+ALERTS_TO=ops@example.com,maintainer@example.com
 ALERT_STALENESS_THRESHOLD_HOURS=2
 ALERT_STALENESS_CHECK_INTERVAL_MIN=15
 ```
 
-If `RESEND_API_KEY` or `ALERT_EMAIL_TO` is missing, the API logs a warning and skips email delivery. Local development remains unaffected.
+`ALERTS_TO` is comma-separated and may contain one or more recipients. Keep real
+addresses only in ignored runtime env files:
+
+- `/opt/vigilafrica/staging/.env`
+- `/opt/vigilafrica/production/.env`
+- local `.env` files for developer testing
+
+`ALERT_EMAIL_TO` remains a single-recipient compatibility fallback for existing
+deployments, but new deployments should use `ALERTS_TO`.
+
+If `RESEND_API_KEY` and all recipient variables are missing, the API logs a
+warning and skips email delivery. Local development remains unaffected.
 
 ## Verification
 
