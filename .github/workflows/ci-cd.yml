@@ -4,7 +4,7 @@ on:
   push:
     branches: [ development, main, releases ]
   pull_request:
-    branches: [ main, releases ]
+    branches: [ development, main, releases ]
 
 jobs:
   build-and-test:
@@ -51,6 +51,11 @@ jobs:
         run: |
           cd api
           go test -v -cover -tags=integration ./internal/database/
+
+      - name: Run Frontend Tests
+        run: |
+          cd web
+          npm run test
 
       - name: Generate milestone data
         run: node scripts/generate-milestones.js

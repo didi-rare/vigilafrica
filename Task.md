@@ -66,3 +66,12 @@
 - [x] 9.2 Update OpenSpec verification instructions to include `-tags=integration`
 - [x] 9.3 Run `go mod tidy` so `api/go.mod` and `api/go.sum` are stable
 - [x] 9.4 Re-run database integration tests and confirm Docker cleanup
+
+## 10. Frontend Component Testing (chore-frontend-tests)
+
+- [x] 10.1 Add Vitest, jsdom, React Testing Library, jest-dom, user-event, and axe dev dependencies
+- [x] 10.2 Configure Vite/Vitest with jsdom and shared test setup
+- [x] 10.3 Add EventsDashboard rendering, conditional banner, filter interaction, and accessibility tests
+- [x] 10.4 Add API client tests for event/state URL parameter parsing and error handling
+- [x] 10.5 Run frontend tests locally and wire them into CI
+- [x] 10.6 Run frontend build/lint verification

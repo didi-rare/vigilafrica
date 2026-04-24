@@ -111,7 +111,8 @@ export function Map({ events, center = [8.6753, 9.082], zoom = 5 }: MapProps) {
 
     return () => {
       map.current?.remove()
-      // Do not null map.current — the guard above relies on it to prevent StrictMode double-invoke
+      map.current = null
+      markers.current = []
     }
   }, [])
 
