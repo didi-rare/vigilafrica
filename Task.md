@@ -90,3 +90,9 @@
 - [x] 11.10 Update `web/src/components/Map.css` with z-index token for cluster circles (no hardcoded z-index, §7.10)
 - [x] 11.11 Rewrite `web/src/components/Map.test.tsx` — mock `addSource`/`addLayer`/`querySourceFeatures`/`getSource`/`removeLayer`/`removeSource`; assert cluster source config, marker sync behavior, cluster click handler
 - [x] 11.12 Run `npm run test`, `npm run lint`, and `tsc -b` — all green
+
+## 12. Developer-Driven API Load Testing (chore-k6-performance-tests)
+
+- [x] 12.1 Create `tests/performance/load-test.js` with k6 stages, thresholds, and realistic `/v1/events` filters
+- [x] 12.2 Add root `npm run test:load` convenience script
+- [x] 12.3 Verify static configuration and run local k6 check where available
