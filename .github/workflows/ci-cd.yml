@@ -2,9 +2,9 @@ name: VigilAfrica CI/CD
 
 on:
   push:
-    branches: [ development, main, releases ]
+    branches: [ development, main, release ]
   pull_request:
-    branches: [ development, main, releases ]
+    branches: [ development, main, release ]
 
 jobs:
   build-and-test:
@@ -69,34 +69,4 @@ jobs:
         run: |
           cd api
           go build -o ../vigilafrica ./cmd/server/    # Entry point: api/cmd/server/main.go (ADR-007)
-
-  deploy-staging:
-    needs: build-and-test
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Deploy to Vercel (Staging)
-        uses: amondnet/vercel-action@v25
-        with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          vercel-args: '--staging'
-
-  deploy-production:
-    needs: build-and-test
-    if: github.ref == 'refs/heads/releases'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Deploy to Vercel (Production)
-        uses: amondnet/vercel-action@v25
-        with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          vercel-args: '--prod'
 

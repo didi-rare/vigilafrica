@@ -1,0 +1,78 @@
+services:
+  staging-db:
+    image: postgis/postgis:15-3.4
+    container_name: vigilafrica-staging-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    volumes:
+      - vigil-staging-data:/var/lib/postgresql/data
+    networks:
+      - staging-internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  staging-api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${APP_VERSION:-staging}
+    container_name: vigilafrica-staging-api
+    restart: unless-stopped
+    depends_on:
+      staging-db:
+        condition: service_healthy
+      staging-geoipupdate:
+        condition: service_started
+    environment:
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@staging-db:5432/${POSTGRES_DB}?sslmode=disable
+      - API_PORT=8080
+      - GEOIP_DB_PATH=/usr/share/GeoIP/GeoLite2-City.mmdb
+      - CORS_ORIGIN=${CORS_ORIGIN}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - INGEST_INTERVAL_MIN=${INGEST_INTERVAL_MIN:-60}
+      - RATE_LIMIT_RPM=${RATE_LIMIT_RPM:-60}
+      - CACHE_TTL_SECONDS=${CACHE_TTL_SECONDS:-300}
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
+      - ALERT_FROM_EMAIL=${ALERT_FROM_EMAIL:-VigilAfrica Alerts <alerts@vigilafrica.org>}
+      - ALERT_EMAIL_TO=${ALERT_EMAIL_TO:-}
+      - ALERT_STALENESS_THRESHOLD_HOURS=${ALERT_STALENESS_THRESHOLD_HOURS:-2}
+      - ALERT_STALENESS_CHECK_INTERVAL_MIN=${ALERT_STALENESS_CHECK_INTERVAL_MIN:-15}
+    ports:
+      - "127.0.0.1:8081:8080"
+    volumes:
+      - staging-maxmind-data:/usr/share/GeoIP:ro
+    networks:
+      - staging-internal
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  staging-geoipupdate:
+    image: maxmindinc/geoipupdate
+    container_name: vigilafrica-staging-geoip
+    restart: unless-stopped
+    environment:
+      - GEOIPUPDATE_ACCOUNT_ID=${MAXMIND_ACCOUNT_ID:-0}
+      - GEOIPUPDATE_LICENSE_KEY=${MAXMIND_LICENSE_KEY:-000000000000}
+      - GEOIPUPDATE_EDITION_IDS=GeoLite2-City
+      - GEOIPUPDATE_FREQUENCY=168
+    volumes:
+      - staging-maxmind-data:/usr/share/GeoIP
+    networks:
+      - staging-internal
+
+volumes:
+  vigil-staging-data:
+  staging-maxmind-data:
+
+networks:
+  staging-internal:

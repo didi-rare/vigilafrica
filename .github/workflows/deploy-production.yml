@@ -1,0 +1,74 @@
+name: Deploy Production
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing SemVer tag to deploy or roll back to'
+        required: true
+        type: string
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve deploy tag
+        id: ref
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REQUESTED_TAG: ${{ inputs.tag }}
+        run: |
+          if [ "${EVENT_NAME}" = "workflow_dispatch" ]; then
+            TAG="${REQUESTED_TAG}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          if [[ ! "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid deploy tag: ${TAG}" >&2
+            exit 1
+          fi
+          git fetch --force origin release:refs/remotes/origin/release --tags
+          tag_sha="$(git rev-list -n 1 "${TAG}")"
+          if ! git merge-base --is-ancestor "${tag_sha}" origin/release; then
+            echo "Deploy tag ${TAG} does not point to a commit reachable from origin/release" >&2
+            exit 1
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Configure SSH
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/vigilafrica_deploy
+          chmod 600 ~/.ssh/vigilafrica_deploy
+          ssh-keyscan -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Deploy API stack
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          DEPLOY_TAG: ${{ steps.ref.outputs.tag }}
+        run: |
+          ssh -i ~/.ssh/vigilafrica_deploy "${VPS_USER}@${VPS_HOST}" bash -s -- "${DEPLOY_TAG}" <<'REMOTE'
+            set -euo pipefail
+            deploy_tag="$1"
+            cd /opt/vigilafrica/production
+            git fetch --all --tags
+            git checkout --force -- "${deploy_tag}"
+            APP_VERSION="${deploy_tag}" docker compose -f docker-compose.prod.yml up -d --build
+          REMOTE
+
+      - name: Smoke test production API
+        env:
+          DEPLOY_TAG: ${{ steps.ref.outputs.tag }}
+        run: |
+          set -euo pipefail
+          curl -fsS https://api.vigilafrica.org/health \
+            | jq -e --arg version "${DEPLOY_TAG}" '.status == "ok" and .version == $version'

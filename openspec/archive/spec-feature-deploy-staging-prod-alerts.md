@@ -83,10 +83,10 @@ Hotfix: branch off `release` → `hotfix/thing` → PR back to `release` (cherry
 18. `web/README.md` — document Vercel env mapping (`main` → staging project, `release` → prod project) and `VITE_API_BASE_URL` per env.
 19. `openspec/specs/vigilafrica/roadmap.md` — check off v0.5 items 177, 178, 182; add a note under v1.0 quality gate that staging validation is required before tagging.
 20. `openspec/specs/vigilafrica/architecture.md` — add deployment topology diagram + environment table.
-21. `openspec/specs/vigilafrica/decisions.md` — append ADR-012 "Single-VPS two-stack deployment model" with the Railway/Supabase rejection rationale from the proposal.
+21. `openspec/specs/vigilafrica/decisions.md` — append ADR-014 "Single-VPS two-stack deployment model" with the Railway/Supabase rejection rationale from the proposal.
 22. `api/cmd/server/main.go` — start the staleness watchdog goroutine alongside the scheduled ingest; wire failed-ingestion path to call `alert.SendIngestFailure`.
 23. `api/internal/ingest/scheduler.go` (or equivalent) — after writing a failed `ingestion_runs` row, call `alert.SendIngestFailure(ctx, run)`.
-24. `api/.env.example` — add `RESEND_API_KEY`, `ALERT_FROM_EMAIL`, `ALERT_EMAIL_TO`, `ALERT_STALENESS_THRESHOLD_HOURS`, `ALERT_STALENESS_CHECK_INTERVAL_MIN` with safe defaults and comments.
+24. `.env.example` — add `RESEND_API_KEY`, `ALERT_FROM_EMAIL`, `ALERT_EMAIL_TO`, `ALERT_STALENESS_THRESHOLD_HOURS`, `ALERT_STALENESS_CHECK_INTERVAL_MIN` with safe defaults and comments.
 25. `api/Dockerfile` — add `--build-arg VERSION` and stamp it into a Go `-ldflags "-X main.version=$VERSION"` variable exposed via `/health`.
 
 ## Implementation Plan
@@ -104,12 +104,12 @@ Hotfix: branch off `release` → `hotfix/thing` → PR back to `release` (cherry
    - Emits one alert per staleness event; de-dup state kept in-process (resets on restart). Document the de-dup limitation in code comment.
 4. Wire `alert.SendIngestFailure` into the ingest scheduler's post-run failure path.
 5. Write unit tests (§9): `httptest` stub for Resend, fake clock for watchdog, repository stub for `ingestion_runs` query.
-6. Update `api/.env.example` and `docs/deployment/vps.md` env var reference (already has the Resend rows — verify still accurate).
+6. Update `.env.example` and `docs/deployment/vps.md` env var reference (already has the Resend rows — verify still accurate).
 
 ### Phase 2 — VPS provisioning
 
 7. Write `deploy/provision.sh` — idempotent bash: apt updates, Docker, Caddy, ufw/fail2ban rules, `unattended-upgrades`, creates `/opt/vigilafrica/{staging,production}`, creates `deploy` user with docker group and SSH key.
-8. Manual (one-time): provision Hetzner CX22, run `provision.sh`, copy `.env` files from password manager into `/opt/vigilafrica/staging/.env` and `/opt/vigilafrica/production/.env` (chmod 600).
+8. Manual (one-time): provision Hetzner CX22, run `provision.sh`, copy `.env` files from password manager into `/opt/vigilafrica/staging/.env` and `/opt/vigilafrica/production/.env` (owned by the deploy user, chmod 600).
 9. Install `deploy/Caddyfile.example` → `/etc/caddy/Caddyfile`, replacing placeholders; reload Caddy.
 10. DNS setup (manual at registrar): A records for `vigilafrica.org`, `staging.vigilafrica.org`, `api.vigilafrica.org`, `api.staging.vigilafrica.org` + Vercel CNAMEs for the frontend subdomains.
 
@@ -161,7 +161,7 @@ Hotfix: branch off `release` → `hotfix/thing` → PR back to `release` (cherry
 34. Update `web/README.md` with Vercel env mapping.
 35. Update `openspec/specs/vigilafrica/roadmap.md` — check off §v0.5 items 177, 178, 182.
 36. Update `openspec/specs/vigilafrica/architecture.md` with deployment diagram.
-37. Append ADR-012 to `openspec/specs/vigilafrica/decisions.md`.
+37. Append ADR-014 to `openspec/specs/vigilafrica/decisions.md`.
 
 ### Phase 8 — Validation
 
@@ -207,11 +207,11 @@ Hotfix: branch off `release` → `hotfix/thing` → PR back to `release` (cherry
 - [ ] All 7 docs listed in Components to Touch (§14–§21) updated.
 - [ ] A new contributor can read `CONTRIBUTING.md` and correctly identify which branch to PR against without asking.
 - [ ] `DEMO.md` no longer contains the `TBD — see project README once deployed` placeholder; resolves to `staging.vigilafrica.org`.
-- [ ] ADR-012 recorded in `decisions.md` documenting the hosting choice + Railway/Supabase rejection rationale.
+- [ ] ADR-014 recorded in `decisions.md` documenting the hosting choice + Railway/Supabase rejection rationale.
 
 ### Security
 - [ ] No secrets committed to the repo (verified by grepping the diff for `re_`, `postgres://`, private-key headers).
-- [ ] `.env` files on VPS are `chmod 600`, root-owned.
+- [ ] `.env` files on VPS are owned by the deploy user with `chmod 600`, so GitHub Actions deploys can read them without exposing them to other users.
 - [ ] GitHub Environment `production` has a required reviewer configured.
 - [ ] Only the maintainer's SSH public key is in `~/.ssh/authorized_keys` on the VPS; password auth disabled in `sshd_config`.
 
@@ -239,9 +239,9 @@ Hotfix: branch off `release` → `hotfix/thing` → PR back to `release` (cherry
 
 | Risk | Mitigation |
 |---|---|
-| Single VPS = single point of failure | Accepted at v1.0 scale; documented in ADR-012; off-box `pg_dump` backups (existing cron in vps.md) cover data; rebuild-from-script path via `provision.sh`. |
+| Single VPS = single point of failure | Accepted at v1.0 scale; documented in ADR-014; off-box `pg_dump` backups (existing cron in vps.md) cover data; rebuild-from-script path via `provision.sh`. |
 | Resend free tier exhausted (100/day) | Failure-only alerts — realistic volume <5/day. De-dup state in watchdog prevents repeated fires for one incident. |
 | SSH key compromise = full prod access | GitHub Environment SSH keys are separate from maintainer's personal key; revoke by removing from `authorized_keys`. |
 | Tag pushed by mistake → prod deploy | Production environment requires manual approval click; tag push alone does not deploy. |
-| `.env` on VPS drifts from documented example | `api/.env.example` is the source of truth; a quarterly diff check is a CONTRIBUTING.md reminder. |
+| `.env` on VPS drifts from documented example | `.env.example` is the source of truth; a quarterly diff check is a CONTRIBUTING.md reminder. |
 | DNS misconfiguration blocks cert issuance | `deploy/provision.sh` verifies DNS resolves to VPS IP before reloading Caddy; Caddy logs cert issuance. |

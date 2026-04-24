@@ -31,7 +31,7 @@ Deliver a two-environment topology on a single VPS, an automated deploy pipeline
 - **Resend alerting** (from zero): account creation, `vigilafrica.org` sending-domain verification (SPF/DKIM/DMARC), two API keys (one per env), wired into existing `alert` package to satisfy ADR-011:
   - Failed-ingestion alert on every failed `ingestion_runs` row
   - Staleness watchdog goroutine — alerts if no successful ingestion in `ALERT_STALENESS_THRESHOLD_HOURS` (default 2h)
-- **Secrets**: GitHub Environments hold CI-side secrets (SSH key, host); runtime secrets (`RESEND_API_KEY`, `DATABASE_URL`, etc.) live in `/opt/vigilafrica/{env}/.env` on the VPS, `chmod 600`, root-owned. Master copies kept in the maintainer's password manager.
+- **Secrets**: GitHub Environments hold CI-side secrets (SSH key, host); runtime secrets (`RESEND_API_KEY`, `DATABASE_URL`, etc.) live in `/opt/vigilafrica/{env}/.env` on the VPS, owned by the deploy user with `chmod 600`. Master copies kept in the maintainer's password manager.
 - **Documentation refresh** across 7 files (see spec).
 - **Hosted demo URL wiring** — `DEMO.md` placeholder from v0.8 resolves to `staging.vigilafrica.org` (demo seed data path).
 

@@ -25,6 +25,7 @@
 | ADR-011 | Ingestion Observability: Resend Alerting  | ACCEPTED | 2026-04-16 |
 | ADR-012 | Frontend Server State: TanStack Query     | ACCEPTED | 2026-04-18 |
 | ADR-013 | Frontend Styling: Plain CSS over CSS-in-JS | ACCEPTED | 2026-04-18 |
+| ADR-014 | Single-VPS Two-Stack Deployment Model     | ACCEPTED | 2026-04-24 |
 
 ---
 
@@ -362,7 +363,7 @@ Four options evaluated: SMTP (self-configured), SendGrid, Mailgun, Resend.
 
 - `RESEND_API_KEY` and `ALERT_EMAIL_TO` are required env vars from v0.5 onward — documented in `.env.example`
 - The `ingestion_runs` table requires a new migration: `api/db/migrations/` (numbered after existing migrations)
-- All ingestion observability logic lives in `api/internal/ingestor/` — no new top-level package
+- Resend email delivery and staleness watchdog logic live in `api/internal/alert/`; scheduled ingestion remains in `api/internal/ingestor/`
 - The `/health` handler in `api/internal/handlers/` queries `ingestion_runs` for the last run record
 - If Resend is unreachable when sending an alert, the failure is logged but does not crash the ingestor or scheduler
 
@@ -430,3 +431,37 @@ Styling approach was evaluated at project start. Options considered: Tailwind CS
 - CSS custom properties in `index.css` are the design token layer
 - No `styled-components`, `@emotion/react`, `@emotion/styled`, or Tailwind in `package.json`
 - Adding any CSS-in-JS library or Tailwind requires superseding this ADR
+
+---
+
+## ADR-014 — Single-VPS Two-Stack Deployment Model
+
+**Date**: 2026-04-24
+**Status**: ACCEPTED
+
+### Context
+
+VigilAfrica needs staging and production environments before v1.0 can be tagged. The project is still solo-maintained and cost-sensitive, but production changes need a real promotion path, versioned deploys, and a rollback mechanism.
+
+### Decision
+
+Run staging and production on one VPS as two isolated Docker Compose stacks behind one host-level Caddy instance:
+
+- Staging API: `api.staging.vigilafrica.org` -> `127.0.0.1:8081`, deployed from `main`
+- Production API: `api.vigilafrica.org` -> `127.0.0.1:8080`, deployed from SemVer tags on `release`
+- Frontend: two Vercel projects, `staging.vigilafrica.org` from `main` and `vigilafrica.org` from `release`
+- Production deploys require GitHub Environment approval
+
+### Options Considered
+
+- **Railway**: rejected because managed Postgres does not provide the same PostGIS story, and custom containers erase much of the managed-platform benefit.
+- **Supabase database + VPS API**: rejected for v1.0 because it splits the operational surface across vendors and adds latency for ingestion upserts.
+- **Fly.io**: rejected because it does not materially simplify the PostGIS + low-cost deployment story for this stage.
+- **Branch-push production deploys**: rejected because tags provide a clearer release artifact and rollback target.
+
+### Consequences
+
+- One VPS remains a single point of failure, accepted for v1.0 scale.
+- Staging and production must use separate `.env` files, Docker networks, and volumes.
+- `/health.version` is stamped at build time with a commit SHA for staging and a SemVer tag for production.
+- Rollback is performed by redeploying a prior tag through the production workflow.

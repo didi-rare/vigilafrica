@@ -1,0 +1,44 @@
+name: Deploy Staging
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure SSH
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/vigilafrica_deploy
+          chmod 600 ~/.ssh/vigilafrica_deploy
+          ssh-keyscan -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Deploy API stack
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          ssh -i ~/.ssh/vigilafrica_deploy "${VPS_USER}@${VPS_HOST}" "
+            set -euo pipefail
+            cd /opt/vigilafrica/staging
+            git fetch --all --tags
+            git checkout main
+            git pull --ff-only origin main
+            APP_VERSION=${GITHUB_SHA::7} docker compose -f docker-compose.staging.yml up -d --build
+          "
+
+      - name: Smoke test staging API
+        env:
+          EXPECTED_VERSION: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          short_sha="${EXPECTED_VERSION::7}"
+          curl -fsS https://api.staging.vigilafrica.org/health \
+            | jq -e --arg version "${short_sha}" '.status == "ok" and .version == $version'

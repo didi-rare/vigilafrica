@@ -1,98 +1,54 @@
-# v0.8 Pre-Demo Setup
+# feature-deploy-staging-prod-alerts
 
-**Branch**: `feat/v0.8-pre-demo-setup`
-**Spec**: `openspec/changes/v08-pre-demo-setup/specs/`
-**Change record**: `openspec/changes/v08-pre-demo-setup/`
+**Branch:** `feat/feature-deploy-staging-prod-alerts`
+**Status:** Archived on 2026-04-24
+**Proposal:** `openspec/archive/proposal-feature-deploy-staging-prod-alerts.md`
+**Spec:** `openspec/archive/spec-feature-deploy-staging-prod-alerts.md`
 
-## 1. Seed Data — Ghana Extension
+## 1. Stale Cleanup
 
-- [x] 1.1 Create `api/db/seeds/sample_events_ghana.sql` with ≥ 3 Ghana events covering ≥ 3 regions, categories Floods + Wildfires, idempotent (`ON CONFLICT DO NOTHING`), relative event dates (`NOW() - INTERVAL '...'`)
-- [x] 1.2 Verify Ghana seed events enrich correctly — `state_name` populates for each event after applying seed to a local DB with migration 000005 applied
-- [x] 1.3 Add a `docs/seeds/` note in `CONTRIBUTING.md` (or inline comment in seed file) explaining that dates are relative so data stays fresh
+- [x] 1.1 Replace stale v0.8 pre-demo checklist with this feature-specific OpenSpec apply checklist
+- [x] 1.2 Confirm active OpenSpec docs and implementation branch are aligned
 
-## 2. Demo Docker Compose
+## 2. Resend Alerting
 
-- [x] 2.1 Create `docker-compose.demo.yml` — services: `demo-db` (postgres:15-postgis/3, named volume `vigil-demo-data`, port 5433) and `demo-api` (same image as prod, `INGEST_INTERVAL_MIN=0` or no ingest service, `DATABASE_URL` pointing to `demo-db`)
-- [x] 2.2 Add an init script or compose `healthcheck` + `depends_on` that runs all migrations + both seed files on first boot
-- [x] 2.3 Verify: `docker compose -f docker-compose.demo.yml up -d` → `curl localhost:8080/v1/events` returns Nigeria + Ghana events
-- [x] 2.4 Verify idempotency: stop + `docker compose -f docker-compose.demo.yml up -d` again → same event count, no duplication errors
-- [x] 2.5 Add `vigil-demo-data` volume name to `.gitignore` documentation comment (volume itself is not tracked, just note it exists)
+- [x] 2.1 Move Resend delivery into `api/internal/alert`
+- [x] 2.2 Keep alert configuration explicit and documented in `.env.example`
+- [x] 2.3 Send failed-ingestion alerts from scheduled ingestion failures
+- [x] 2.4 Start a configurable staleness watchdog from the API server
+- [x] 2.5 Add unit tests for Resend delivery and watchdog decision logic
 
-## 3. DEMO.md Documentation
+## 3. Deployment Topology
 
-- [x] 3.1 Create `DEMO.md` at repo root with sections: Prerequisites, Start the demo, Access the frontend, Stop the demo, Reset demo data
-- [x] 3.2 `DEMO.md` Prerequisites section lists: Docker + Docker Compose, Node.js (for frontend), `git clone` instructions
-- [x] 3.3 `DEMO.md` includes a placeholder for the hosted demo URL (`TBD — see project README once deployed`)
-- [x] 3.4 Add a `## Demo Environment` section to `CONTRIBUTING.md` with a one-liner and link to `DEMO.md`
+- [x] 3.1 Add production and staging Docker Compose files with distinct ports and volumes
+- [x] 3.2 Add a Caddyfile example for `api.vigilafrica.org` and `api.staging.vigilafrica.org`
+- [x] 3.3 Add an idempotent VPS provisioning script
+- [x] 3.4 Stamp API `/health.version` from Docker build args
 
-## 4. Screenshot
+## 4. GitHub Actions
 
-- [x] 4.1 Run demo compose locally, open frontend, ensure Nigeria event markers are visible on the map
-- [x] 4.2 Take a screenshot at 1280×800 showing the map view with at least 2 event markers and the filter controls visible
-- [x] 4.3 Save as `docs/screenshots/demo.png` (PNG, ≤ 1 MB)
-- [x] 4.4 Commit `docs/screenshots/demo.png`
+- [x] 4.1 Keep CI focused on build/test for `development`, `main`, and `release`
+- [x] 4.2 Add staging deploy workflow for pushes to `main`
+- [x] 4.3 Add gated production deploy workflow for SemVer tags and rollback dispatch
 
-## 5. Demo GIF
+## 5. Documentation
 
-- [x] 5.1 Record 25–30 second screen capture: (1) page loads with Nigeria events, (2) click a marker to see popup, (3) switch country filter to Ghana, (4) Ghana events appear with Ghanaian region names
-- [x] 5.2 Optimize GIF: target 10 fps, ≤ 3 MB (`gifsicle -O3 --lossy=80` or equivalent)
-- [x] 5.3 Save as `docs/screenshots/demo.gif`
-- [x] 5.4 Commit `docs/screenshots/demo.gif`
+- [x] 5.1 Refresh `docs/deployment/vps.md` for two-stack VPS topology
+- [x] 5.2 Add release-process, Resend setup, and topology deployment docs
+- [x] 5.3 Update README, CONTRIBUTING, DEMO, and web README for environments and branch flow
+- [x] 5.4 Update roadmap, architecture, and decisions with the v1.0 deployment model
 
-## 6. README Update
+## 6. Verification
 
-- [x] 6.1 Add `## Demo` section to `README.md` (after the "What is VigilAfrica" section) with: embedded `demo.gif`, one-line description, placeholder hosted demo URL
-- [x] 6.2 Add `docs/screenshots/` to the `.gitignore` exclusion allowlist if needed (ensure PNGs and GIFs are not gitignored)
-- [x] 6.3 Verify README renders correctly on GitHub (image embeds, no broken links)
+- [x] 6.1 Run Go alert unit tests
+- [x] 6.2 Run broader Go tests
+- [x] 6.3 Run OpenSpec validation
+- [x] 6.4 Note any environment-only verification that still requires live VPS, DNS, Resend, Vercel, or GitHub Environment setup
 
-## 7. Final Verification
+Environment-only checks still required after merge/deploy:
 
-- [x] 7.1 Run `docker compose -f docker-compose.demo.yml up -d` from a clean clone — confirm the full flow works without prior setup
-- [x] 7.2 Confirm all v0.8 roadmap acceptance criteria are met (checklist in `roadmap.md §v0.8`)
-- [x] 7.3 Commit all changes under conventional commit format: `feat(demo): add v0.8 pre-demo setup`
-
-## 8. Graceful EONET Rate Limiting (feature-eonet-rate-limiting)
-
-- [x] 8.1 Implement retry loop in `runIngest` (max 3 retries)
-- [x] 8.2 Parse `retry_after` JSON payload for 429/503 status codes and calculate backoff
-- [x] 8.3 Implement exponential backoff fallback for missing/invalid `retry_after`
-- [x] 8.4 Update React dashboard to present ingestion errors natively from `/health`
-- [x] 8.5 Add unit tests for rate-limiting simulation in Go
-- [x] 8.6 Commit changes: `feat(ingestor): graceful EONET rate limit retries`
-
-## 9. Backend DB Test Review Remediation (chore-backend-db-tests)
-
-- [x] 9.1 Add tagged database integration test execution to CI
-- [x] 9.2 Update OpenSpec verification instructions to include `-tags=integration`
-- [x] 9.3 Run `go mod tidy` so `api/go.mod` and `api/go.sum` are stable
-- [x] 9.4 Re-run database integration tests and confirm Docker cleanup
-
-## 10. Frontend Component Testing (chore-frontend-tests)
-
-- [x] 10.1 Add Vitest, jsdom, React Testing Library, jest-dom, user-event, and axe dev dependencies
-- [x] 10.2 Configure Vite/Vitest with jsdom and shared test setup
-- [x] 10.3 Add EventsDashboard rendering, conditional banner, filter interaction, and accessibility tests
-- [x] 10.4 Add API client tests for event/state URL parameter parsing and error handling
-- [x] 10.5 Run frontend tests locally and wire them into CI
-- [x] 10.6 Run frontend build/lint verification
-
-## 11. Map Performance & Clustering (feature-map-clustering)
-
-- [x] 11.1 Refactor `web/src/components/Map.tsx` to add a GeoJSON source (`events-map-source`) with `cluster: true`, `clusterMaxZoom: 14`, `clusterRadius: 50`
-- [x] 11.2 Add `events-map-clusters` circle layer with `step`-based colors (amber/orange/red) and radii
-- [x] 11.3 Add `events-map-cluster-count` symbol layer showing `point_count_abbreviated`
-- [x] 11.4 Implement `syncMarkers()` that calls `querySourceFeatures`, diffs by id, and adds/removes DOM markers only for unclustered visible events
-- [x] 11.5 Change `markers` ref from array to `Map<string, maplibregl.Marker>` for O(1) id lookup
-- [x] 11.6 Wire `syncMarkers()` into `moveend`, `zoomend`, and `sourcedata` events in the load handler
-- [x] 11.7 Add cluster click handler using `getClusterExpansionZoom` + `easeTo`, plus pointer cursor on hover
-- [x] 11.8 Remove cluster layers + source in useEffect cleanup before `map.remove()`
-- [x] 11.9 Memoize GeoJSON FeatureCollection from events (§12.8)
-- [x] 11.10 Update `web/src/components/Map.css` with z-index token for cluster circles (no hardcoded z-index, §7.10)
-- [x] 11.11 Rewrite `web/src/components/Map.test.tsx` — mock `addSource`/`addLayer`/`querySourceFeatures`/`getSource`/`removeLayer`/`removeSource`; assert cluster source config, marker sync behavior, cluster click handler
-- [x] 11.12 Run `npm run test`, `npm run lint`, and `tsc -b` — all green
-
-## 12. Developer-Driven API Load Testing (chore-k6-performance-tests)
-
-- [x] 12.1 Create `tests/performance/load-test.js` with k6 stages, thresholds, and realistic `/v1/events` filters
-- [x] 12.2 Add root `npm run test:load` convenience script
-- [x] 12.3 Verify static configuration and run local k6 check where available
+- Configure live DNS and Caddy on the VPS
+- Configure GitHub `staging` and `production` Environments with deploy secrets
+- Configure Vercel staging/production projects and `VITE_API_BASE_URL`
+- Verify a staging failed-ingestion email with real Resend credentials
+- Verify staleness alerting and production rollback against live infrastructure
