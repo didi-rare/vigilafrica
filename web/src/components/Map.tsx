@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import maplibregl from 'maplibre-gl/dist/maplibre-gl-csp'
 import { setWorkerUrl } from 'maplibre-gl/dist/maplibre-gl-csp'
 import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-csp-worker.js?url'
@@ -6,6 +6,10 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 import './Map.css'
 
 setWorkerUrl(maplibreWorkerUrl)
+
+const SOURCE_ID = 'events-map-source'
+const CLUSTERS_LAYER_ID = 'events-map-clusters'
+const CLUSTER_COUNT_LAYER_ID = 'events-map-cluster-count'
 
 interface EventMarker {
   id: string
@@ -19,6 +23,12 @@ interface MapProps {
   events: EventMarker[]
   center?: [number, number]
   zoom?: number
+}
+
+type EventsGeoJSON = GeoJSON.FeatureCollection<GeoJSON.Point, { id: string; title: string; category: string }>
+type MarkerRecord = {
+  marker: maplibregl.Marker
+  event: EventMarker
 }
 
 function getMarkerVariant(category: string): 'flood' | 'fire' {
@@ -58,22 +68,52 @@ function createMarkerElement(event: EventMarker): HTMLButtonElement {
   return button
 }
 
+function buildEventsGeoJSON(events: readonly EventMarker[]): EventsGeoJSON {
+  return {
+    type: 'FeatureCollection',
+    features: events.map((event) => ({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [event.lng, event.lat] },
+      properties: { id: event.id, title: event.title, category: event.category },
+    })),
+  }
+}
+
+function markerMatchesEvent(record: MarkerRecord, event: EventMarker): boolean {
+  return record.event.lat === event.lat &&
+    record.event.lng === event.lng &&
+    record.event.category === event.category &&
+    record.event.title === event.title
+}
+
 export function Map({ events, center = [8.6753, 9.082], zoom = 5 }: MapProps) {
   const mapContainer = useRef<HTMLDivElement>(null)
-  const map = useRef<maplibregl.Map | null>(null)
-  const markers = useRef<maplibregl.Marker[]>([])
+  const mapInstance = useRef<maplibregl.Map | null>(null)
+  const markers = useRef<globalThis.Map<string, MarkerRecord>>(new globalThis.Map())
   const [isLoaded, setIsLoaded] = useState(false)
   const initialCenter = useRef(center)
   const initialZoom = useRef(zoom)
 
-  // Initialization - Run once per mount. Guard prevents StrictMode double-invoke (§12.3).
-  useEffect(() => {
-    if (map.current || !mapContainer.current) return
+  // §12.8 — memoize GeoJSON construction so setData only runs when events change
+  const geojson = useMemo(() => buildEventsGeoJSON(events), [events])
+  const eventsById = useMemo(() => {
+    const map = new globalThis.Map<string, EventMarker>()
+    for (const event of events) {
+      map.set(event.id, event)
+    }
+    return map
+  }, [events])
 
-    map.current = new maplibregl.Map({
+  // Initialization — run once per mount. Guard against StrictMode double-invoke (§12.3).
+  useEffect(() => {
+    if (mapInstance.current || !mapContainer.current) return
+
+    const instance = new maplibregl.Map({
       container: mapContainer.current,
       style: {
         version: 8,
+        // Required so the cluster-count symbol layer can render text glyphs.
+        glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
         sources: {
           'map-osm': {
             type: 'raster',
@@ -104,52 +144,188 @@ export function Map({ events, center = [8.6753, 9.082], zoom = 5 }: MapProps) {
       center: initialCenter.current,
       zoom: initialZoom.current,
     })
+    mapInstance.current = instance
+    // Capture the current markers collection so cleanup operates on the same
+    // Map instance that was populated during this effect's lifetime.
+    const markersMap = markers.current
 
-    map.current.on('load', () => {
+    instance.on('load', () => {
+      instance.addSource(SOURCE_ID, {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+        cluster: true,
+        clusterMaxZoom: 14,
+        clusterRadius: 50,
+      })
+
+      instance.addLayer({
+        id: CLUSTERS_LAYER_ID,
+        type: 'circle',
+        source: SOURCE_ID,
+        filter: ['has', 'point_count'],
+        paint: {
+          'circle-color': [
+            'step',
+            ['get', 'point_count'],
+            '#F5A623',
+            10,
+            '#E8622A',
+            50,
+            '#C0392B',
+          ],
+          'circle-radius': [
+            'step',
+            ['get', 'point_count'],
+            20,
+            10,
+            28,
+            50,
+            36,
+          ],
+          'circle-stroke-width': 2,
+          'circle-stroke-color': 'rgba(255, 255, 255, 0.6)',
+          'circle-opacity': 0.85,
+        },
+      })
+
+      instance.addLayer({
+        id: CLUSTER_COUNT_LAYER_ID,
+        type: 'symbol',
+        source: SOURCE_ID,
+        filter: ['has', 'point_count'],
+        layout: {
+          'text-field': ['get', 'point_count_abbreviated'],
+          'text-font': ['Open Sans Bold'],
+          'text-size': 13,
+        },
+        paint: {
+          'text-color': '#ffffff',
+        },
+      })
+
+      instance.on('click', CLUSTERS_LAYER_ID, (e) => {
+        const features = instance.queryRenderedFeatures(e.point, { layers: [CLUSTERS_LAYER_ID] })
+        if (features.length === 0) return
+        const feature = features[0]
+        const clusterId = feature.properties?.cluster_id
+        if (typeof clusterId !== 'number') return
+        const source = instance.getSource(SOURCE_ID) as maplibregl.GeoJSONSource | undefined
+        if (!source) return
+        source.getClusterExpansionZoom(clusterId).then((nextZoom) => {
+          const geometry = feature.geometry
+          if (geometry.type !== 'Point') return
+          instance.easeTo({
+            center: geometry.coordinates as [number, number],
+            zoom: nextZoom,
+          })
+        }).catch(() => {
+          // Cluster no longer exists (e.g. data changed between click and response) — ignore.
+        })
+      })
+
+      instance.on('mouseenter', CLUSTERS_LAYER_ID, () => {
+        instance.getCanvas().style.cursor = 'pointer'
+      })
+      instance.on('mouseleave', CLUSTERS_LAYER_ID, () => {
+        instance.getCanvas().style.cursor = ''
+      })
+
       setIsLoaded(true)
     })
 
     return () => {
-      map.current?.remove()
-      map.current = null
-      markers.current = []
+      markersMap.forEach((record) => record.marker.remove())
+      markersMap.clear()
+
+      if (instance.getLayer(CLUSTER_COUNT_LAYER_ID)) instance.removeLayer(CLUSTER_COUNT_LAYER_ID)
+      if (instance.getLayer(CLUSTERS_LAYER_ID)) instance.removeLayer(CLUSTERS_LAYER_ID)
+      if (instance.getSource(SOURCE_ID)) instance.removeSource(SOURCE_ID)
+
+      instance.remove()
+      mapInstance.current = null
     }
   }, [])
 
-  // Fly-to when center changes (e.g., context loaded)
+  // Fly-to when center prop changes (e.g., context loaded).
   useEffect(() => {
-    if (!map.current || !isLoaded) return
+    const instance = mapInstance.current
+    if (!instance || !isLoaded) return
 
-    // Guard against invalid coordinates that would crash flyTo
     if (typeof center[0] !== 'number' || typeof center[1] !== 'number') return
-
-    map.current.flyTo({ center, zoom: 7, speed: 0.8 })
+    instance.flyTo({ center, zoom: 7, speed: 0.8 })
   }, [center, isLoaded])
 
-  // Marker Management
+  // Feed data into the clustering source + keep DOM markers in sync with
+  // unclustered, in-viewport points (§12.7).
   useEffect(() => {
-    if (!map.current || !isLoaded) return
+    const instance = mapInstance.current
+    if (!instance || !isLoaded) return
 
-    // Clear existing markers properly
-    markers.current.forEach((marker) => marker.remove())
-    markers.current = []
+    const source = instance.getSource(SOURCE_ID) as maplibregl.GeoJSONSource | undefined
+    if (!source) return
+    source.setData(geojson)
 
-    events.forEach((event) => {
-      const el = createMarkerElement(event)
+    const syncMarkers = () => {
+      const map = mapInstance.current
+      if (!map) return
+      const features = map.querySourceFeatures(SOURCE_ID)
+      const unclusteredIds = new Set<string>()
+      for (const feature of features) {
+        if (feature.properties?.cluster) continue
+        const id = feature.properties?.id
+        if (typeof id === 'string' && eventsById.has(id)) {
+          unclusteredIds.add(id)
+        }
+      }
 
-      const popupContent = document.createElement('div')
-      const title = document.createElement('h3')
-      title.textContent = event.title
-      popupContent.appendChild(title)
+      for (const [id, record] of markers.current) {
+        if (!unclusteredIds.has(id)) {
+          record.marker.remove()
+          markers.current.delete(id)
+        }
+      }
 
-      const marker = new maplibregl.Marker({ element: el, anchor: 'bottom' })
-        .setLngLat([event.lng, event.lat])
-        .setPopup(new maplibregl.Popup({ offset: 20 }).setDOMContent(popupContent))
-        .addTo(map.current!)
+      for (const id of unclusteredIds) {
+        const event = eventsById.get(id)
+        if (!event) continue
 
-      markers.current.push(marker)
-    })
-  }, [events, isLoaded])
+        const existing = markers.current.get(id)
+        if (existing && markerMatchesEvent(existing, event)) continue
+        if (existing) {
+          existing.marker.remove()
+          markers.current.delete(id)
+        }
+
+        const el = createMarkerElement(event)
+        const popupContent = document.createElement('div')
+        const title = document.createElement('h3')
+        title.textContent = event.title
+        popupContent.appendChild(title)
+
+        const marker = new maplibregl.Marker({ element: el, anchor: 'bottom' })
+          .setLngLat([event.lng, event.lat])
+          .setPopup(new maplibregl.Popup({ offset: 20 }).setDOMContent(popupContent))
+          .addTo(map)
+        markers.current.set(id, { marker, event })
+      }
+    }
+
+    const handleSourceData = (e: maplibregl.MapSourceDataEvent) => {
+      if (e.sourceId !== SOURCE_ID || !e.isSourceLoaded) return
+      syncMarkers()
+    }
+
+    syncMarkers()
+    instance.on('moveend', syncMarkers)
+    instance.on('zoomend', syncMarkers)
+    instance.on('sourcedata', handleSourceData)
+
+    return () => {
+      instance.off('moveend', syncMarkers)
+      instance.off('zoomend', syncMarkers)
+      instance.off('sourcedata', handleSourceData)
+    }
+  }, [geojson, eventsById, isLoaded])
 
   return (
     <div className="map-wrapper glass-effect">
