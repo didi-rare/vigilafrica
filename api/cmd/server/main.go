@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -135,7 +136,7 @@ func loadAlertConfigFromEnv() alert.Config {
 	return alert.Config{
 		ResendAPIKey: os.Getenv("RESEND_API_KEY"),
 		FromEmail:    envOrDefault("ALERT_FROM_EMAIL", "VigilAfrica Alerts <alerts@vigilafrica.org>"),
-		ToEmail:      os.Getenv("ALERT_EMAIL_TO"),
+		ToEmails:     alert.ParseRecipients(envOrDefaultTrimmed("ALERTS_TO", os.Getenv("ALERT_EMAIL_TO"))),
 	}
 }
 
@@ -148,6 +149,13 @@ func loadWatchdogConfigFromEnv() alert.WatchdogConfig {
 
 func envOrDefault(key, fallback string) string {
 	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return fallback
+}
+
+func envOrDefaultTrimmed(key, fallback string) string {
+	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
 		return value
 	}
 	return fallback

@@ -71,7 +71,7 @@ RATE_LIMIT_RPM=60
 CACHE_TTL_SECONDS=300
 RESEND_API_KEY=re_...
 ALERT_FROM_EMAIL=VigilAfrica Alerts <alerts@vigilafrica.org>
-ALERT_EMAIL_TO=maintainer@example.com
+ALERTS_TO=ops@example.com,maintainer@example.com
 ALERT_STALENESS_THRESHOLD_HOURS=2
 ALERT_STALENESS_CHECK_INTERVAL_MIN=15
 MAXMIND_ACCOUNT_ID=<optional>
@@ -79,6 +79,10 @@ MAXMIND_LICENSE_KEY=<optional>
 ```
 
 Production should use `CORS_ORIGIN=https://vigilafrica.org`.
+Use placeholder addresses in committed docs only. Set real alert recipients
+directly in `/opt/vigilafrica/staging/.env` and
+`/opt/vigilafrica/production/.env`; these files are not committed and should
+remain deploy-owned with mode `0600`.
 
 ## Manual Stack Commands
 

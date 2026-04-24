@@ -20,7 +20,7 @@ const defaultResendEndpoint = "https://api.resend.com/emails"
 type Config struct {
 	ResendAPIKey string
 	FromEmail    string
-	ToEmail      string
+	ToEmails     []string
 	Endpoint     string
 }
 
@@ -40,6 +40,7 @@ func NewClient(cfg Config, logger *slog.Logger) *Client {
 	if cfg.FromEmail == "" {
 		cfg.FromEmail = "VigilAfrica Alerts <alerts@vigilafrica.org>"
 	}
+	cfg.ToEmails = cleanRecipients(cfg.ToEmails)
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -51,7 +52,26 @@ func NewClient(cfg Config, logger *slog.Logger) *Client {
 }
 
 func (c *Client) Enabled() bool {
-	return c != nil && c.cfg.ResendAPIKey != "" && c.cfg.ToEmail != ""
+	return c != nil && c.cfg.ResendAPIKey != "" && len(c.cfg.ToEmails) > 0
+}
+
+func ParseRecipients(value string) []string {
+	if value == "" {
+		return nil
+	}
+	return cleanRecipients(strings.Split(value, ","))
+}
+
+func cleanRecipients(values []string) []string {
+	recipients := make([]string, 0, len(values))
+	for _, value := range values {
+		recipient := strings.TrimSpace(value)
+		if recipient == "" {
+			continue
+		}
+		recipients = append(recipients, recipient)
+	}
+	return recipients
 }
 
 func (c *Client) SendIngestFailure(ctx context.Context, run *models.IngestionRun) error {
@@ -98,7 +118,7 @@ func (c *Client) SendIngestFailure(ctx context.Context, run *models.IngestionRun
 	if err := c.sendEmail(ctx, subject, htmlBody, textBody); err != nil {
 		return fmt.Errorf("send failure alert: %w", err)
 	}
-	c.log.Info("failure alert sent", "run_id", run.ID, "country", run.CountryCode, "to", c.cfg.ToEmail)
+	c.log.Info("failure alert sent", "run_id", run.ID, "country", run.CountryCode, "recipient_count", len(c.cfg.ToEmails))
 	return nil
 }
 
@@ -128,14 +148,14 @@ func (c *Client) SendStalenessAlert(ctx context.Context, lastSuccessAt time.Time
 	if err := c.sendEmail(ctx, subject, htmlBody, textBody); err != nil {
 		return fmt.Errorf("send staleness alert: %w", err)
 	}
-	c.log.Warn("staleness alert sent", "last_success_at", data.LastSuccessAt, "hours_stale", hoursStale, "to", c.cfg.ToEmail)
+	c.log.Warn("staleness alert sent", "last_success_at", data.LastSuccessAt, "hours_stale", hoursStale, "recipient_count", len(c.cfg.ToEmails))
 	return nil
 }
 
 func (c *Client) sendEmail(ctx context.Context, subject, htmlBody, textBody string) error {
 	payload := map[string]any{
 		"from":    c.cfg.FromEmail,
-		"to":      []string{c.cfg.ToEmail},
+		"to":      c.cfg.ToEmails,
 		"subject": subject,
 		"html":    htmlBody,
 		"text":    textBody,

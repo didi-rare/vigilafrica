@@ -43,3 +43,27 @@ func TestHandleHealth(t *testing.T) {
 	}
 }
 
+func TestLoadAlertConfigPrefersAlertsTo(t *testing.T) {
+	t.Setenv("RESEND_API_KEY", "re_test")
+	t.Setenv("ALERTS_TO", "ops@example.com, maintainer@example.com")
+	t.Setenv("ALERT_EMAIL_TO", "legacy@example.com")
+
+	cfg := loadAlertConfigFromEnv()
+	if len(cfg.ToEmails) != 2 {
+		t.Fatalf("expected two recipients, got %#v", cfg.ToEmails)
+	}
+	if cfg.ToEmails[0] != "ops@example.com" || cfg.ToEmails[1] != "maintainer@example.com" {
+		t.Fatalf("unexpected recipients: %#v", cfg.ToEmails)
+	}
+}
+
+func TestLoadAlertConfigFallsBackToLegacyAlertEmailTo(t *testing.T) {
+	t.Setenv("RESEND_API_KEY", "re_test")
+	t.Setenv("ALERTS_TO", " ")
+	t.Setenv("ALERT_EMAIL_TO", "legacy@example.com")
+
+	cfg := loadAlertConfigFromEnv()
+	if len(cfg.ToEmails) != 1 || cfg.ToEmails[0] != "legacy@example.com" {
+		t.Fatalf("expected legacy recipient fallback, got %#v", cfg.ToEmails)
+	}
+}

@@ -29,7 +29,7 @@ flowchart TD
 | `CORS_ORIGIN` | `https://staging.vigilafrica.org` | `https://vigilafrica.org` |
 | `VITE_API_BASE_URL` | `https://api.staging.vigilafrica.org` | `https://api.vigilafrica.org` |
 | `RESEND_API_KEY` | staging sending key | production sending key |
-| `ALERT_EMAIL_TO` | maintainer inbox | maintainer inbox |
+| `ALERTS_TO` | comma-separated maintainer inboxes in VPS `.env` | comma-separated maintainer inboxes in VPS `.env` |
 | `APP_VERSION` | short commit SHA | SemVer tag |
 | API host port | `127.0.0.1:8081` | `127.0.0.1:8080` |
 | DB volume | `vigil-staging-data` | `vigil-prod-data` |
