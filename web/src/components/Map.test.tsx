@@ -1,3 +1,4 @@
+import { StrictMode } from 'react'
 import { act, render, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -218,5 +219,17 @@ describe('Map', () => {
     unmount()
 
     expect(maplibreMock.instances.maps[0].remove).toHaveBeenCalledTimes(1)
+  })
+
+  it('reinitializes cleanly across the StrictMode effect cleanup cycle', () => {
+    render(
+      <StrictMode>
+        <Map events={events} />
+      </StrictMode>,
+    )
+
+    expect(maplibreMock.Map).toHaveBeenCalledTimes(2)
+    expect(maplibreMock.instances.maps[0].remove).toHaveBeenCalledTimes(1)
+    expect(maplibreMock.instances.maps[1].remove).not.toHaveBeenCalled()
   })
 })
