@@ -7,7 +7,8 @@ const RAMP_UP_DURATION = __ENV.VIGILAFRICA_RAMP_UP_DURATION || "30s";
 const HOLD_DURATION = __ENV.VIGILAFRICA_HOLD_DURATION || "1m";
 const RAMP_DOWN_DURATION = __ENV.VIGILAFRICA_RAMP_DOWN_DURATION || "30s";
 const THINK_TIME_SECONDS = Number(__ENV.VIGILAFRICA_THINK_TIME_SECONDS || "30");
-const DEFAULT_EVENT_IDS = [];
+const SETUP_WAIT_SECONDS = Number(__ENV.VIGILAFRICA_SETUP_WAIT_SECONDS || "60");
+const SETUP_POLL_SECONDS = Number(__ENV.VIGILAFRICA_SETUP_POLL_SECONDS || "2");
 
 export const options = {
   stages: [
@@ -71,13 +72,28 @@ function safeJSON(response) {
 }
 
 export function setup() {
-  const response = http.get(buildURL("/v1/events", { limit: "50" }), {
-    tags: { endpoint: "/v1/events", scenario: "setup-event-ids" },
-  });
-  const body = safeJSON(response);
-  const ids = Array.isArray(body?.data) ? body.data.map((event) => event.id).filter(Boolean) : DEFAULT_EVENT_IDS;
+  const deadline = Date.now() + SETUP_WAIT_SECONDS * 1000;
+  let lastStatus = 0;
 
-  return { eventIds: ids };
+  while (Date.now() <= deadline) {
+    const response = http.get(buildURL("/v1/events", { limit: "50" }), {
+      tags: { endpoint: "/v1/events", scenario: "setup-event-ids" },
+    });
+    lastStatus = response.status;
+
+    const body = safeJSON(response);
+    const ids = Array.isArray(body?.data) ? body.data.map((event) => event.id).filter(Boolean) : [];
+    if (ids.length > 0) {
+      return { eventIds: ids };
+    }
+
+    sleep(SETUP_POLL_SECONDS);
+  }
+
+  throw new Error(
+    `No event IDs discovered from /v1/events after ${SETUP_WAIT_SECONDS}s (last status: ${lastStatus}). ` +
+      "Ensure demo seed data has finished loading before running the mixed-endpoint load test.",
+  );
 }
 
 function getEventsList() {
@@ -97,8 +113,7 @@ function getEventsList() {
 
 function getEventDetail(eventIds) {
   if (eventIds.length === 0) {
-    getEventsList();
-    return;
+    throw new Error("event-detail scenario requires setup-discovered event IDs");
   }
 
   const id = randomItem(eventIds);

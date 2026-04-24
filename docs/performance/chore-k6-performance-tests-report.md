@@ -28,6 +28,8 @@ The profile can be tuned without editing the file:
 - `VIGILAFRICA_HOLD_DURATION`
 - `VIGILAFRICA_RAMP_DOWN_DURATION`
 - `VIGILAFRICA_THINK_TIME_SECONDS`
+- `VIGILAFRICA_SETUP_WAIT_SECONDS`
+- `VIGILAFRICA_SETUP_POLL_SECONDS`
 
 The request mix exercises realistic dashboard/API traffic:
 
@@ -54,19 +56,18 @@ Within `GET /v1/events`, the script rotates through:
 
 ## Verification Commands
 
+Static checks:
+
 ```powershell
 npm run spec:validate
 node --check tests\performance\load-test.js
-docker compose -f docker-compose.demo.yml up -d
-(Invoke-WebRequest -Uri http://127.0.0.1:8080/v1/events -UseBasicParsing).StatusCode
-docker run --rm -e VIGILAFRICA_API_BASE_URL=http://host.docker.internal:8080 -v "${PWD}\tests\performance:/scripts:ro" grafana/k6 run /scripts/load-test.js
-docker compose -f docker-compose.demo.yml stop
 ```
 
-For the committed 500 VU profile, use the performance-only compose override so the API's normal `RATE_LIMIT_RPM=60` default is not edited:
+For the committed 500 VU profile, use the performance-only compose override so the API's normal `RATE_LIMIT_RPM=60` default is not edited. The k6 setup phase polls `/v1/events` for event IDs and fails fast if seed data is unavailable, because `GET /v1/events/{id}` coverage is mandatory in the mixed endpoint run.
 
 ```powershell
 docker compose -f docker-compose.demo.yml -f tests/performance/docker-compose.performance.yml up -d --force-recreate
+(Invoke-WebRequest -Uri http://127.0.0.1:8080/v1/events -UseBasicParsing).StatusCode
 docker run --rm -e VIGILAFRICA_API_BASE_URL=http://host.docker.internal:8080 -v "${PWD}\tests\performance:/scripts:ro" grafana/k6 run /scripts/load-test.js
 docker compose -f docker-compose.demo.yml -f tests/performance/docker-compose.performance.yml stop
 ```
