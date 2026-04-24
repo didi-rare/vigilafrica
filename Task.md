@@ -75,3 +75,18 @@
 - [x] 10.4 Add API client tests for event/state URL parameter parsing and error handling
 - [x] 10.5 Run frontend tests locally and wire them into CI
 - [x] 10.6 Run frontend build/lint verification
+
+## 11. Map Performance & Clustering (feature-map-clustering)
+
+- [x] 11.1 Refactor `web/src/components/Map.tsx` to add a GeoJSON source (`events-map-source`) with `cluster: true`, `clusterMaxZoom: 14`, `clusterRadius: 50`
+- [x] 11.2 Add `events-map-clusters` circle layer with `step`-based colors (amber/orange/red) and radii
+- [x] 11.3 Add `events-map-cluster-count` symbol layer showing `point_count_abbreviated`
+- [x] 11.4 Implement `syncMarkers()` that calls `querySourceFeatures`, diffs by id, and adds/removes DOM markers only for unclustered visible events
+- [x] 11.5 Change `markers` ref from array to `Map<string, maplibregl.Marker>` for O(1) id lookup
+- [x] 11.6 Wire `syncMarkers()` into `moveend`, `zoomend`, and `sourcedata` events in the load handler
+- [x] 11.7 Add cluster click handler using `getClusterExpansionZoom` + `easeTo`, plus pointer cursor on hover
+- [x] 11.8 Remove cluster layers + source in useEffect cleanup before `map.remove()`
+- [x] 11.9 Memoize GeoJSON FeatureCollection from events (§12.8)
+- [x] 11.10 Update `web/src/components/Map.css` with z-index token for cluster circles (no hardcoded z-index, §7.10)
+- [x] 11.11 Rewrite `web/src/components/Map.test.tsx` — mock `addSource`/`addLayer`/`querySourceFeatures`/`getSource`/`removeLayer`/`removeSource`; assert cluster source config, marker sync behavior, cluster click handler
+- [x] 11.12 Run `npm run test`, `npm run lint`, and `tsc -b` — all green
