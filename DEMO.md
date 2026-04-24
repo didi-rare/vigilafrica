@@ -3,14 +3,14 @@
 This guide explains how to stand up a fully isolated, seeded demo environment of VigilAfrica. 
 The demo environment is separate from the production infrastructure and disables live EONET polling to ensure a consistent, curated experience.
 
-> **Hosted Demo**: TBD — see project README once deployed
+> **Hosted Demo**: https://staging.vigilafrica.org
 
 ---
 
 ## Prerequisites
 
 - **Docker + Docker Compose**: To run the database and API.
-- **Node.js (v18+)**: To run the React frontend.
+- **Node.js (v22+)**: To run the React frontend.
 - **Git**: To clone the repository.
 
 ```bash

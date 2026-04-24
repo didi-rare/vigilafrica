@@ -30,7 +30,7 @@ All contributors are expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md
 | Tool | Version | Notes |
 |---|---|---|
 | Go | 1.26 | `go version` to verify |
-| Node.js | 18+ | For the React frontend |
+| Node.js | 22+ | For the React frontend and Vite toolchain |
 | Docker Desktop | Latest | Required for PostgreSQL + PostGIS |
 | Git | Any recent | — |
 
@@ -71,6 +71,9 @@ For email alerting (optional for local dev), also set:
 ```env
 RESEND_API_KEY=re_...
 ALERT_EMAIL_TO=your@email.com
+ALERT_FROM_EMAIL=VigilAfrica Alerts <alerts@vigilafrica.org>
+ALERT_STALENESS_THRESHOLD_HOURS=2
+ALERT_STALENESS_CHECK_INTERVAL_MIN=15
 ```
 
 ### 4. Start PostgreSQL with PostGIS
@@ -160,7 +163,8 @@ vigilafrica/
 │   └── internal/
 │       ├── database/           # Repository interface + pgx queries
 │       ├── handlers/           # HTTP handlers + middleware
-│       ├── ingestor/           # EONET fetch, scheduler, alerter
+│       ├── alert/              # Resend delivery + staleness watchdog
+│       ├── ingestor/           # EONET fetch + scheduler
 │       ├── models/             # Shared data types
 │       ├── normalizer/         # EONET → internal model
 │       └── geoip/              # MaxMind reader wrapper
@@ -190,8 +194,8 @@ The document is a **living standard**: if you hit a case the rules don't cover, 
 
 | Branch | Purpose |
 |---|---|
-| `releases` | Production environment — protected, merge from `main` only |
-| `main` | Staging environment — integration testing before promotion to `releases` |
+| `release` | Production mirror — protected, merge from `main` only, deploy by tag |
+| `main` | Staging environment — integration testing before promotion to `release` |
 | `development` | Active development — merge feature and fix branches here |
 | `feat/*` | Feature branches — branch from `development` |
 | `fix/*` | Bug fix branches — branch from `development` |
@@ -207,8 +211,11 @@ git push -u origin feat/my-feature
 # open PR targeting development
 
 # When development is stable → PR to main (staging)
-# When main is verified in staging → PR to releases (production)
+# When main is verified in staging → PR to release
+# Tag release with vX.Y.Z to trigger gated production deployment
 ```
+
+See [docs/deployment/release-process.md](docs/deployment/release-process.md) for the full promotion, rollback, and hotfix flow.
 
 ### Sentinel CI Gate
 
@@ -255,7 +262,7 @@ Key documents:
 
 ## Pull Request Guidelines
 
-1. **Target `development`** for feature and fix PRs — not `main` or `releases`
+1. **Target `development`** for feature and fix PRs — not `main` or `release`
 2. **One feature per PR** — keep diffs reviewable
 3. **Include a change record** in `openspec/changes/` for any `api/internal/*` or `api/cmd/*` changes
 4. **Tests must pass** — `go test ./...` and `go vet ./...` clean

@@ -1,298 +1,143 @@
 # VPS Deployment Guide
 
-This guide describes how to deploy VigilAfrica to a self-managed VPS (Hetzner, DigitalOcean, Contabo, etc.) using Docker Compose for the API + database and Caddy as a reverse proxy with automatic HTTPS.
+This guide describes the v1.0 single-VPS topology for VigilAfrica: one Hetzner/DigitalOcean-style VPS, two isolated Docker Compose stacks, one host-level Caddy reverse proxy, and Resend-backed ingestion alerting.
 
-Target audience: single-VPS production deployment for the v0.5 operational prototype.
+## Topology
 
----
+| Environment | Frontend | API | Compose file | Host API port | Branch/ref |
+|---|---|---|---|---|---|
+| Staging | `staging.vigilafrica.org` | `api.staging.vigilafrica.org` | `docker-compose.staging.yml` | `127.0.0.1:8081` | `main` |
+| Production | `vigilafrica.org` | `api.vigilafrica.org` | `docker-compose.prod.yml` | `127.0.0.1:8080` | SemVer tag from `release` |
 
-## Table of Contents
+Both stacks run on the same VPS but use separate containers, networks, and Docker volumes:
 
-- [Architecture](#architecture)
-- [Prerequisites](#prerequisites)
-- [Server Setup](#server-setup)
-- [Docker Compose (Production)](#docker-compose-production)
-- [Caddy Reverse Proxy](#caddy-reverse-proxy)
-- [Environment Variables Reference](#environment-variables-reference)
-- [Deployment Steps](#deployment-steps)
-- [Database Backups](#database-backups)
-- [Operational Checks](#operational-checks)
-- [Troubleshooting](#troubleshooting)
+```text
+/opt/vigilafrica/
+  staging/       # clone checked out to main, .env for staging
+  production/    # clone checked out to vX.Y.Z tag, .env for production
 
----
-
-## Architecture
-
-```
-          ┌──────────────────────────────────────────────┐
-          │                    VPS                       │
-          │                                              │
-Internet ─┼─► Caddy :443 ──► Go API :8080 ──► Postgres :5432
-          │   (TLS, HTTP/2)  (Docker)         (Docker + PostGIS)
-          │                                              │
-          └──────────────────────────────────────────────┘
-
-Frontend (Vercel) ── fetch() ──► https://api.vigilafrica.org
+Caddy:
+  api.staging.vigilafrica.org -> 127.0.0.1:8081
+  api.vigilafrica.org         -> 127.0.0.1:8080
 ```
 
-- **Caddy** terminates TLS, serves a free Let's Encrypt cert, and proxies to the API container.
-- **API** runs inside Docker, binds to `127.0.0.1:8080` (not exposed externally).
-- **Postgres + PostGIS** runs inside Docker, reachable only from the API container.
-- **Frontend** is hosted on Vercel and calls the API over HTTPS.
+## One-Time Provisioning
 
----
-
-## Prerequisites
-
-| Tool | Version | Notes |
-|---|---|---|
-| A VPS | 2 vCPU / 2 GB RAM min | Ubuntu 22.04 LTS or 24.04 LTS recommended |
-| DNS record | A/AAAA | Point `api.yourdomain.com` at the VPS IP before requesting a cert |
-| Docker Engine | 24+ | `docker compose` subcommand |
-| Caddy | 2.7+ | Installed on the host (not in Docker — simpler cert renewal) |
-| Non-root user | — | With `sudo` and Docker group membership |
-
----
-
-## Server Setup
-
-### 1. Base hardening
+Run the provisioning script as root after creating the VPS:
 
 ```bash
-sudo apt update && sudo apt upgrade -y
-sudo apt install -y ufw fail2ban
-sudo ufw allow OpenSSH
-sudo ufw allow 80/tcp
-sudo ufw allow 443/tcp
-sudo ufw enable
+sudo SSH_PUBLIC_KEY='ssh-ed25519 ...' ./deploy/provision.sh
 ```
 
-### 2. Install Docker
+The script installs Docker, Caddy, ufw, fail2ban, unattended upgrades, creates the `deploy` user, and prepares `/opt/vigilafrica/{staging,production}`.
+
+Clone the repo into both paths:
 
 ```bash
-curl -fsSL https://get.docker.com | sudo sh
-sudo usermod -aG docker $USER
-newgrp docker
+sudo -iu deploy
+git clone https://github.com/didi-rare/vigilafrica.git /opt/vigilafrica/staging
+git clone https://github.com/didi-rare/vigilafrica.git /opt/vigilafrica/production
 ```
 
-### 3. Install Caddy
+Install `deploy/Caddyfile.example` as `/etc/caddy/Caddyfile`, then reload:
 
 ```bash
-sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
-  | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
-  | sudo tee /etc/apt/sources.list.d/caddy-stable.list
-sudo apt update
-sudo apt install -y caddy
-```
-
-### 4. Clone the repository
-
-```bash
-sudo mkdir -p /opt/vigilafrica
-sudo chown $USER:$USER /opt/vigilafrica
-cd /opt/vigilafrica
-git clone https://github.com/didi-rare/vigilafrica.git .
-```
-
----
-
-## Docker Compose (Production)
-
-Create `/opt/vigilafrica/docker-compose.prod.yml`:
-
-```yaml
-services:
-  db:
-    image: postgis/postgis:15-3.4
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    networks:
-      - internal
-    # Do NOT expose 5432 publicly — internal network only
-
-  api:
-    build:
-      context: ./api
-      dockerfile: Dockerfile
-    restart: unless-stopped
-    env_file: .env
-    depends_on:
-      - db
-    ports:
-      - "127.0.0.1:8080:8080"   # bound to localhost only; Caddy proxies in
-    networks:
-      - internal
-
-volumes:
-  pgdata:
-
-networks:
-  internal:
-```
-
-Create `/opt/vigilafrica/.env` from `.env.example` and fill in production values (see reference below).
-
----
-
-## Caddy Reverse Proxy
-
-Edit `/etc/caddy/Caddyfile`:
-
-```caddy
-api.yourdomain.com {
-    encode zstd gzip
-
-    # Forward the real client IP so the API's per-IP rate limiter works correctly
-    reverse_proxy 127.0.0.1:8080 {
-        header_up X-Real-IP {remote_host}
-        header_up X-Forwarded-For {remote_host}
-        header_up X-Forwarded-Proto {scheme}
-    }
-
-    # Standard security headers
-    header {
-        Strict-Transport-Security "max-age=31536000; includeSubDomains"
-        X-Content-Type-Options "nosniff"
-        Referrer-Policy "strict-origin-when-cross-origin"
-        -Server
-    }
-
-    log {
-        output file /var/log/caddy/api.log
-        format json
-    }
-}
-```
-
-Reload:
-
-```bash
+sudo cp deploy/Caddyfile.example /etc/caddy/Caddyfile
+sudo caddy validate --config /etc/caddy/Caddyfile
 sudo systemctl reload caddy
-sudo journalctl -u caddy -f   # watch cert issuance
 ```
 
-Caddy fetches and renews Let's Encrypt certs automatically.
+## Runtime `.env` Files
 
----
+Create separate deploy-owned env files. The deploy workflows run `docker compose`
+as this user, so Compose must be able to read `.env` while the file remains
+private to the deploy account:
 
-## Environment Variables Reference
+```bash
+sudo install -m 600 -o deploy -g deploy /dev/null /opt/vigilafrica/staging/.env
+sudo install -m 600 -o deploy -g deploy /dev/null /opt/vigilafrica/production/.env
+```
 
-The production `.env` should set at minimum:
+Minimum variables per environment:
 
-| Variable | Purpose | Example |
+```env
+POSTGRES_USER=vigilafrica
+POSTGRES_PASSWORD=<strong-random-password>
+POSTGRES_DB=vigilafrica
+CORS_ORIGIN=https://staging.vigilafrica.org
+LOG_LEVEL=info
+INGEST_INTERVAL_MIN=60
+RATE_LIMIT_RPM=60
+CACHE_TTL_SECONDS=300
+RESEND_API_KEY=re_...
+ALERT_FROM_EMAIL=VigilAfrica Alerts <alerts@vigilafrica.org>
+ALERTS_TO=ops@example.com,maintainer@example.com
+ALERT_STALENESS_THRESHOLD_HOURS=2
+ALERT_STALENESS_CHECK_INTERVAL_MIN=15
+MAXMIND_ACCOUNT_ID=<optional>
+MAXMIND_LICENSE_KEY=<optional>
+```
+
+Production should use `CORS_ORIGIN=https://vigilafrica.org`.
+Use placeholder addresses in committed docs only. Set real alert recipients
+directly in `/opt/vigilafrica/staging/.env` and
+`/opt/vigilafrica/production/.env`; these files are not committed and should
+remain deploy-owned with mode `0600`.
+
+## Manual Stack Commands
+
+Staging:
+
+```bash
+cd /opt/vigilafrica/staging
+git checkout main
+git pull --ff-only origin main
+APP_VERSION=$(git rev-parse --short HEAD) docker compose -f docker-compose.staging.yml up -d --build
+curl -fsS https://api.staging.vigilafrica.org/health
+```
+
+Production:
+
+```bash
+cd /opt/vigilafrica/production
+git fetch --all --tags
+git checkout --force v1.0.0
+APP_VERSION=v1.0.0 docker compose -f docker-compose.prod.yml up -d --build
+curl -fsS https://api.vigilafrica.org/health
+```
+
+## GitHub Actions
+
+- `.github/workflows/deploy-staging.yml`: push to `main` deploys the staging API stack.
+- `.github/workflows/deploy-production.yml`: pushing a `v*.*.*` tag deploys production after GitHub Environment approval.
+- Production also supports `workflow_dispatch` with a tag input for rollback.
+
+Configure GitHub Environments:
+
+| Environment | Required secrets | Protection |
 |---|---|---|
-| `DATABASE_URL` | Postgres connection string (use the Docker service name `db`) | `postgres://vigilafrica:<pw>@db:5432/vigilafrica` |
-| `POSTGRES_USER` | DB user for the `db` service | `vigilafrica` |
-| `POSTGRES_PASSWORD` | DB password | strong random value |
-| `POSTGRES_DB` | DB name | `vigilafrica` |
-| `API_PORT` | API listen port | `8080` |
-| `CORS_ORIGIN` | Allowed CORS origin — your Vercel frontend | `https://vigilafrica.vercel.app` |
-| `LOG_LEVEL` | slog level | `info` |
-| `GEOIP_DB_PATH` | Path to MaxMind `.mmdb` (mount into container) | `/data/GeoLite2-City.mmdb` |
-| `INGEST_INTERVAL_MIN` | EONET poll interval in minutes | `60` |
-| `RATE_LIMIT_RPM` | Per-IP rate limit (req/min) | `60` |
-| `CACHE_TTL_SECONDS` | `/v1/events` response cache TTL | `300` |
-| `RESEND_API_KEY` | Email alerting (optional) | `re_...` |
-| `ALERT_EMAIL_TO` | Alert recipient | `ops@yourdomain.com` |
-| `ALERT_FROM_EMAIL` | Verified Resend sender | `alerts@yourdomain.com` |
-| `ALERT_STALENESS_THRESHOLD_HOURS` | Staleness alert threshold | `2` |
-
-**Never commit `.env`.** Store a copy in a secrets manager (1Password, Bitwarden, etc.).
-
----
-
-## Deployment Steps
-
-From `/opt/vigilafrica`:
-
-```bash
-# 1. Pull the latest code
-git pull origin main
-
-# 2. Build and start
-docker compose -f docker-compose.prod.yml up -d --build
-
-# 3. Tail logs
-docker compose -f docker-compose.prod.yml logs -f api
-```
-
-Migrations run automatically on API startup.
-
-### Updating
-
-```bash
-cd /opt/vigilafrica
-git pull
-docker compose -f docker-compose.prod.yml up -d --build api
-```
-
-The DB container is not rebuilt — only the API.
-
----
-
-## Database Backups
-
-Add a nightly cron (root crontab):
-
-```bash
-sudo crontab -e
-```
-
-```cron
-0 3 * * * docker compose -f /opt/vigilafrica/docker-compose.prod.yml exec -T db \
-  pg_dump -U vigilafrica vigilafrica | gzip > /var/backups/vigilafrica-$(date +\%F).sql.gz
-0 4 * * * find /var/backups -name 'vigilafrica-*.sql.gz' -mtime +14 -delete
-```
-
-Ensure `/var/backups` exists and is root-owned. Sync off-box (rsync, S3, Backblaze B2) for disaster recovery.
-
----
+| `staging` | `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY` | none |
+| `production` | `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY` | required reviewer |
 
 ## Operational Checks
 
 ```bash
-# API health (includes last_ingestion block)
-curl https://api.yourdomain.com/health
-
-# Expected on a healthy system:
-# {"status":"ok","version":"0.5.0","last_ingestion":{"status":"success",...}}
-
-# Rate limiter check — burst a few requests and confirm 429 appears only past RATE_LIMIT_RPM
-for i in $(seq 1 80); do curl -s -o /dev/null -w "%{http_code}\n" https://api.yourdomain.com/v1/events; done | sort | uniq -c
-
-# Check container state
-docker compose -f docker-compose.prod.yml ps
-
-# Stream API logs (JSON slog output)
-docker compose -f docker-compose.prod.yml logs -f api
+docker compose -f /opt/vigilafrica/staging/docker-compose.staging.yml ps
+docker compose -f /opt/vigilafrica/production/docker-compose.prod.yml ps
+curl -fsS https://api.staging.vigilafrica.org/health
+curl -fsS https://api.vigilafrica.org/health
 ```
 
-If `/health` returns `"status":"degraded"`, the last ingestion run failed — inspect logs and the `ingestion_runs` table.
+`/health.version` is stamped from `APP_VERSION` during the Docker build. Staging should show the short commit SHA; production should show the SemVer tag.
 
----
+## Backups
 
-## Troubleshooting
+Add root cron jobs for both volumes:
 
-| Symptom | Likely cause | Fix |
-|---|---|---|
-| `/health` returns `degraded` | Last ingestion failed | Check API logs for the EONET error; confirm outbound HTTPS works |
-| Rate limiter blocks all traffic | Caddy not forwarding client IP | Verify `X-Forwarded-For` / `X-Real-IP` headers are set in the Caddyfile |
-| 502 Bad Gateway from Caddy | API container down or not listening on `127.0.0.1:8080` | `docker compose logs api`; confirm `ports: 127.0.0.1:8080:8080` |
-| CORS errors in browser | `CORS_ORIGIN` mismatch | Set to the exact Vercel origin including scheme, no trailing slash |
-| Cert issuance fails | DNS not propagated or port 80 blocked | Confirm A record resolves to VPS IP; `ufw allow 80/tcp` |
-| `ingestion_runs` table missing | Migrations didn't run | Restart the API container; migrations run on startup |
+```cron
+0 2 * * * docker compose -f /opt/vigilafrica/staging/docker-compose.staging.yml exec -T staging-db pg_dump -U vigilafrica vigilafrica | gzip > /var/backups/vigilafrica-staging-$(date +\%F).sql.gz
+0 3 * * * docker compose -f /opt/vigilafrica/production/docker-compose.prod.yml exec -T prod-db pg_dump -U vigilafrica vigilafrica | gzip > /var/backups/vigilafrica-prod-$(date +\%F).sql.gz
+0 4 * * * find /var/backups -name 'vigilafrica-*.sql.gz' -mtime +14 -delete
+```
 
----
-
-## Related Documents
-
-- [ADR-011 — Ingestion Observability](../../openspec/specs/vigilafrica/decisions.md)
-- [Roadmap v0.5](../../openspec/specs/vigilafrica/roadmap.md)
-- [CONTRIBUTING.md](../../CONTRIBUTING.md)
+Sync backups off-box before calling production resilient.

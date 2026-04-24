@@ -7,9 +7,12 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
+	"vigilafrica/api/internal/alert"
 	"vigilafrica/api/internal/database"
 	"vigilafrica/api/internal/geoip"
 	"vigilafrica/api/internal/handlers"
@@ -60,9 +63,9 @@ func main() {
 	}
 
 	// ── Alert config + scheduler + watchdog ───────────────────────────────────
-	alertCfg, _ := ingestor.LoadAlertConfig()
-	ingestor.StartScheduler(ctx, repo, alertCfg)
-	ingestor.StartStalenessWatchdog(ctx, repo, alertCfg)
+	alertClient := alert.NewClient(loadAlertConfigFromEnv(), slog.Default().With("component", "alert"))
+	ingestor.StartScheduler(ctx, repo, alertClient)
+	alert.StartStalenessWatchdog(ctx, repo, alertClient, loadWatchdogConfigFromEnv(), slog.Default().With("component", "watchdog"))
 
 	// ── Middleware ────────────────────────────────────────────────────────────
 	cache := handlers.NewResponseCache()
@@ -127,4 +130,46 @@ func main() {
 		slog.Error("graceful shutdown error", "err", err)
 	}
 	slog.Info("server stopped cleanly")
+}
+
+func loadAlertConfigFromEnv() alert.Config {
+	return alert.Config{
+		ResendAPIKey: os.Getenv("RESEND_API_KEY"),
+		FromEmail:    envOrDefault("ALERT_FROM_EMAIL", "VigilAfrica Alerts <alerts@vigilafrica.org>"),
+		ToEmails:     alert.ParseRecipients(envOrDefaultTrimmed("ALERTS_TO", os.Getenv("ALERT_EMAIL_TO"))),
+	}
+}
+
+func loadWatchdogConfigFromEnv() alert.WatchdogConfig {
+	return alert.WatchdogConfig{
+		CheckInterval:      time.Duration(envPositiveInt("ALERT_STALENESS_CHECK_INTERVAL_MIN", 15)) * time.Minute,
+		StalenessThreshold: time.Duration(envPositiveInt("ALERT_STALENESS_THRESHOLD_HOURS", 2)) * time.Hour,
+	}
+}
+
+func envOrDefault(key, fallback string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return fallback
+}
+
+func envOrDefaultTrimmed(key, fallback string) string {
+	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
+		return value
+	}
+	return fallback
+}
+
+func envPositiveInt(key string, fallback int) int {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed <= 0 {
+		slog.Warn("invalid positive integer env var; using default", "key", key, "value", value, "default", fallback)
+		return fallback
+	}
+	return parsed
 }

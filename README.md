@@ -15,7 +15,7 @@ Instead of asking users to interpret coordinates and satellite metadata, VigilAf
 ![VigilAfrica Demo](docs/screenshots/demo.gif)
 
 A fully isolated, seeded demo environment of VigilAfrica is available for evaluation:
-> **Hosted Demo**: TBD — see project README once deployed
+> **Hosted Demo**: https://staging.vigilafrica.org
 
 For instructions on running the demo locally, see the [Demo Environment Guide](DEMO.md).
 
@@ -35,7 +35,7 @@ VigilAfrica bridges that gap by combining:
 
 ## Current status
 
-> 🛰️ **Operational prototype — v0.6 complete.** Real data. Real enrichment. Two countries live.
+> **Pre-launch operational prototype — v0.8 complete.** Real data, two countries, demo assets, and v1.0 deployment work in progress.
 
 The system currently:
 
@@ -43,9 +43,9 @@ The system currently:
 - **Enriches** every event with state/region names using PostGIS boundary matching
 - **Serves** a paginated, filterable REST API (`/v1/events`) with `category`, `country`, `state`, and `status` filters
 - **Displays** events on an interactive satellite map with location-aware "near you" context
-- **Monitors** ingestion health — the frontend shows a staleness banner when data is overdue
+- **Monitors** ingestion health with `/health`, failed-ingestion emails, and a staleness watchdog
 
-Next milestone (v0.7): enrichment quality validation for Ghana — confirming the second country meets the Tier 2 enrichment success rate target.
+Next milestone (v1.0): credible public launch — staging/production deployment, release tagging, and operational alerting validation.
 
 ---
 
@@ -54,7 +54,7 @@ Next milestone (v0.7): enrichment quality validation for Ghana — confirming th
 ### Prerequisites
 
 - Go 1.26+
-- Node.js 20+
+- Node.js 22+
 - Docker + Docker Compose (for PostgreSQL 15 + PostGIS 3)
 
 ### Setup
@@ -66,7 +66,7 @@ cd vigilafrica
 
 # Copy environment variables
 cp .env.example .env
-# Edit .env — DATABASE_URL, EONET_BASE_URL, and RESEND_API_KEY are required
+# Edit .env — DATABASE_URL is required; Resend values enable email alerts
 
 # Start PostgreSQL + PostGIS
 docker compose up -d
@@ -151,8 +151,8 @@ docker-compose.yml  Local dev: PostgreSQL + PostGIS
 | v0.4      | Map + near-me experience     | ✅ Complete      |
 | v0.5      | Operational prototype        | ✅ Complete      |
 | v0.6      | Country expansion model      | ✅ Complete      |
-| v0.7      | Second country stable        | 🔄 In progress  |
-| v0.8      | Pre-demo setup               | Planned         |
+| v0.7      | Second country stable        | ✅ Complete      |
+| v0.8      | Pre-demo setup               | ✅ Complete      |
 | v1.0      | Credible public launch       | Planned         |
 
 Full roadmap with acceptance criteria: [`openspec/specs/vigilafrica/roadmap.md`](openspec/specs/vigilafrica/roadmap.md)
@@ -164,8 +164,14 @@ Full roadmap with acceptance criteria: [`openspec/specs/vigilafrica/roadmap.md`]
 | Branch        | Environment | Purpose            |
 |---------------|-------------|--------------------|
 | `development` | Local/dev   | Active development |
-| `main`        | Staging     | Pre-production     |
-| `releases`    | Production  | Live               |
+| `main`        | Staging     | Auto-deployed staging |
+| `release`     | Production  | Tagged, approval-gated production |
+
+Deployment docs:
+
+- [VPS deployment](docs/deployment/vps.md)
+- [Release process](docs/deployment/release-process.md)
+- [Resend setup](docs/deployment/resend-setup.md)
 
 OpenSpec drift detection runs on every push to `development` and every PR to all branches.
 

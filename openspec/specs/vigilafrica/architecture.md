@@ -28,12 +28,12 @@ VigilAfrica follows a **Poll → Enrich → Serve** architecture:
 | Map library          | **MapLibre GL JS v3+**              | ADR-001     | Locked      |
 | IP geolocation       | MaxMind GeoLite2-City (local .mmdb) | —           | Locked      |
 | Frontend hosting     | **Vercel**                          | ADR-002     | Locked      |
-| Backend + DB hosting | **Single VPS (DigitalOcean/Hetzner)** | ADR-003   | Locked      |
+| Backend + DB hosting | **Single VPS, two isolated stacks** | ADR-003, ADR-014 | Locked      |
 | Container runtime    | Docker Compose                      | ADR-003     | Locked      |
 | Reverse proxy        | Caddy                               | ADR-003     | Locked      |
 | PostgreSQL driver    | `jackc/pgx` (no ORM)               | ADR-009     | Locked      |
 | API protocol         | REST / JSON                         | —           | Locked      |
-| Go scheduler         | `go-co-op/gocron` v2               | —           | Locked      |
+| Go scheduler         | stdlib `time.Ticker`               | ADR-011     | Locked      |
 | GeoIP Go library     | `oschwald/geoip2-golang`           | —           | Locked      |
 
 ---
@@ -50,7 +50,7 @@ graph TD
     subgraph VPS["VPS — DigitalOcean / Hetzner"]
         Caddy["Caddy<br/>SSL termination + reverse proxy<br/>:443 → :8080"]
         subgraph Docker["Docker Compose"]
-            GoAPI["Go Backend :8080<br/>─────────────────<br/>• Poll Worker (gocron)<br/>• Normalizer<br/>• Enricher<br/>• REST API (chi router)"]
+            GoAPI["Go Backend :8080<br/>─────────────────<br/>• Poll Worker (time.Ticker)<br/>• Normalizer<br/>• Enricher<br/>• REST API (stdlib ServeMux)"]
             PG[("PostgreSQL 15 + PostGIS 3<br/>:5432<br/>─────────────────<br/>• events table<br/>• admin_boundaries table")]
         end
     end
@@ -78,31 +78,21 @@ graph TD
 ## 4. Deployment Topology
 
 ```
-[User Browser]
-      │
-      ▼
-[Vercel CDN Edge]
-  React static build (HTML/JS/CSS)
-  VITE_API_BASE_URL = https://api.vigilafrica.org
-      │
-      │ API calls: GET /health, GET /v1/events, GET /v1/context
-      ▼
-[Caddy :443 on VPS]
-  - Auto SSL (Let's Encrypt)
-  - HTTP → HTTPS redirect
-  - /v1/* and /health → proxy :8080
-      │
-      ▼
-[Go binary :8080 — Docker container]
-  - Chi HTTP router
-  - Poll worker (gocron, every 60 min)
-  - MaxMind .mmdb local file
-      │
-      ▼
-[PostgreSQL 15 + PostGIS 3 :5432 — Docker container]
-  - Named Docker volume (persistent)
-  - events table
-  - admin_boundaries table (Nigeria ADM0 + ADM1)
+[Vercel staging]    staging.vigilafrica.org  ─┐
+                                               ├─► [Caddy on VPS :443]
+[Vercel production] vigilafrica.org          ─┘       │
+                                                       ├─ api.staging.vigilafrica.org -> 127.0.0.1:8081
+                                                       └─ api.vigilafrica.org         -> 127.0.0.1:8080
+
+[/opt/vigilafrica/staging]
+  docker-compose.staging.yml
+  Go API + PostGIS + GeoIP updater
+  volumes: vigil-staging-data, staging-maxmind-data
+
+[/opt/vigilafrica/production]
+  docker-compose.prod.yml
+  Go API + PostGIS + GeoIP updater
+  volumes: vigil-prod-data, prod-maxmind-data
 ```
 
 ### Environment Separation
@@ -110,8 +100,8 @@ graph TD
 | Git Branch    | Environment | Target                    |
 |---------------|-------------|---------------------------|
 | `development` | Local dev   | Docker Compose (localhost) |
-| `main`        | Staging     | Staging VPS instance       |
-| `releases`    | Production  | Production VPS instance    |
+| `main`        | Staging     | VPS staging stack + Vercel staging |
+| `release`     | Production  | SemVer-tagged VPS production stack + Vercel production |
 
 ---
 
@@ -168,6 +158,7 @@ vigilafrica/
 │   │   └── server/
 │   │       └── main.go              # Entry point — wires all internal packages
 │   ├── internal/
+│   │   ├── alert/                   # Resend email delivery + staleness watchdog
 │   │   ├── ingestor/                # EONET fetch + poll worker
 │   │   ├── normalizer/              # Raw payload → internal Event model
 │   │   ├── enricher/                # PostGIS spatial enrichment
@@ -201,6 +192,9 @@ vigilafrica/
 │       └── community.yml            # First-interaction welcome
 │
 ├── docker-compose.yml               # Local dev: PostgreSQL + PostGIS
+├── docker-compose.staging.yml       # VPS staging stack
+├── docker-compose.prod.yml          # VPS production stack
+├── deploy/                          # Caddy example + VPS provisioning script
 ├── openspec.yaml                    # OpenSpec project configuration
 ├── package.json                     # Root scripts (api:dev, web:dev, spec:validate)
 ├── .env.example                     # All required environment variables
@@ -208,7 +202,7 @@ vigilafrica/
 └── README.md                        # Project-stage README (prototype)
 ```
 
-> **Note**: There is no `/infra` directory. Deployment configuration is `docker-compose.yml` (root) and VPS-level Caddy/Docker configs managed outside the repository. See ADR-003.
+> **Note**: There is no `/infra` directory. Deployment configuration lives in the root Docker Compose files and `deploy/`. Runtime `.env` files remain on the VPS only. See ADR-003 and ADR-014.
 
 ---
 
