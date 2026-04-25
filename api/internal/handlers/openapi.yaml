@@ -1,0 +1,391 @@
+openapi: 3.1.0
+info:
+  title: VigilAfrica API
+  description: |
+    VigilAfrica is an open-source African natural event tracker.
+    This API exposes enriched NASA EONET event data, local context lookup,
+    enrichment quality metrics, and ingestion health telemetry for local testing
+    and operational monitoring.
+  version: 0.7.0
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+
+servers:
+  - url: http://localhost:8080
+    description: Local Development
+  - url: https://api-staging.vigilafrica.org
+    description: Staging Environment
+  - url: https://api.vigilafrica.org
+    description: Production Environment
+
+tags:
+  - name: Events
+    description: Query enriched natural event data ingested from NASA EONET — floods and wildfires, tagged with African administrative boundaries.
+  - name: Location & Discovery
+    description: Location-aware context and administrative boundary discovery — detect the caller's country/state and list known regions.
+  - name: Observability
+    description: Ingestion health, enrichment quality metrics, and staleness telemetry for operational monitoring.
+
+paths:
+  /health:
+    get:
+      tags: [Observability]
+      summary: Health check
+      description: Returns service status plus the latest ingestion telemetry globally and by country.
+      operationId: getHealth
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /v1/events:
+    get:
+      tags: [Events]
+      summary: List events
+      description: Returns a paginated list of enriched natural events.
+      operationId: listEvents
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum: [floods, wildfires]
+          description: Filter by event category.
+        - name: country
+          in: query
+          schema:
+            type: string
+          description: Filter by enriched country name.
+        - name: state
+          in: query
+          schema:
+            type: string
+          description: Filter by enriched state or region name (case-insensitive).
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [open, closed]
+          description: Filter by event status.
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/OffsetParam'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+
+  /v1/events/{id}:
+    get:
+      tags: [Events]
+      summary: Get event details
+      description: Returns the full detail of a single event by its internal UUID.
+      operationId: getEventById
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Internal VigilAfrica event UUID.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventDetail'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/context:
+    get:
+      tags: [Location & Discovery]
+      summary: Get situational context
+      description: Returns the caller's detected location and nearby events for local awareness.
+      operationId: getContext
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContextResponse'
+
+  /v1/states:
+    get:
+      tags: [Location & Discovery]
+      summary: List distinct states or regions
+      description: Returns distinct enriched state names, optionally filtered by country.
+      operationId: listStates
+      parameters:
+        - name: country
+          in: query
+          schema:
+            type: string
+          description: Country name to scope the state list.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatesResponse'
+
+  /v1/enrichment-stats:
+    get:
+      tags: [Observability]
+      summary: Get enrichment quality metrics
+      description: Returns per-country enrichment success rates for administrative tagging.
+      operationId: getEnrichmentStats
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnrichmentStatsResponse'
+
+components:
+  parameters:
+    LimitParam:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+      description: Maximum results per page.
+    OffsetParam:
+      name: offset
+      in: query
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+      description: Pagination offset.
+
+  responses:
+    BadRequestError:
+      description: Bad Request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    ErrorResponse:
+      type: object
+      description: Standard error envelope returned on all non-2xx responses.
+      properties:
+        error:
+          type: string
+          description: Human-readable description of what went wrong.
+      required: [error]
+
+    LastIngestion:
+      type: object
+      description: Telemetry record for the most recent ingestion run, either globally or per country.
+      properties:
+        country_code:
+          type: string
+        status:
+          type: string
+          nullable: true
+          enum: [success, failure, running]
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        events_fetched:
+          type: integer
+          nullable: true
+        events_stored:
+          type: integer
+          nullable: true
+        error:
+          type: string
+          nullable: true
+
+    HealthResponse:
+      type: object
+      description: Service health status including version and ingestion telemetry. `status` is `degraded` when the last ingestion run failed.
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded]
+        version:
+          type: string
+        last_ingestion:
+          oneOf:
+            - $ref: '#/components/schemas/LastIngestion'
+            - type: 'null'
+        last_ingestion_by_country:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/LastIngestion'
+      required: [status, version, last_ingestion]
+
+    Meta:
+      type: object
+      properties:
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+      required: [total, limit, offset]
+
+    EventSummary:
+      type: object
+      description: A single natural event enriched with African administrative boundary data. `state_name` and `country_name` are null when enrichment could not match the coordinates to a known boundary.
+      properties:
+        id:
+          type: string
+          format: uuid
+        source_id:
+          type: string
+        source:
+          type: string
+          enum: [eonet]
+        title:
+          type: string
+        category:
+          type: string
+          enum: [floods, wildfires]
+        status:
+          type: string
+          enum: [open, closed]
+        geometry_type:
+          type: string
+          nullable: true
+          enum: [Point, Polygon]
+        latitude:
+          type: number
+          nullable: true
+        longitude:
+          type: number
+          nullable: true
+        country_name:
+          type: string
+          nullable: true
+        state_name:
+          type: string
+          nullable: true
+        event_date:
+          type: string
+          format: date-time
+          nullable: true
+        source_url:
+          type: string
+          nullable: true
+        ingested_at:
+          type: string
+          format: date-time
+        enriched_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - source_id
+        - source
+        - title
+        - category
+        - status
+        - ingested_at
+
+    EventDetail:
+      $ref: '#/components/schemas/EventSummary'
+
+    EventListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/EventSummary'
+        meta:
+          $ref: '#/components/schemas/Meta'
+      required: [data, meta]
+
+    GeoLocation:
+      type: object
+      description: Resolved administrative location for the API caller, derived from IP geolocation via MaxMind GeoLite2.
+      properties:
+        country:
+          type: string
+        state:
+          type: string
+        lat:
+          type: number
+        lng:
+          type: number
+      required: [country, state, lat, lng]
+
+    ContextResponse:
+      type: object
+      properties:
+        location:
+          oneOf:
+            - $ref: '#/components/schemas/GeoLocation'
+            - type: 'null'
+        nearby_events:
+          type: array
+          items:
+            $ref: '#/components/schemas/EventSummary'
+      required: [location, nearby_events]
+
+    StatesResponse:
+      type: object
+      properties:
+        states:
+          type: array
+          items:
+            type: string
+      required: [states]
+
+    EnrichmentStat:
+      type: object
+      description: Per-country enrichment quality metric. A `null` country_name row represents events that fell outside all known administrative boundaries — a useful diagnostic signal for border/edge cases.
+      properties:
+        country_name:
+          type: string
+          nullable: true
+        total_events:
+          type: integer
+        enriched_events:
+          type: integer
+        success_rate_pct:
+          type: number
+      required: [total_events, enriched_events, success_rate_pct]
+
+    EnrichmentStatsResponse:
+      type: object
+      properties:
+        stats:
+          type: array
+          items:
+            $ref: '#/components/schemas/EnrichmentStat'
+      required: [stats]
