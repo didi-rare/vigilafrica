@@ -3,8 +3,6 @@ package handlers
 import (
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -20,17 +18,20 @@ func TestScalarHTML_PointsToLocalSpec(t *testing.T) {
 	}
 }
 
-func TestOpenAPISpecHandler_ServesSpecFile(t *testing.T) {
-	originalPaths := openAPISpecPaths
-	t.Cleanup(func() { openAPISpecPaths = originalPaths })
-
-	tempDir := t.TempDir()
-	specPath := filepath.Join(tempDir, "openapi.yaml")
-	if err := os.WriteFile(specPath, []byte("openapi: 3.1.0\ninfo:\n  title: Test\n"), 0o644); err != nil {
-		t.Fatalf("failed to write temp spec: %v", err)
+func TestLoadOpenAPISpec_ReturnsEmbeddedSpec(t *testing.T) {
+	spec, err := loadOpenAPISpec()
+	if err != nil {
+		t.Fatalf("expected embedded spec to load, got error: %v", err)
 	}
-	openAPISpecPaths = []string{specPath}
+	if len(spec) == 0 {
+		t.Fatal("expected non-empty embedded spec")
+	}
+	if !strings.Contains(string(spec), "openapi:") {
+		t.Fatal("expected embedded spec to contain openapi key")
+	}
+}
 
+func TestOpenAPISpecHandler_ServesEmbeddedSpec(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/openapi.yaml", nil)
 	rec := httptest.NewRecorder()
 
@@ -42,7 +43,7 @@ func TestOpenAPISpecHandler_ServesSpecFile(t *testing.T) {
 	if ct := rec.Header().Get("Content-Type"); !strings.Contains(ct, "application/yaml") {
 		t.Fatalf("expected yaml content type, got %q", ct)
 	}
-	if body := rec.Body.String(); !strings.Contains(body, "openapi: 3.1.0") {
-		t.Fatalf("expected served spec body, got %q", body)
+	if body := rec.Body.String(); !strings.Contains(body, "openapi:") {
+		t.Fatalf("expected spec body, got %q", body)
 	}
 }

@@ -6,7 +6,7 @@ info:
     This API exposes enriched NASA EONET event data, local context lookup,
     enrichment quality metrics, and ingestion health telemetry for local testing
     and operational monitoring.
-  version: 1.0.0
+  version: 0.7.0
   license:
     name: Apache 2.0
     url: https://www.apache.org/licenses/LICENSE-2.0.html
@@ -14,7 +14,7 @@ info:
 servers:
   - url: http://localhost:8080
     description: Local Development
-  - url: https://api.staging.vigilafrica.org
+  - url: https://api-staging.vigilafrica.org
     description: Staging Environment
   - url: https://api.vigilafrica.org
     description: Production Environment
