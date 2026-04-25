@@ -88,12 +88,30 @@ ALERT_STALENESS_CHECK_INTERVAL_MIN=15
 
 **3.1 Merge development → main** ✅ — `Deploy Staging` passed in 17s. Commit `ffe0bb7`.
 
-**3.2 Smoke test** ✅ — `https://api.staging.vigilafrica.org/health` returns:
+**3.2 Smoke test API** ✅ — `https://api.staging.vigilafrica.org/health` returns:
 ```json
 {"status":"ok","version":"ffe0bb7","last_ingestion":{"country_code":"GH","status":"success",...}}
 ```
 
-**3.3 Verify Resend failure alert** ⏳
+**3.3 Set up Vercel staging project** ⏳
+
+The frontend staging deployment is separate from the API and runs on Vercel.
+
+1. Create a new Vercel project linked to this repository, targeting the `main` branch.
+2. Set the following environment variable in the Vercel staging project:
+   ```
+   VITE_API_BASE_URL=https://api.staging.vigilafrica.org
+   ```
+3. Add the custom domain `staging.vigilafrica.org` in the Vercel project settings.
+4. In Namecheap, add a CNAME record:
+
+   | Type | Host | Value |
+   |---|---|---|
+   | CNAME | `staging` | `cname.vercel-dns.com` |
+
+5. Verify `https://staging.vigilafrica.org` loads the frontend and events appear from the staging API.
+
+**3.4 Verify Resend failure alert** ⏳
 
 1. SSH into VPS, temporarily break the EONET endpoint in staging `.env`.
 2. Set `INGEST_INTERVAL_MIN=1` temporarily.
@@ -101,7 +119,7 @@ ALERT_STALENESS_CHECK_INTERVAL_MIN=15
 4. Wait one cycle. Confirm email arrives at `didi.pepple@gmail.com`.
 5. Restore correct env and restart.
 
-**3.4 Verify Resend staleness alert** ⏳
+**3.5 Verify Resend staleness alert** ⏳
 
 1. Set `ALERT_STALENESS_THRESHOLD_HOURS=1` and `ALERT_STALENESS_CHECK_INTERVAL_MIN=1`.
 2. Stop ingestion long enough to exceed the threshold.
@@ -164,6 +182,7 @@ Expected: `{"status":"ok","version":"v1.0.0", ...}`
 - [x] `staging` and `production` GitHub Environments exist with correct secrets
 - [x] `deploy/provision.sh` executed on the VPS without errors
 - [x] `https://api.staging.vigilafrica.org/health` returns `status: ok` and correct commit SHA
+- [ ] Vercel staging project live at `https://staging.vigilafrica.org` with `VITE_API_BASE_URL` pointing to staging API
 - [ ] Resend failure alert email received on staging
 - [ ] Resend staleness alert email received on staging (exactly once)
 - [ ] Rollback workflow exercised via `workflow_dispatch` after v1.0.0 tag
