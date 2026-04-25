@@ -10,8 +10,8 @@ import (
 
 // RawEONETEvent structures the incoming JSON from NASA's API.
 type RawEONETEvent struct {
-	ID         string `json:"id"`
-	Title      string `json:"title"`
+	ID         string  `json:"id"`
+	Title      string  `json:"title"`
 	Closed     *string `json:"closed"`
 	Categories []struct {
 		ID    string `json:"id"`
@@ -28,6 +28,39 @@ type RawGeometry struct {
 	Date        string        `json:"date"`
 	Type        string        `json:"type"`
 	Coordinates []interface{} `json:"coordinates"` // Usually [lon, lat] or nested for polygons
+}
+
+func parseGeometryDate(rawDate string) (time.Time, bool) {
+	if rawDate == "" {
+		return time.Time{}, false
+	}
+
+	parsed, err := time.Parse(time.RFC3339, rawDate)
+	if err != nil {
+		return time.Time{}, false
+	}
+
+	return parsed, true
+}
+
+func selectMostRecentGeometry(geometries []RawGeometry) RawGeometry {
+	selected := geometries[len(geometries)-1]
+	selectedDate, hasSelectedDate := parseGeometryDate(selected.Date)
+
+	for _, geom := range geometries[:len(geometries)-1] {
+		geomDate, ok := parseGeometryDate(geom.Date)
+		if !ok {
+			continue
+		}
+
+		if !hasSelectedDate || geomDate.After(selectedDate) {
+			selected = geom
+			selectedDate = geomDate
+			hasSelectedDate = true
+		}
+	}
+
+	return selected
 }
 
 // Normalize takes a raw API payload and transforms it into the canonical models.Event.
@@ -64,16 +97,14 @@ func Normalize(raw RawEONETEvent, rawPayload []byte) (models.Event, string, erro
 	}
 
 	geoJSON := ""
-	// Handle Geometry. We take the most recent geometry (last in the array usually, or first if only one).
-	// For simplicity, we just use the first geometry block provided.
+	// Handle Geometry. Prefer the geometry with the most recent timestamp, falling
+	// back to the last snapshot when upstream dates are missing or malformed.
 	if len(raw.Geometries) > 0 {
-		geom := raw.Geometries[0]
+		geom := selectMostRecentGeometry(raw.Geometries)
 		evt.GeomType = &geom.Type
 
-		if geom.Date != "" {
-			if t, err := time.Parse(time.RFC3339, geom.Date); err == nil {
-				evt.EventDate = &t
-			}
+		if parsedDate, ok := parseGeometryDate(geom.Date); ok {
+			evt.EventDate = &parsedDate
 		}
 
 		// If it's a Point, coordinates are [lon, lat]

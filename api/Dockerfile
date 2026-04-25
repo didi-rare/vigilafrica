@@ -1,4 +1,4 @@
-FROM golang:1.25-alpine AS builder
+FROM golang:1.26-alpine AS builder
 
 WORKDIR /app
 
@@ -12,11 +12,12 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Tidy the module for Go 1.25
+# Tidy the module for Go 1.26
 RUN go mod tidy
 
 # Build the binary
-RUN CGO_ENABLED=0 GOOS=linux go build -o vigil-api ./cmd/server/main.go
+ARG VERSION=dev
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags "-X main.version=${VERSION}" -o vigil-api ./cmd/server/main.go
 
 # Final stage
 FROM alpine:latest

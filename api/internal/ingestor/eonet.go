@@ -5,88 +5,218 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
 
 	"vigilafrica/api/internal/database"
+	"vigilafrica/api/internal/models"
 	"vigilafrica/api/internal/normalizer"
 )
 
-const eonetURL = "https://eonet.gsfc.nasa.gov/api/v3/events"
+// eonetURL is the NASA EONET v3 events endpoint.
+// Declared as var (not const) to allow override in tests via eonetURL = server.URL.
+// TODO(future): refactor into an Ingestor struct field to avoid global mutation (openspec-review §9.5).
+var eonetURL = "https://eonet.gsfc.nasa.gov/api/v3/events"
 
-// Default query parameters for Nigeria bounds and categories
-// bbox: [min_lon, min_lat, max_lon, max_lat] for Nigeria
-const queryParams = "?bbox=2.0,4.0,15.0,14.0&category=floods,wildfires&status=open,closed"
-
-// Ingest pulls events from NASA EONET and upserts them into the provided database repository.
-func Ingest(ctx context.Context, repo database.Repository) error {
-	client := &http.Client{
-		Timeout: 30 * time.Second,
+// eonetSleepFn is the sleep function used between retries.
+// Replaced in tests to avoid real wall-clock waits (openspec-review §9.11).
+// TODO(future): inject via Ingestor struct rather than package-level var.
+var eonetSleepFn = func(ctx context.Context, d time.Duration) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(d):
+		return nil
 	}
+}
 
-	reqURL := eonetURL + queryParams
-	log.Printf("Fetching events from NASA EONET: %s", reqURL)
+// CountryConfig defines a country's ingestion parameters.
+// BBox is [min_lon, min_lat, max_lon, max_lat] in WGS84 (EPSG:4326).
+// Add new countries to DefaultCountries — the scheduler picks them up automatically.
+// See: openspec/specs/vigilafrica/country-onboarding-template.md §2.2
+type CountryConfig struct {
+	Code string     // ISO 3166-1 alpha-2 (e.g. "NG", "GH")
+	Name string     // English country name (e.g. "Nigeria", "Ghana")
+	BBox [4]float64 // [min_lon, min_lat, max_lon, max_lat]
+}
 
-	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
+// DefaultCountries is the list of countries ingested on every scheduled tick.
+// Bounding boxes are derived from HDX COD ADM0 boundaries + 0.1° buffer.
+var DefaultCountries = []CountryConfig{
+	{Code: "NG", Name: "Nigeria", BBox: [4]float64{2.0, 4.0, 15.0, 14.0}},
+	{Code: "GH", Name: "Ghana", BBox: [4]float64{-3.5, 4.5, 1.2, 11.2}},
+}
+
+// IngestResult holds the outcome of a single ingestion run for one country.
+type IngestResult struct {
+	EventsFetched int
+	EventsStored  int
+}
+
+// Ingest pulls events from NASA EONET for the given country, upserts them
+// (F-013 deduplication), and records the run in ingestion_runs (ADR-011).
+func Ingest(ctx context.Context, repo database.Repository, country CountryConfig) (*IngestResult, error) {
+	startedAt := time.Now()
+
+	runID, err := repo.CreateIngestionRun(ctx, startedAt, country.Code)
 	if err != nil {
-		return fmt.Errorf("failed to create http request: %w", err)
-	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "VigilAfrica-Ingestor/1.0")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("http request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected status code %d from EONET", resp.StatusCode)
+		slog.Error("ingestion: failed to create run record", "country", country.Code, "err", err)
+		runID = 0
 	}
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("failed to read response body: %w", err)
+	slog.Info("ingestion: run started",
+		"run_id", runID,
+		"country", country.Code,
+		"started_at", startedAt.Format(time.RFC3339),
+	)
+
+	result, ingestErr := runIngest(ctx, repo, country)
+
+	duration := time.Since(startedAt)
+
+	if runID > 0 {
+		status := models.RunStatusSuccess
+		var errMsg *string
+		if ingestErr != nil {
+			status = models.RunStatusFailure
+			msg := ingestErr.Error()
+			errMsg = &msg
+		}
+		if completeErr := repo.CompleteIngestionRun(ctx, runID, status, result.EventsFetched, result.EventsStored, errMsg); completeErr != nil {
+			slog.Error("ingestion: failed to complete run record", "run_id", runID, "err", completeErr)
+		}
+	}
+
+	if ingestErr != nil {
+		slog.Error("ingestion: run failed",
+			"run_id", runID,
+			"country", country.Code,
+			"duration_ms", duration.Milliseconds(),
+			"events_fetched", result.EventsFetched,
+			"events_stored", result.EventsStored,
+			"err", ingestErr,
+		)
+		return result, ingestErr
+	}
+
+	slog.Info("ingestion: run complete",
+		"run_id", runID,
+		"country", country.Code,
+		"duration_ms", duration.Milliseconds(),
+		"events_fetched", result.EventsFetched,
+		"events_stored", result.EventsStored,
+	)
+	return result, nil
+}
+
+// runIngest is the core fetch-normalise-upsert loop for a single country.
+func runIngest(ctx context.Context, repo database.Repository, country CountryConfig) (*IngestResult, error) {
+	result := &IngestResult{}
+
+	client := &http.Client{Timeout: 30 * time.Second}
+
+	bbox := fmt.Sprintf("%.4f,%.4f,%.4f,%.4f",
+		country.BBox[0], country.BBox[1],
+		country.BBox[2], country.BBox[3],
+	)
+	reqURL := fmt.Sprintf("%s?bbox=%s&category=floods,wildfires&status=open,closed", eonetURL, bbox)
+
+	slog.Info("ingestion: fetching from EONET", "country", country.Code, "url", reqURL)
+
+	var body []byte
+	var reqErr error
+	var resp *http.Response
+	maxRetries := 3
+
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+		if err != nil {
+			return result, fmt.Errorf("failed to create http request: %w", err)
+		}
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("User-Agent", "VigilAfrica-Ingestor")
+
+		resp, reqErr = client.Do(req)
+		if reqErr != nil {
+			return result, fmt.Errorf("http request failed: %w", reqErr)
+		}
+
+		if resp.StatusCode == http.StatusOK {
+			body, reqErr = io.ReadAll(resp.Body)
+			resp.Body.Close()
+			if reqErr != nil {
+				return result, fmt.Errorf("failed to read response body: %w", reqErr)
+			}
+			break
+		}
+
+		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusServiceUnavailable {
+			bodyBytes, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+
+			if attempt == maxRetries {
+				return result, fmt.Errorf("unexpected EONET status after %d retries: %d", maxRetries, resp.StatusCode)
+			}
+
+			var rateLimitData struct {
+				RetryAfter int `json:"retry_after"`
+			}
+
+			// Exponential fallback: 5s, 10s, 20s if retry_after is absent or unparseable.
+			sleepSeconds := 5 * (1 << attempt)
+			if err := json.Unmarshal(bodyBytes, &rateLimitData); err == nil && rateLimitData.RetryAfter > 0 {
+				// Dynamic backoff: honour the server's hint + 5s buffer for clock drift.
+				sleepSeconds = rateLimitData.RetryAfter + 5
+			}
+
+			slog.Warn("ingestion: high demand, retrying",
+				"country", country.Code,
+				"status", resp.StatusCode,
+				"attempt", attempt+1,
+				"sleep_sec", sleepSeconds,
+			)
+
+			if err := eonetSleepFn(ctx, time.Duration(sleepSeconds)*time.Second); err != nil {
+				return result, err
+			}
+			continue
+		}
+
+		resp.Body.Close()
+		return result, fmt.Errorf("unexpected EONET status: %d", resp.StatusCode)
 	}
 
 	var root struct {
-		Title  string                     `json:"title"`
 		Events []normalizer.RawEONETEvent `json:"events"`
 	}
-
 	if err := json.Unmarshal(body, &root); err != nil {
-		return fmt.Errorf("failed to decode JSON response: %w", err)
+		return result, fmt.Errorf("failed to decode EONET JSON: %w", err)
 	}
 
-	log.Printf("Fetched %d raw events from EONET. Normalizing and inserting...", len(root.Events))
+	result.EventsFetched = len(root.Events)
+	slog.Info("ingestion: events fetched", "country", country.Code, "count", result.EventsFetched)
 
-	successCount := 0
 	for _, rawEvt := range root.Events {
-		// Isolate individual raw payload for storage
 		rawEvtBytes, _ := json.Marshal(rawEvt)
 
 		event, geoJSON, err := normalizer.Normalize(rawEvt, rawEvtBytes)
 		if err != nil {
-			log.Printf("Warning: failed to normalize event %s: %v", rawEvt.ID, err)
+			slog.Warn("ingestion: normalize failed", "country", country.Code, "source_id", rawEvt.ID, "err", err)
 			continue
 		}
-
-		// Ensure we don't insert events without geometry (unless configured to do so)
 		if geoJSON == "" {
-			log.Printf("Skipping event %s: no geometry extracted", event.SourceID)
+			slog.Warn("ingestion: skipping event with no geometry", "country", country.Code, "source_id", event.SourceID)
 			continue
 		}
 
-		err = repo.UpsertEvent(ctx, event, geoJSON)
-		if err != nil {
-			log.Printf("Error: failed to upsert event %s: %v", event.SourceID, err)
+		// F-013: upsert on source_id — idempotent, no duplicates
+		if err := repo.UpsertEvent(ctx, event, geoJSON); err != nil {
+			slog.Error("ingestion: upsert failed", "country", country.Code, "source_id", event.SourceID, "err", err)
 			continue
 		}
-
-		successCount++
+		result.EventsStored++
 	}
 
-	log.Printf("Successfully ingested %d events.", successCount)
-	return nil
+	return result, nil
 }

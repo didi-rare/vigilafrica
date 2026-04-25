@@ -25,3 +25,8 @@ Thumbs.db
 
 # OpenSpec
 openspec/traces/
+
+# Docker
+postgres_data/
+maxmind_data/
+vigil-demo-data/

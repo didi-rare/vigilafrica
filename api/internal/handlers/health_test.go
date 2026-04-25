@@ -9,7 +9,7 @@ import (
 
 func TestHealthHandler_ServeHTTP(t *testing.T) {
 	version := "1.2.3"
-	handler := NewHealthHandler(version)
+	handler := NewHealthHandler(version, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	w := httptest.NewRecorder()

@@ -12,11 +12,11 @@
 
 ### Base URLs
 
-| Environment | URL                               |
-|-------------|-----------------------------------|
-| Local dev   | `http://localhost:8080`           |
-| Staging     | `https://api-staging.vigilafrica.io` |
-| Production  | `https://api.vigilafrica.io`      |
+| Environment | URL                                  |
+|-------------|--------------------------------------|
+| Local dev   | `http://localhost:8080`              |
+| Staging     | `https://api-staging.vigilafrica.org` |
+| Production  | `https://api.vigilafrica.org`        |
 
 ### Content Type
 

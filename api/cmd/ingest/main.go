@@ -25,14 +25,13 @@ func main() {
 		cancel()
 	}()
 
-	// Database URL from environment
+	// Database URL from environment — required, no fallback (matches cmd/server behaviour)
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
-		// Default to local docker-compose environment for simplicity during development
-		dbURL = "postgres://vigilafrica:vigilafrica@localhost:5432/vigilafrica?sslmode=disable"
+		log.Fatal("DATABASE_URL is not set")
 	}
 
-	log.Println("Starting VigilAfrica NASA EONET Ingestor run...")
+	log.Printf("Starting VigilAfrica NASA EONET Ingestor — %d countries", len(ingestor.DefaultCountries))
 
 	repo, err := database.NewRepository(ctx, dbURL)
 	if err != nil {
@@ -40,9 +39,17 @@ func main() {
 	}
 	defer repo.Close()
 
-	if err := ingestor.Ingest(ctx, repo); err != nil {
-		log.Fatalf("Ingestion run failed: %v", err)
+	var totalFetched, totalStored int
+	for _, country := range ingestor.DefaultCountries {
+		result, err := ingestor.Ingest(ctx, repo, country)
+		if err != nil {
+			log.Printf("Ingestion failed for %s: %v", country.Name, err)
+			continue
+		}
+		log.Printf("%s: fetched=%d stored=%d", country.Name, result.EventsFetched, result.EventsStored)
+		totalFetched += result.EventsFetched
+		totalStored += result.EventsStored
 	}
 
-	log.Println("Ingestion run completed successfully.")
+	log.Printf("Ingestion run complete. Total fetched: %d, stored: %d", totalFetched, totalStored)
 }

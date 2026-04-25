@@ -1,21 +1,30 @@
+import { lazy, Suspense } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { fetchEventById } from '../api/events'
-import { Map } from '../components/Map'
+import { fetchEventById, eventKeys } from '../api/events'
+
 import './EventDetail.css'
+
+const Map = lazy(async () => {
+  const module = await import('../components/Map')
+  return { default: module.Map }
+})
 
 export function EventDetail() {
   const { id } = useParams<{ id: string }>()
-  const { data: event, isLoading, error } = useQuery({
-    queryKey: ['event', id],
-    queryFn: () => fetchEventById(id!),
-    enabled: !!id
+  const { data: event, isPending, error } = useQuery({
+    queryKey: eventKeys.detail(id ?? ''),
+    queryFn: () => fetchEventById(id!), // enabled only when id is defined (enabled: !!id below)
+    enabled: !!id,
   })
 
-  if (isLoading) return <div className="container section">Loading event telemetry...</div>
+  if (isPending) return <div className="container section">Loading event telemetry...</div>
   if (error || !event) return <div className="container section">Event not found in Command Center.</div>
 
   const categoryClass = event.category === 'floods' ? 'flood' : 'fire'
+  const coordinates = event.latitude !== null && event.longitude !== null
+    ? { lat: event.latitude, lng: event.longitude }
+    : null
 
   return (
     <div className="event-detail-page">
@@ -45,7 +54,11 @@ export function EventDetail() {
               <label>Location Context</label>
               <div className="event-location glass-effect">
                 <strong>{event.state_name}</strong>, {event.country_name}
-                <small>Coordinates: {event.latitude?.toFixed(4)}, {event.longitude?.toFixed(4)}</small>
+                <small>
+                  {coordinates
+                    ? `Coordinates: ${coordinates.lat.toFixed(4)}, ${coordinates.lng.toFixed(4)}`
+                    : 'Area geometry available; point coordinates were not provided for this event.'}
+                </small>
               </div>
             </section>
 
@@ -66,20 +79,29 @@ export function EventDetail() {
           </div>
 
           <div className="detail-map">
-             <Map 
-                events={[{
+            {coordinates ? (
+              <Suspense fallback={<div className="map-unavailable glass-effect">Loading map telemetry...</div>}>
+                <Map
+                  events={[{
                   id: event.id,
-                  lat: event.latitude!,
-                  lng: event.longitude!,
+                  lat: coordinates.lat,
+                  lng: coordinates.lng,
                   category: event.category,
                   title: event.title
-                }]} 
-                center={[event.longitude!, event.latitude!]} 
-                zoom={10} 
-             />
+                }]}
+                  center={[coordinates.lng, coordinates.lat]}
+                  zoom={10}
+                />
+              </Suspense>
+            ) : (
+              <div className="map-unavailable glass-effect">
+                Detailed map view unavailable for area-based geometry events.
+              </div>
+            )}
           </div>
         </div>
       </div>
     </div>
   )
 }
+

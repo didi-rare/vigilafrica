@@ -1,6 +1,17 @@
 export type EventCategory = 'floods' | 'wildfires'
 export type EventStatus = 'open' | 'closed'
 
+// ── API Base URL ─────────────────────────────────────────────────────────────
+// Configurable for deployments where frontend and API are on separate hosts.
+// Falls back to window.location.origin for local development or same-origin proxy.
+function getApiBaseUrl(): string {
+  return import.meta.env.VITE_API_BASE_URL || window.location.origin
+}
+
+function buildApiUrl(path: string): string {
+  return new URL(path, getApiBaseUrl()).toString()
+}
+
 export interface GeoLocation {
   country: string;
   state: string;
@@ -40,13 +51,12 @@ export interface EventsResponse {
   };
 }
 
-export async function fetchEvents(category?: EventCategory, stateName?: string): Promise<EventsResponse> {
-  // Use absolute URL since Vite proxy might not be configured yet, but usually we use relative
-  // Assuming API runs on 8080 locally if proxy fails, for now use relative URL assuming Vite proxy is configured.
-  const url = new URL('/v1/events', window.location.origin)
-  
+export async function fetchEvents(category?: EventCategory, stateName?: string, country?: string): Promise<EventsResponse> {
+  const url = new URL('/v1/events', getApiBaseUrl())
+
   if (category) url.searchParams.set('category', category)
   if (stateName) url.searchParams.set('state', stateName)
+  if (country) url.searchParams.set('country', country)
 
   const res = await fetch(url.toString())
   if (!res.ok) {
@@ -57,7 +67,7 @@ export async function fetchEvents(category?: EventCategory, stateName?: string):
 }
 
 export async function fetchEventById(id: string): Promise<VigilEvent> {
-  const res = await fetch(`/v1/events/${id}`)
+  const res = await fetch(buildApiUrl(`/v1/events/${id}`))
   if (!res.ok) {
     throw new Error(`Failed to fetch event ${id}`)
   }
@@ -65,9 +75,70 @@ export async function fetchEventById(id: string): Promise<VigilEvent> {
 }
 
 export async function fetchContext(): Promise<ContextResponse> {
-  const res = await fetch('/v1/context')
+  const res = await fetch(buildApiUrl('/v1/context'))
   if (!res.ok) {
     throw new Error('Failed to fetch user context')
   }
   return res.json()
+}
+
+// ── Health / ingestion freshness (v0.5 — ADR-011) ────────────────────────────
+
+export interface LastIngestion {
+  status: 'success' | 'failure' | 'running' | null
+  started_at: string | null
+  completed_at: string | null
+  events_fetched: number | null
+  events_stored: number | null
+  error: string | null
+}
+
+export interface HealthResponse {
+  status: 'ok' | 'degraded'
+  version: string
+  last_ingestion: LastIngestion | null
+  last_ingestion_by_country?: Record<string, LastIngestion | null>
+}
+
+export async function fetchHealth(): Promise<HealthResponse> {
+  const res = await fetch(buildApiUrl('/health'))
+  if (!res.ok) {
+    throw new Error('Failed to fetch health status')
+  }
+  return res.json()
+}
+
+// ── Query key factories (§5.2) ───────────────────────────────────────────────
+
+export const eventKeys = {
+  all:    ['events'] as const,
+  list:   (country: string, category: string, state: string) =>
+    [...eventKeys.all, 'list', { country, category, state }] as const,
+  detail: (id: string) => [...eventKeys.all, 'detail', id] as const,
+}
+
+export const stateKeys = {
+  list: (country: string) => ['states', country] as const,
+}
+
+export const healthKeys = {
+  all: ['health'] as const,
+}
+
+export const contextKeys = {
+  all: ['context'] as const,
+}
+
+// ── States endpoint (v0.7) ───────────────────────────────────────────────────
+
+export async function fetchStates(country?: string): Promise<string[]> {
+  const url = new URL('/v1/states', getApiBaseUrl())
+  if (country) url.searchParams.set('country', country)
+
+  const res = await fetch(url.toString())
+  if (!res.ok) {
+    throw new Error('Failed to fetch states')
+  }
+  const data: { states: string[] } = await res.json()
+  return data.states
 }

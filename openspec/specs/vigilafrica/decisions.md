@@ -22,6 +22,10 @@
 | ADR-008 | Go Version: 1.26                          | ACCEPTED | 2026-04-12 |
 | ADR-009 | Database Driver: pgx (No ORM)             | ACCEPTED | 2026-04-12 |
 | ADR-010 | Automated Governance: The Sentinel        | ACCEPTED | 2026-04-14 |
+| ADR-011 | Ingestion Observability: Resend Alerting  | ACCEPTED | 2026-04-16 |
+| ADR-012 | Frontend Server State: TanStack Query     | ACCEPTED | 2026-04-18 |
+| ADR-013 | Frontend Styling: Plain CSS over CSS-in-JS | ACCEPTED | 2026-04-18 |
+| ADR-014 | Single-VPS Two-Stack Deployment Model     | ACCEPTED | 2026-04-24 |
 
 ---
 
@@ -301,3 +305,163 @@ Implement an automated governance gate ("The Sentinel") that prevents code chang
 - **CI Failure**: Pull Requests that violate these rules will fail the `openspec-verify` workflow.
 - **Workflow Dependency**: Developers must run `/opsx-propose` before starting implementation on a new feature.
 - **Improved Scannability**: The `openspec/changes/archive` becomes a reliable history of *why* every part of the codebase exists.
+
+---
+
+## ADR-011 — Ingestion Observability: Resend Alerting
+
+**Date**: 2026-04-16
+**Status**: ACCEPTED
+
+### Decision
+
+Implement ingestion run tracking and email alerting via **Resend** as part of the v0.5 operational prototype. The system must be capable of detecting and reporting both immediate ingestion failures and prolonged ingestion staleness without manual log inspection.
+
+### Context
+
+v0.5 introduces scheduled ingestion via gocron. A scheduled job that fails silently — EONET unreachable, PostGIS enrichment broken, goroutine hung — presents stale data as current, which is worse than no data for target users (NGOs, journalists, civic responders). A solo-maintained VPS requires automated alerting to be operationally viable at zero cost.
+
+### Decision Components
+
+**1. Ingestion run tracking**
+- An `ingestion_runs` table records every run: `started_at`, `completed_at`, `status` (success/failure), `events_fetched`, `events_stored`, `error` message
+- Written by the ingestor at the start and end of each cycle
+
+**2. Extended `/health` endpoint**
+- Response includes a `last_ingestion` block with the most recent run record
+- Top-level `status` field returns `"degraded"` if the last run status is `"failure"`, `"ok"` otherwise
+- Frontend reads `last_ingestion.completed_at` to display a "last updated X min ago" freshness indicator — warns if > 2 hours stale
+
+**3. Failure alert**
+- On every failed ingestion run, an email is sent immediately via Resend
+- Subject: `[VigilAfrica] Ingestion failed at {time}`
+- Body includes: error message, events fetched, events stored, run duration
+
+**4. Staleness watchdog**
+- A separate goroutine runs on a configurable interval (default: every 30 minutes, offset from the ingestion schedule)
+- Queries `ingestion_runs` for the most recent successful run
+- If `last_success_at < now - ALERT_STALENESS_THRESHOLD_HOURS`, sends a staleness email
+- Catches failures the immediate alert misses: scheduler process died, gocron stopped, goroutine hung silently
+
+### Email Provider: Resend
+
+Four options evaluated: SMTP (self-configured), SendGrid, Mailgun, Resend.
+
+- **Resend chosen**: single `RESEND_API_KEY` env var, no SMTP config, 3,000 emails/month free tier — sufficient for hourly ingestion monitoring indefinitely
+- **SMTP rejected**: requires per-provider configuration (Gmail app password, port, TLS settings) — unnecessary complexity for a zero-cost operational goal
+- **SendGrid / Mailgun rejected**: more complex onboarding for equivalent free tier functionality
+
+### Environment Variables
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `RESEND_API_KEY` | — | Required. Resend API key for email delivery |
+| `ALERT_EMAIL_TO` | — | Required. Recipient address for all alerts |
+| `ALERT_STALENESS_THRESHOLD_HOURS` | `2` | Hours without successful ingestion before staleness alert fires |
+
+### Consequences
+
+- `RESEND_API_KEY` and `ALERT_EMAIL_TO` are required env vars from v0.5 onward — documented in `.env.example`
+- The `ingestion_runs` table requires a new migration: `api/db/migrations/` (numbered after existing migrations)
+- Resend email delivery and staleness watchdog logic live in `api/internal/alert/`; scheduled ingestion remains in `api/internal/ingestor/`
+- The `/health` handler in `api/internal/handlers/` queries `ingestion_runs` for the last run record
+- If Resend is unreachable when sending an alert, the failure is logged but does not crash the ingestor or scheduler
+
+---
+
+## ADR-012 — Frontend Server State: TanStack Query
+
+**Date**: 2026-04-18
+**Status**: ACCEPTED
+
+### Decision
+
+Use **TanStack Query v5** (`@tanstack/react-query`) as the sole server-state management layer for the React frontend.
+
+### Context
+
+The dashboard fetches event lists, applies filters, and needs background refetch to stay current with ingestion runs. Options evaluated: `useEffect` + `useState`, SWR, TanStack Query, Zustand with async actions.
+
+### Rationale
+
+- **Eliminates `useEffect` data fetching** — the most common React anti-pattern; TanStack Query replaces the `useEffect` + `useState` + error handling triple with a single hook
+- **Built-in caching and deduplication** — multiple components requesting the same query share one network call; cache is invalidated explicitly after mutations
+- **Background refetch** — events dashboard stays live without manual polling logic
+- **Suspense integration** — `useSuspenseQuery` works natively with React 19 Suspense boundaries
+- **SWR rejected** — smaller API surface but less control over cache invalidation and key conventions; TanStack Query's key factory pattern is more explicit
+- **Zustand rejected** — appropriate for complex client state machines, not server state; would require manual loading/error/cache management
+
+### Consequences
+
+- All server data fetching must use TanStack Query hooks — `useQuery`, `useSuspenseQuery`, `useMutation`
+- Query keys must follow the hierarchical key factory pattern (§5.2 of `developers-react.md`)
+- No `useEffect` + `setState` for fetching data
+- `QueryClientProvider` wraps the app root with a single shared `QueryClient`
+- Cache invalidation is explicit via `queryClient.invalidateQueries`
+
+---
+
+## ADR-013 — Frontend Styling: Plain CSS over CSS-in-JS
+
+**Date**: 2026-04-18
+**Status**: ACCEPTED
+
+### Decision
+
+Use **plain CSS files co-located with components** as the sole styling mechanism. No CSS-in-JS, no CSS Modules, no Tailwind.
+
+### Context
+
+Styling approach was evaluated at project start. Options considered: Tailwind CSS, CSS Modules, styled-components / Emotion (CSS-in-JS), plain CSS.
+
+### Rationale
+
+- **Zero runtime cost** — CSS-in-JS (styled-components, Emotion) injects styles at runtime, adding JS bundle size and runtime overhead; plain CSS has none
+- **No build transformation** — CSS Modules require a PostCSS pipeline; Tailwind requires a purge step; plain CSS works natively in Vite with no config
+- **Browser DevTools native** — plain CSS class names are readable in DevTools without source maps; CSS-in-JS generates hashed names that obscure origin
+- **Contributor accessibility** — plain CSS is the baseline skill; CSS-in-JS APIs are framework-specific knowledge
+- **Tailwind rejected** — utility-class proliferation makes diffs noisy and component JSX harder to read; also requires the Tailwind PostCSS plugin
+- **CSS Modules rejected** — adds a build-time step and a module import pattern for marginal benefit over class prefixing convention
+- **Scoping achieved via convention** — BEM-style component-prefix class names (`.events-dashboard__filter`) prevent global collisions without a build tool
+
+### Consequences
+
+- Each component has one co-located CSS file, imported at the top of the `.tsx`
+- Class names are `kebab-case` prefixed with the component name (§7.3 of `developers-react.md`)
+- CSS custom properties in `index.css` are the design token layer
+- No `styled-components`, `@emotion/react`, `@emotion/styled`, or Tailwind in `package.json`
+- Adding any CSS-in-JS library or Tailwind requires superseding this ADR
+
+---
+
+## ADR-014 — Single-VPS Two-Stack Deployment Model
+
+**Date**: 2026-04-24
+**Status**: ACCEPTED
+
+### Context
+
+VigilAfrica needs staging and production environments before v1.0 can be tagged. The project is still solo-maintained and cost-sensitive, but production changes need a real promotion path, versioned deploys, and a rollback mechanism.
+
+### Decision
+
+Run staging and production on one VPS as two isolated Docker Compose stacks behind one host-level Caddy instance:
+
+- Staging API: `api.staging.vigilafrica.org` -> `127.0.0.1:8081`, deployed from `main`
+- Production API: `api.vigilafrica.org` -> `127.0.0.1:8080`, deployed from SemVer tags on `release`
+- Frontend: two Vercel projects, `staging.vigilafrica.org` from `main` and `vigilafrica.org` from `release`
+- Production deploys require GitHub Environment approval
+
+### Options Considered
+
+- **Railway**: rejected because managed Postgres does not provide the same PostGIS story, and custom containers erase much of the managed-platform benefit.
+- **Supabase database + VPS API**: rejected for v1.0 because it splits the operational surface across vendors and adds latency for ingestion upserts.
+- **Fly.io**: rejected because it does not materially simplify the PostGIS + low-cost deployment story for this stage.
+- **Branch-push production deploys**: rejected because tags provide a clearer release artifact and rollback target.
+
+### Consequences
+
+- One VPS remains a single point of failure, accepted for v1.0 scale.
+- Staging and production must use separate `.env` files, Docker networks, and volumes.
+- `/health.version` is stamped at build time with a commit SHA for staging and a SemVer tag for production.
+- Rollback is performed by redeploying a prior tag through the production workflow.
