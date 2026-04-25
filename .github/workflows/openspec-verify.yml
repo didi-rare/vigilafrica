@@ -26,7 +26,11 @@ jobs:
           go-version: '1.26'
 
       - name: Fetch Development Branch
-        run: git fetch origin development:development
+        # --update-head-ok allows the fetch to update `development` even when
+        # the workflow is checked out on it (direct pushes to development, or
+        # PRs from development → main). Without it, fetch fails with "refusing
+        # to fetch into branch refs/heads/development checked out at ...".
+        run: git fetch origin development:development --update-head-ok
 
       - name: Cache Npm Store
         uses: actions/cache@v4
