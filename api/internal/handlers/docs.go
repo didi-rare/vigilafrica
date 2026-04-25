@@ -1,27 +1,19 @@
 package handlers
 
 import (
+	_ "embed"
 	"fmt"
 	"net/http"
-	"os"
-	"path/filepath"
 )
 
-var openAPISpecPaths = []string{
-	filepath.Join("openspec", "specs", "vigilafrica", "openapi.yaml"),
-	filepath.Join("..", "openspec", "specs", "vigilafrica", "openapi.yaml"),
-	filepath.Join("..", "..", "openspec", "specs", "vigilafrica", "openapi.yaml"),
-}
+//go:embed openapi.yaml
+var embeddedOpenAPISpec []byte
 
 func loadOpenAPISpec() ([]byte, error) {
-	for _, candidate := range openAPISpecPaths {
-		data, err := os.ReadFile(candidate)
-		if err == nil {
-			return data, nil
-		}
+	if len(embeddedOpenAPISpec) == 0 {
+		return nil, fmt.Errorf("openapi spec not embedded in binary")
 	}
-
-	return nil, fmt.Errorf("openapi spec not found in known local paths")
+	return embeddedOpenAPISpec, nil
 }
 
 func scalarHTML(specURL string) string {
