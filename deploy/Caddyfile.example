@@ -14,10 +14,6 @@ api.staging.vigilafrica.org {
         -Server
     }
 
-    log {
-        output file /var/log/caddy/vigilafrica-staging-api.log
-        format json
-    }
 }
 
 api.vigilafrica.org {
@@ -36,8 +32,4 @@ api.vigilafrica.org {
         -Server
     }
 
-    log {
-        output file /var/log/caddy/vigilafrica-prod-api.log
-        format json
-    }
 }
