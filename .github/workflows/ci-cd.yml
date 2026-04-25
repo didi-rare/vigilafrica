@@ -42,6 +42,12 @@ jobs:
           npm ci
           cd web && npm ci
 
+      - name: Check OpenAPI spec in sync
+        run: |
+          node scripts/sync-openapi.js
+          git diff --exit-code api/internal/handlers/openapi.yaml || \
+            (echo "❌ api/internal/handlers/openapi.yaml is out of sync with openspec/specs/vigilafrica/openapi.yaml — run 'npm run sync:openapi' and commit the result." && exit 1)
+
       - name: Run Go Tests
         run: |
           cd api
