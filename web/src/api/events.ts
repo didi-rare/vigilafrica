@@ -4,12 +4,21 @@ export type EventStatus = 'open' | 'closed'
 // ── API Base URL ─────────────────────────────────────────────────────────────
 // Configurable for deployments where frontend and API are on separate hosts.
 // Falls back to window.location.origin for local development or same-origin proxy.
-function getApiBaseUrl(): string {
+export function getApiBaseUrl(): string {
   return import.meta.env.VITE_API_BASE_URL || window.location.origin
 }
 
 function buildApiUrl(path: string): string {
   return new URL(path, getApiBaseUrl()).toString()
+}
+
+export class ApiError extends Error {
+  status?: number
+  constructor(message: string, status?: number) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+  }
 }
 
 export interface GeoLocation {
@@ -60,7 +69,7 @@ export async function fetchEvents(category?: EventCategory, stateName?: string, 
 
   const res = await fetch(url.toString())
   if (!res.ok) {
-    throw new Error('Failed to fetch events from VigilAfrica API')
+    throw new ApiError(`Failed to fetch events from VigilAfrica API (HTTP ${res.status})`, res.status)
   }
 
   return res.json()

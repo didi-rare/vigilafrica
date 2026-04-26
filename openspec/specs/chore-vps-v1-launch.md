@@ -103,12 +103,7 @@ The frontend staging deployment is separate from the API and runs on Vercel.
    VITE_API_BASE_URL=https://api.staging.vigilafrica.org
    ```
 3. Add the custom domain `staging.vigilafrica.org` in the Vercel project settings.
-4. In Namecheap, add a CNAME record:
-
-   | Type | Host | Value |
-   |---|---|---|
-   | CNAME | `staging` | `cname.vercel-dns.com` |
-
+4. **DNS records (CNAME for `staging`, apex for production) are owned by `fix-staging-soft-launch` §8** — operator action tracked there.
 5. Verify `https://staging.vigilafrica.org` loads the frontend and events appear from the staging API.
 
 **3.4 Verify Resend failure alert** ⏳
@@ -182,7 +177,7 @@ Expected: `{"status":"ok","version":"v1.0.0", ...}`
 - [x] `staging` and `production` GitHub Environments exist with correct secrets
 - [x] `deploy/provision.sh` executed on the VPS without errors
 - [x] `https://api.staging.vigilafrica.org/health` returns `status: ok` and correct commit SHA
-- [ ] Vercel staging project live at `https://staging.vigilafrica.org` with `VITE_API_BASE_URL` pointing to staging API
+- [ ] Vercel staging project live at `https://staging.vigilafrica.org` with `VITE_API_BASE_URL` pointing to staging API (DNS sign-off lives in `fix-staging-soft-launch` §8)
 - [ ] Resend failure alert email received on staging
 - [ ] Resend staleness alert email received on staging (exactly once)
 - [ ] Rollback workflow exercised via `workflow_dispatch` after v1.0.0 tag
