@@ -1,7 +1,9 @@
 ---
 id: fix-mobile-and-status-accuracy
-status: in-progress
+status: archived
 branch: fix/mobile-and-status
+merged_pr: https://github.com/didi-rare/vigilafrica/pull/36
+archived_on: 2026-04-26
 ---
 
 # Proposal: Mobile Layout + Status Accuracy Fix (fix-mobile-and-status-accuracy)
