@@ -98,3 +98,32 @@
     grid-template-columns: 1fr;
   }
 }
+
+@media (max-width: 768px) {
+  .event-detail-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .header-main,
+  .header-meta,
+  .detail-info {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .header-main h1 {
+    font-size: 2rem;
+    overflow-wrap: anywhere;
+  }
+
+  .header-meta {
+    align-items: flex-start;
+  }
+
+  .event-date,
+  .telemetry-log code {
+    overflow-wrap: anywhere;
+  }
+}

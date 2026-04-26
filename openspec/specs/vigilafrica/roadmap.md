@@ -20,7 +20,7 @@
 | v0.6      | Country expansion model      | Process template (no new F-IDs)       | ✅ Complete |
 | v0.7      | Second country stable        | Enrichment quality validation         | ✅ Complete |
 | v0.8      | Pre-demo setup               | Demo environment + curated seed data  | ✅ Complete |
-| v1.0      | Credible public launch       | Quality gate (no new F-IDs)           | 🔴 Planned |
+| v1.0      | Credible public launch       | Quality gate (no new F-IDs)           | 🔄 Active |
 
 
 > **Release-state note**: The milestone index above is the authoritative release-state source for milestone tracking. Historical checklist boxes below are preserved as delivery records and are not retroactively rewritten when a milestone is marked release-complete.

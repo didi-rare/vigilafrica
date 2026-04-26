@@ -7,7 +7,7 @@
 //   - Links to GitHub repository
 //   - Responsive at 375px and 1280px
 //   - No API calls (static component only)
-import { Fragment, Suspense, lazy } from 'react'
+import { Suspense, lazy } from 'react'
 import {
   Satellite,
   Map,
@@ -16,7 +16,6 @@ import {
   Newspaper,
   Truck,
   ShieldAlert,
-  ArrowRight
 } from 'lucide-react'
 
 import { BrowserRouter as Router, Routes, Route, useRouteError } from 'react-router-dom'
@@ -92,9 +91,10 @@ function App() {
   return (
     <Router>
       <div id="app">
+      <a href="#main" className="skip-link">Skip to main content</a>
       {/* ── Prototype Banner ── */}
       <div id="prototype-banner" className="prototype-banner" role="banner" aria-label="Project status">
-        🛰️ Active Development — v0.7 complete · v0.8 Pre-demo Setup planned
+        🛰️ Active Development — v0.7 complete · v1.0 staging live · production launch in progress
       </div>
 
       {/* ── Navigation ── */}
@@ -116,7 +116,7 @@ function App() {
         </a>
       </nav>
 
-      <main>
+      <main id="main">
         <Routes>
           <Route path="/" errorElement={<PageError />} element={
             <>
@@ -168,22 +168,15 @@ function App() {
                     coordinator can understand.
                   </p>
 
-                  <div className="steps" role="list">
-                    {STEPS.map((step, i) => (
-                      <Fragment key={step.title}>
-                        <article className="step" role="listitem">
+                  <ul className="steps" role="list">
+                    {STEPS.map((step) => (
+                        <li key={step.title} className="step">
                           <div className="step-icon" aria-hidden="true">{step.icon}</div>
                           <h3>{step.title}</h3>
                           <p>{step.desc}</p>
-                        </article>
-                        {i < STEPS.length - 1 && (
-                          <div className="step-arrow" aria-hidden="true">
-                            <ArrowRight size={20} />
-                          </div>
-                        )}
-                      </Fragment>
+                        </li>
                     ))}
-                  </div>
+                  </ul>
                 </div>
               </section>
 
@@ -220,9 +213,10 @@ function App() {
                     </h2>
 
                     <p>
-                      VigilAfrica is being built milestone by milestone. v0.6 (Country Expansion Model)
-                      is complete — Ghana is live alongside Nigeria. **v0.7** (Second Country Stable)
-                      is active: enrichment quality validation and full Ghana experience in progress.
+                      VigilAfrica is being built milestone by milestone. v0.7 (Second Country Stable)
+                      is complete — Nigeria and Ghana run end-to-end on the same pipeline. v1.0
+                      (Credible Public Launch) is active: staging is live, and production deploy is
+                      gated on final reviewer approval.
                     </p>
 
                     <nav aria-label="Milestone progress">
@@ -235,14 +229,20 @@ function App() {
                           >
                             {m.label}
                             {m.complete && (
-                               <span className="milestone-tag milestone-tag--complete">
-                                ✅ Complete
-                              </span>
+                              <>
+                                {' '}
+                                <span className="milestone-tag milestone-tag--complete">
+                                  <span aria-hidden="true">✅</span> Complete
+                                </span>
+                              </>
                             )}
                             {m.active && (
-                              <span className="milestone-tag">
-                                🔄 In progress
-                              </span>
+                              <>
+                                {' '}
+                                <span className="milestone-tag">
+                                  <span aria-hidden="true">🔄</span> In progress
+                                </span>
+                              </>
                             )}
                           </li>
                         ))}
