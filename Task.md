@@ -16,6 +16,7 @@
 - [x] 2.2 Let the page own scrolling on mobile instead of nested sidebar scrolling
 - [x] 2.3 Make event location text wrap without card or viewport overflow
 - [x] 2.4 Add sticky-nav-safe scroll margins for section anchors
+- [x] 2.5 Fix event detail header overflow caught during mobile browser pass
 
 ## 3. Status Accuracy
 

@@ -15,6 +15,7 @@ Frontend-only. Mobile responsive bugs, stale status copy, embarrassing MapLibre 
 | File | Change |
 | --- | --- |
 | `web/src/components/EventsDashboard.css` | Add `@media (max-width: 768px)` block for layout; fix `.event-location` wrapping; styles for skip-link if hosted here |
+| `web/src/pages/EventDetail.css` | Browser-pass follow-up: prevent long detail titles/meta from creating mobile horizontal overflow |
 | `web/src/App.tsx` | Banner copy update; body copy refresh; remove literal `**v0.7**`; add skip-to-main link; wrap milestone emojis in `aria-hidden`; restructure `<article role="listitem">` steps |
 | `web/src/App.css` | `scroll-margin-top` on section anchors; `prefers-reduced-motion` block; skip-link styles if hosted here |
 | `web/src/data/milestones.json` | Flip v0.7 → complete; v1.0 → active |
