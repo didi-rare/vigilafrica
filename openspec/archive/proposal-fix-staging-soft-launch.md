@@ -1,7 +1,9 @@
 ---
 id: fix-staging-soft-launch
-status: proposed
+status: archived
 branch: fix/staging-soft-launch
+merged_pr: https://github.com/didi-rare/vigilafrica/pull/33
+archived_on: 2026-04-26
 ---
 
 # Proposal: Staging Soft-Launch Hardening (fix-staging-soft-launch)
