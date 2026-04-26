@@ -112,8 +112,8 @@ export function Map({ events, center = [8.6753, 9.082], zoom = 5 }: MapProps) {
       container: mapContainer.current,
       style: {
         version: 8,
-        // Required so the cluster-count symbol layer can render text glyphs.
-        glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
+        // MapLibre GL JS 5.11+ renders text from local fonts when glyphs is omitted.
+        // This keeps cluster labels visible without remote glyph 404s.
         sources: {
           'map-osm': {
             type: 'raster',
@@ -195,7 +195,11 @@ export function Map({ events, center = [8.6753, 9.082], zoom = 5 }: MapProps) {
         filter: ['has', 'point_count'],
         layout: {
           'text-field': ['get', 'point_count_abbreviated'],
-          'text-font': ['Open Sans Bold'],
+          'text-font': [
+            'Arial Unicode MS Bold', 'Arial Bold',
+            'Noto Sans Bold', 'Roboto Bold', 'DejaVu Sans Bold',
+            'sans-serif',
+          ],
           'text-size': 13,
         },
         paint: {

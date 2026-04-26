@@ -31,17 +31,17 @@
   },
   {
     "label": "v0.7 · Second country stable",
-    "active": true,
-    "complete": false
+    "active": false,
+    "complete": true
   },
   {
     "label": "v0.8 · Pre-demo setup",
     "active": false,
-    "complete": false
+    "complete": true
   },
   {
     "label": "v1.0 · Credible public launch",
-    "active": false,
+    "active": true,
     "complete": false
   }
 ]
