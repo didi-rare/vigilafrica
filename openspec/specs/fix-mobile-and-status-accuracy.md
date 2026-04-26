@@ -21,8 +21,11 @@ Frontend-only. Mobile responsive bugs, stale status copy, embarrassing MapLibre 
 | `web/src/data/milestones.json` | Flip v0.7 → complete; v1.0 → active |
 | `web/index.html` | `<meta name="description">` rewrite |
 | `web/src/components/Map.tsx` | MapLibre style/glyphs swap |
-| `web/src/components/EventsDashboard.test.tsx` | Add tests covering skip-link presence and milestone aria-hidden emoji |
-| `.env.example` | (Optional, only if MapTiler key chosen) document `VITE_MAPTILER_KEY` |
+| `web/src/App.test.tsx` (new) | App-level tests: skip-link first focusable, milestone emoji aria-hidden, axe `aria-allowed-role`, list semantics |
+| `web/src/components/Map.test.tsx` | Assert glyphs is omitted and `text-font` stack contains local fallbacks (regression guard against `Open Sans Bold`) |
+| `openspec/specs/vigilafrica/roadmap.md` | Mark v1.0 as 🔄 Active (consequence of §5.3 milestone flip) |
+| `Task.md` | Replace stale checklist with this change's working tasks (housekeeping) |
+| `.env.example` | Not modified — §4 chose local-font rendering, no MapTiler key needed |
 
 ## 3. Mobile Layout
 

@@ -271,8 +271,16 @@ describe('Map', () => {
     })
     expect(clusterCount?.layout).toMatchObject({
       'text-field': ['get', 'point_count_abbreviated'],
-      'text-font': ['Arial Unicode MS Bold', 'Arial Bold', 'sans-serif'],
+      'text-font': expect.arrayContaining([
+        'Arial Unicode MS Bold',
+        'Roboto Bold',
+        'DejaVu Sans Bold',
+      ]),
     })
+    // Regression guard: a remote-glyph font ("Open Sans Bold") would re-introduce
+    // the demotiles 404s — the stack must use locally-renderable fonts only.
+    const textFont = clusterCount?.layout?.['text-font'] as string[] | undefined
+    expect(textFont).not.toContain('Open Sans Bold')
   })
 
   it('creates accessible DOM markers only for unclustered features returned by the source', async () => {

@@ -195,7 +195,11 @@ export function Map({ events, center = [8.6753, 9.082], zoom = 5 }: MapProps) {
         filter: ['has', 'point_count'],
         layout: {
           'text-field': ['get', 'point_count_abbreviated'],
-          'text-font': ['Arial Unicode MS Bold', 'Arial Bold', 'sans-serif'],
+          'text-font': [
+            'Arial Unicode MS Bold', 'Arial Bold',
+            'Noto Sans Bold', 'Roboto Bold', 'DejaVu Sans Bold',
+            'sans-serif',
+          ],
           'text-size': 13,
         },
         paint: {
