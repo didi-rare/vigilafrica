@@ -268,21 +268,26 @@
 .event-location {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
+  min-width: 0;
   padding: 12px 14px;
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.05);
+  word-break: break-word;
 }
 
 .location-pin {
   font-size: 0.9rem;
   filter: grayscale(0.2);
+  flex-shrink: 0;
 }
 
 .location-text {
   font-size: 0.875rem;
   color: var(--text-secondary);
+  min-width: 0;
 }
 
 .location-text strong {
@@ -372,4 +377,30 @@
 .freshness-icon {
   flex-shrink: 0;
   font-size: 1rem;
+}
+
+@media (max-width: 768px) {
+  .dashboard-layout {
+    flex-direction: column;
+    height: auto;
+    gap: 1.25rem;
+  }
+
+  .dashboard-sidebar {
+    flex: 1 1 auto;
+    width: 100%;
+    max-height: none;
+    overflow-y: visible;
+    padding-right: 0;
+  }
+
+  .dashboard-map-container {
+    flex: 1 1 auto;
+    height: 60vh;
+    min-height: 360px;
+  }
+
+  .dashboard-state {
+    padding: 3rem 1.25rem;
+  }
 }

@@ -36,6 +36,8 @@
   /* Spacing */
   --container-max: 1160px;
   --section-py:    128px;
+  --z-nav: 100;
+  --z-skip-link: 1000;
 }
 
 /* ─────────────────────────────────────
@@ -99,6 +101,12 @@ a {
   line-height: 1.7;
 }
 
+section[id],
+h2[id],
+#dashboard-heading {
+  scroll-margin-top: 88px;
+}
+
 /* ─────────────────────────────────────
    Buttons
 ───────────────────────────────────── */
@@ -138,6 +146,22 @@ a {
   background: var(--bg-card);
 }
 
+.skip-link {
+  position: absolute;
+  top: -100px;
+  left: 8px;
+  z-index: var(--z-skip-link);
+  background: var(--accent-amber);
+  color: #07091A;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-weight: 600;
+}
+
+.skip-link:focus {
+  top: 8px;
+}
+
 /* ─────────────────────────────────────
    Prototype Banner
 ───────────────────────────────────── */
@@ -158,7 +182,7 @@ a {
 .nav {
   position: sticky;
   top: 0;
-  z-index: 100;
+  z-index: var(--z-nav);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -343,6 +367,7 @@ a {
   gap: 8px;
   margin-top: 48px;
   flex-wrap: wrap;
+  list-style: none;
 }
 
 .step {
@@ -378,8 +403,8 @@ a {
 }
 
 .step:nth-child(1) .step-icon { color: var(--accent-amber); }
-.step:nth-child(3) .step-icon { color: var(--accent-orange); }
-.step:nth-child(5) .step-icon { color: var(--accent-blue); }
+.step:nth-child(2) .step-icon { color: var(--accent-orange); }
+.step:nth-child(3) .step-icon { color: var(--accent-blue); }
 
 .step h3 {
   font-size: 1.25rem;
@@ -394,24 +419,14 @@ a {
   line-height: 1.7;
 }
 
-.step-arrow {
-  font-size: 1.5rem;
-  color: var(--text-muted);
-  align-self: center;
-  padding: 0 8px;
-  flex-shrink: 0;
-  opacity: 0.4;
-}
-
 @media (max-width: 768px) {
-  .step-arrow { display: none; }
   .steps { gap: 12px; }
 }
 
 /* Step accent borders */
 .step:nth-child(1) { border-top: 2px solid var(--accent-amber); }
-.step:nth-child(3) { border-top: 2px solid var(--accent-orange); }
-.step:nth-child(5) { border-top: 2px solid var(--accent-blue); }
+.step:nth-child(2) { border-top: 2px solid var(--accent-orange); }
+.step:nth-child(3) { border-top: 2px solid var(--accent-blue); }
 
 /* ─────────────────────────────────────
    Built For
@@ -657,4 +672,15 @@ a {
 @media (max-width: 480px) {
   .hero-title { font-size: 2.25rem; }
   .steps { flex-direction: column; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
+  }
 }

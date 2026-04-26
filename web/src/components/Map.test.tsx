@@ -241,6 +241,8 @@ describe('Map', () => {
 
     const map = maplibreMock.instances.maps[0]
     map.sourceFeatures = []
+    const options = map.options as { style: { glyphs?: string } }
+    expect(options.style.glyphs).toBeUndefined()
 
     await act(async () => {
       map.trigger('load')
@@ -269,6 +271,7 @@ describe('Map', () => {
     })
     expect(clusterCount?.layout).toMatchObject({
       'text-field': ['get', 'point_count_abbreviated'],
+      'text-font': ['Arial Unicode MS Bold', 'Arial Bold', 'sans-serif'],
     })
   })
 
