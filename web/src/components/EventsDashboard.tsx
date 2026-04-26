@@ -1,7 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { fetchEvents, fetchContext, fetchHealth, fetchStates, eventKeys, stateKeys, healthKeys, contextKeys } from '../api/events'
+import { fetchEvents, fetchContext, fetchHealth, fetchStates, getApiBaseUrl, eventKeys, stateKeys, healthKeys, contextKeys } from '../api/events'
 import type { HealthResponse, EventCategory } from '../api/events'
 
 import './EventsDashboard.css'
@@ -124,7 +124,13 @@ export function EventsDashboard() {
 
   // §5.1: all data fetching via TanStack Query
   // §5.2: query keys from factory functions
-  const { data: eventsData, isPending: eventsLoading, error: eventsError } = useQuery({
+  const {
+    data: eventsData,
+    isPending: eventsLoading,
+    error: eventsError,
+    refetch: refetchEvents,
+    isFetching: eventsFetching,
+  } = useQuery({
     queryKey: eventKeys.list(selectedCountry, selectedCategory, selectedState),
     queryFn: () => fetchEvents(
       selectedCategory || undefined,
@@ -239,9 +245,25 @@ export function EventsDashboard() {
             )}
 
             {eventsError && (
-              <div className="dashboard-state error">
+              <div className="dashboard-state error" role="alert">
                 <span role="img" aria-label="alert">⚠️</span>
                 <p>Failed to connect to VigilAfrica Command Center</p>
+                <p className="dashboard-state-detail">
+                  <span className="dashboard-state-label">API:</span>{' '}
+                  <code>{getApiBaseUrl()}</code>
+                </p>
+                <p className="dashboard-state-detail dashboard-state-detail--muted">
+                  {eventsError instanceof Error ? eventsError.message : String(eventsError)}
+                </p>
+                <button
+                  type="button"
+                  className="dashboard-retry-button"
+                  onClick={() => { void refetchEvents() }}
+                  disabled={eventsFetching}
+                  aria-label="Retry connection"
+                >
+                  {eventsFetching ? 'Retrying…' : 'Retry'}
+                </button>
               </div>
             )}
 

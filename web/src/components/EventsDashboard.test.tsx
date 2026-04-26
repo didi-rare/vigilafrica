@@ -167,6 +167,48 @@ describe('EventsDashboard', () => {
     expect(mockFetchStates).toHaveBeenLastCalledWith('Ghana')
   })
 
+  it('shows a retry button when the events fetch fails', async () => {
+    mockFetchEvents.mockRejectedValue(new Error('Network down'))
+
+    renderWithProviders(<EventsDashboard />)
+
+    expect(
+      await screen.findByRole('button', { name: /retry connection/i }),
+    ).toBeInTheDocument()
+  })
+
+  it('refetches events when the retry button is clicked', async () => {
+    const user = userEvent.setup()
+    mockFetchEvents
+      .mockRejectedValueOnce(new Error('Network down'))
+      .mockResolvedValueOnce(eventsResponse)
+
+    renderWithProviders(<EventsDashboard />)
+
+    const retryButton = await screen.findByRole('button', { name: /retry connection/i })
+    const initialCalls = mockFetchEvents.mock.calls.length
+
+    await user.click(retryButton)
+
+    await waitFor(() => {
+      expect(mockFetchEvents.mock.calls.length).toBeGreaterThan(initialCalls)
+    })
+  })
+
+  it('renders the attempted API base URL and underlying error message in the error state', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', 'https://api.staging.vigilafrica.org')
+    mockFetchEvents.mockRejectedValue(new Error('Failed to fetch events from VigilAfrica API (HTTP 503)'))
+
+    renderWithProviders(<EventsDashboard />)
+
+    expect(await screen.findByText('https://api.staging.vigilafrica.org')).toBeInTheDocument()
+    expect(
+      screen.getByText(/Failed to fetch events from VigilAfrica API \(HTTP 503\)/i),
+    ).toBeInTheDocument()
+
+    vi.unstubAllEnvs()
+  })
+
   it('has no obvious accessibility violations in the loaded dashboard state', async () => {
     const { container } = renderWithProviders(<EventsDashboard />)
 
