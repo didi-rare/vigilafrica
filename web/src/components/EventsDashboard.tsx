@@ -248,13 +248,17 @@ export function EventsDashboard() {
               <div className="dashboard-state error" role="alert">
                 <span role="img" aria-label="alert">⚠️</span>
                 <p>Failed to connect to VigilAfrica Command Center</p>
-                <p className="dashboard-state-detail">
-                  <span className="dashboard-state-label">API:</span>{' '}
-                  <code>{getApiBaseUrl()}</code>
-                </p>
-                <p className="dashboard-state-detail dashboard-state-detail--muted">
-                  {eventsError instanceof Error ? eventsError.message : String(eventsError)}
-                </p>
+                {import.meta.env.VITE_SHOW_ERROR_DETAIL === 'true' && (
+                  <>
+                    <p className="dashboard-state-detail">
+                      <span className="dashboard-state-label">API:</span>{' '}
+                      <code>{getApiBaseUrl()}</code>
+                    </p>
+                    <p className="dashboard-state-detail dashboard-state-detail--muted">
+                      {eventsError instanceof Error ? eventsError.message : String(eventsError)}
+                    </p>
+                  </>
+                )}
                 <button
                   type="button"
                   className="dashboard-retry-button"

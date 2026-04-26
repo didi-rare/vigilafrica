@@ -195,16 +195,36 @@ describe('EventsDashboard', () => {
     })
   })
 
-  it('renders the attempted API base URL and underlying error message in the error state', async () => {
+  it('renders the attempted API base URL and underlying error message when VITE_SHOW_ERROR_DETAIL is enabled', async () => {
     vi.stubEnv('VITE_API_BASE_URL', 'https://api.staging.vigilafrica.org')
+    vi.stubEnv('VITE_SHOW_ERROR_DETAIL', 'true')
     mockFetchEvents.mockRejectedValue(new Error('Failed to fetch events from VigilAfrica API (HTTP 503)'))
 
-    renderWithProviders(<EventsDashboard />)
+    const { container } = renderWithProviders(<EventsDashboard />)
 
     expect(await screen.findByText('https://api.staging.vigilafrica.org')).toBeInTheDocument()
     expect(
       screen.getByText(/Failed to fetch events from VigilAfrica API \(HTTP 503\)/i),
     ).toBeInTheDocument()
+
+    const results = await axe(container)
+    expect(results.violations).toHaveLength(0)
+
+    vi.unstubAllEnvs()
+  })
+
+  it('hides diagnostic detail in production builds without VITE_SHOW_ERROR_DETAIL', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', 'https://api.vigilafrica.org')
+    vi.stubEnv('VITE_SHOW_ERROR_DETAIL', '')
+    mockFetchEvents.mockRejectedValue(new Error('Failed to fetch events from VigilAfrica API (HTTP 503)'))
+
+    renderWithProviders(<EventsDashboard />)
+
+    expect(await screen.findByRole('button', { name: /retry connection/i })).toBeInTheDocument()
+    expect(screen.queryByText('https://api.vigilafrica.org')).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(/Failed to fetch events from VigilAfrica API \(HTTP 503\)/i),
+    ).not.toBeInTheDocument()
 
     vi.unstubAllEnvs()
   })

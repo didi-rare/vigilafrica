@@ -16,6 +16,9 @@ Front-end UX fix for the dashboard connection-error state plus operator-facing d
 | --- | --- |
 | `web/src/components/EventsDashboard.tsx` | Replace static error block (lines ~241-246) with a retry-capable component |
 | `web/src/components/EventsDashboard.test.tsx` | Add tests for retry button + diagnostic detail rendering |
+| `web/src/components/EventsDashboard.css` | Styles for new retry button and diagnostic-detail rows |
+| `web/src/api/events.ts` | Export `getApiBaseUrl`; add `ApiError` class so HTTP status surfaces |
+| `.env.example` | Document `VITE_SHOW_ERROR_DETAIL` flag |
 | `docs/deployment/staging-production-topology.md` | Append "Operator Runbook" section (or split into new file if length warrants) |
 
 ## 3. Frontend Behaviour
@@ -25,8 +28,8 @@ Front-end UX fix for the dashboard connection-error state plus operator-facing d
 When `eventsError` is truthy, the dashboard sidebar renders:
 
 - The existing alert icon and headline ("Failed to connect to VigilAfrica Command Center").
-- A secondary line showing **the API base URL that was attempted** (read from `import.meta.env.VITE_API_BASE_URL` with `window.location.origin` fallback — same logic as `getApiBaseUrl()` in [`web/src/api/events.ts:7`](web/src/api/events.ts:7)).
-- A muted line showing the error message (`error instanceof Error ? error.message : String(error)`). If the underlying response had a status code, it is included.
+- A secondary line showing **the API base URL that was attempted** (read from `import.meta.env.VITE_API_BASE_URL` with `window.location.origin` fallback — same logic as `getApiBaseUrl()` in [`web/src/api/events.ts:7`](web/src/api/events.ts:7)). **Gated behind `VITE_SHOW_ERROR_DETAIL === 'true'`** so production end-users see only the generic copy (per developers-react §10.4).
+- A muted line showing the error message (`error instanceof Error ? error.message : String(error)`). If the underlying response had a status code, it is included. **Same gate as above.**
 - A primary "Retry" button (`<button type="button">`) that calls the React Query `refetch()` for the events query. Disabled while `isFetching` is true and shows the existing spinner pattern next to its label.
 - The container retains `role` semantics; the button has an accessible name "Retry connection".
 
