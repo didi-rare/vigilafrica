@@ -28,6 +28,10 @@ What you can evaluate in the demo:
 - **Operational signal**: health and ingestion status are visible, including failed-ingestion/staleness messaging when relevant.
 - **Repeatable setup**: the local demo uses its own Docker Compose file, own Postgres volume, and disabled live ingestion.
 
+Animated walkthrough:
+
+![VigilAfrica animated demo walkthrough](docs/screenshots/demo.gif)
+
 Run the same demo locally:
 
 ```bash
