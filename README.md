@@ -12,12 +12,35 @@ Instead of asking users to interpret coordinates and satellite metadata, VigilAf
 
 ## Demo
 
-![VigilAfrica Demo](docs/screenshots/demo.gif)
+![VigilAfrica demo map showing localized natural events](docs/screenshots/demo.png)
 
-A fully isolated, seeded demo environment of VigilAfrica is available for evaluation:
-> **Hosted Demo**: https://staging.vigilafrica.org
+Try the current hosted demo:
 
-For instructions on running the demo locally, see the [Demo Environment Guide](DEMO.md).
+**https://staging.vigilafrica.org**
+
+The demo is a seeded, isolated VigilAfrica environment designed for quick evaluation without waiting on live NASA EONET availability. It shows how raw event coordinates become locally readable alerts across Nigeria and Ghana.
+
+What you can evaluate in the demo:
+
+- **Localized event context**: floods and wildfires are shown with country and state/region names instead of bare coordinates.
+- **Two-country coverage**: curated Nigeria and Ghana events are loaded from seed data so the map is useful immediately.
+- **Map-first exploration**: event markers, filters, and event cards let a reviewer move from a regional overview to individual incidents.
+- **Operational signal**: health and ingestion status are visible, including failed-ingestion/staleness messaging when relevant.
+- **Repeatable setup**: the local demo uses its own Docker Compose file, own Postgres volume, and disabled live ingestion.
+
+Animated walkthrough:
+
+![VigilAfrica animated demo walkthrough](docs/screenshots/demo.gif)
+
+Run the same demo locally:
+
+```bash
+docker compose -f docker-compose.demo.yml up -d
+curl http://localhost:8080/health
+curl http://localhost:8080/v1/events
+```
+
+Then start the frontend with `VITE_API_BASE_URL=http://localhost:8080` and open the Vite URL. Full instructions are in the [Demo Environment Guide](DEMO.md).
 
 ---
 

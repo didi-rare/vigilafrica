@@ -1,10 +1,5 @@
 # governance-sentinel
 
-**Branch:** `feat/gov-sentinel`
-**Change:** `openspec/changes/governance-sentinel`
-**Design:** `openspec/changes/governance-sentinel/design.md`
-**Tasks:** `openspec/changes/governance-sentinel/tasks.md`
-
 ## 1. Review Decisions
 
 - [ ] 1.1 Confirm governance gate should block source changes without an OpenSpec change record
