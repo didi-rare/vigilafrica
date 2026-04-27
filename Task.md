@@ -1,46 +1,40 @@
-# fix-mobile-and-status-accuracy
+# governance-sentinel
 
-**Branch:** `fix/mobile-and-status`
-**Proposal:** `openspec/proposals/fix-mobile-and-status-accuracy.md`
-**Spec:** `openspec/specs/fix-mobile-and-status-accuracy.md`
+**Branch:** `feat/gov-sentinel`
+**Change:** `openspec/changes/governance-sentinel`
+**Design:** `openspec/changes/governance-sentinel/design.md`
+**Tasks:** `openspec/changes/governance-sentinel/tasks.md`
 
-## 1. Housekeeping
+## 1. Review Decisions
 
-- [x] 1.1 Confirm active OpenSpec docs, React standards, and accessibility scope
-- [x] 1.2 Replace stale `Task.md` content with this active change checklist
-- [x] 1.3 Mark proposal/spec status as in progress
+- [ ] 1.1 Confirm governance gate should block source changes without an OpenSpec change record
+- [ ] 1.2 Confirm `[trivial]` commit-message bypass semantics
+- [ ] 1.3 Confirm allow-list scope, including whether `api/db/migrations/` is exempt
+- [ ] 1.4 Confirm local comparison target should be `origin/development`
 
-## 2. Mobile Layout
+## 2. Sentinel Auditor
 
-- [x] 2.1 Stack the dashboard layout at mobile widths and remove the fixed height
-- [x] 2.2 Let the page own scrolling on mobile instead of nested sidebar scrolling
-- [x] 2.3 Make event location text wrap without card or viewport overflow
-- [x] 2.4 Add sticky-nav-safe scroll margins for section anchors
-- [x] 2.5 Fix event detail header overflow caught during mobile browser pass
+- [ ] 2.1 Create `api/cmd/sentinel/main.go`
+- [ ] 2.2 Detect changed files with `git diff`
+- [ ] 2.3 Treat `api/internal/*` and `web/src/*` as critical package changes
+- [ ] 2.4 Require an active `openspec/changes/<change-id>/` record for critical changes
+- [ ] 2.5 Support `[trivial]` override for allowed small hygiene commits
 
-## 3. Status Accuracy
+## 3. CI Integration
 
-- [x] 3.1 Update the prototype banner for v0.7 complete, v1.0 staging live
-- [x] 3.2 Refresh status body copy and remove literal markdown asterisks
-- [x] 3.3 Update `milestones.json` so v0.7 is complete and v1.0 is active
-- [x] 3.4 Rewrite the page meta description for Nigeria and Ghana live
+- [ ] 3.1 Add the Sentinel Auditor to `.github/workflows/openspec-verify.yml`
+- [ ] 3.2 Ensure the workflow checks out enough Git history for diff comparisons
+- [ ] 3.3 Keep existing OpenSpec drift validation behavior intact
 
-## 4. Map Glyphs
+## 4. Governance Documentation
 
-- [x] 4.1 Remove the failing demotiles glyph dependency
-- [x] 4.2 Keep cluster-count labels rendering without glyph 404 warnings
+- [ ] 4.1 Register ADR-010 in `openspec/specs/vigilafrica/decisions.md`
+- [ ] 4.2 Document the blocking behavior and exemption path for contributors
+- [ ] 4.3 Keep the active change checklist synced with `openspec/changes/governance-sentinel/tasks.md`
 
-## 5. Accessibility
+## 5. Verification
 
-- [x] 5.1 Add skip-to-main as the first focusable element
-- [x] 5.2 Fix step list semantics so axe reports no `aria-allowed-role` violations
-- [x] 5.3 Hide milestone status emojis from assistive tech and preserve label spacing
-- [x] 5.4 Add reduced-motion handling for page and map animations
-
-## 6. Verification
-
-- [x] 6.1 Add focused tests for skip link, milestone emoji accessibility, list semantics, and glyph config
-- [x] 6.2 Run web lint
-- [x] 6.3 Run web tests
-- [x] 6.4 Run web build
-- [x] 6.5 Run OpenSpec validation
+- [ ] 5.1 Run the auditor against a critical change without an OpenSpec record and confirm failure
+- [ ] 5.2 Run the auditor with a `[trivial]` override and confirm success
+- [ ] 5.3 Run `npm run spec:validate`
+- [ ] 5.4 Push `feat/gov-sentinel` and verify GitHub Actions on the PR
