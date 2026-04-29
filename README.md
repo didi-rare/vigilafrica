@@ -132,59 +132,7 @@ NASA EONET → Go Scheduler → PostgreSQL + PostGIS → REST API → React (Ver
                                           MaxMind GeoLite2 (near-me context)
 ```
 
-```mermaid
-sequenceDiagram
-    autonumber
-    
-    actor User as User / NGO Worker
-    participant Frontend as React Frontend
-    participant API as Go REST API
-    participant Ingestor as Go Ingestor Service
-    participant EONET as NASA EONET v3 API
-    participant DB as PostgreSQL + PostGIS
-    participant MaxMind as MaxMind GeoLite2 (Local)
-    
-    rect rgb(20, 30, 40)
-        note right of Ingestor: Phase 1: Background Ingestion (Hourly Schedule)
-        Ingestor->>EONET: GET /api/v3/events?category=floods,wildfires
-        EONET-->>Ingestor: 200 OK (Raw JSON payload)
-        Ingestor->>Ingestor: Normalize payload (Extract points/polygons)
-        Ingestor->>DB: Upsert normalized events (Deduplicate via source_id)
-        note over DB: Geospatial Enrichment
-        DB->>DB: ST_Intersects(event_geom, admin_boundaries)
-        DB-->>Ingestor: Stores enriched events with State/Country names
-    end
-    
-    rect rgb(20, 40, 20)
-        note right of User: Phase 2: Context Resolution
-        User->>Frontend: Loads VigilAfrica Web App
-        Frontend->>API: GET /v1/context (Passes client IP)
-        API->>MaxMind: Local lookup IP to Country/State
-        MaxMind-->>API: Returns Country ISO & State name
-        API->>DB: Fetch active events for resolved location
-        DB-->>API: Local event data
-        API-->>Frontend: Context & Local Events Response
-        Frontend-->>User: Renders Landing Page / localized HUD
-    end
-    
-    rect rgb(40, 20, 20)
-        note right of User: Phase 3: Map & Event Browsing
-        User->>Frontend: Views Event Map & List
-        Frontend->>API: GET /v1/events?category=floods&status=open
-        API->>DB: Query enriched events with filters
-        DB-->>API: Paginated events array
-        API-->>Frontend: JSON response with events
-        Frontend->>Frontend: Build GeoJSON Collection & Clustering Data
-        Frontend-->>User: Renders MapLibre GL JS Map & Event List
-        
-        User->>Frontend: Clicks on Event Marker
-        Frontend->>API: GET /v1/events/:id
-        API->>DB: Fetch single event by UUID
-        DB-->>API: Full event record
-        API-->>Frontend: Event details JSON
-        Frontend-->>User: Displays Event Detail Popup / View
-    end
-```
+![VigilAfrica Architecture Flow](docs/screenshots/architecture_flow.png)
 
 **Full architecture**: [`openspec/specs/vigilafrica/architecture.md`](openspec/specs/vigilafrica/architecture.md)
 
