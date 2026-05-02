@@ -18,6 +18,9 @@ func TestClientSendIngestFailurePostsToResend(t *testing.T) {
 		if got := r.Header.Get("Authorization"); got != "Bearer re_test" {
 			t.Fatalf("expected Authorization header, got %q", got)
 		}
+		if got := r.Header.Get("User-Agent"); got != "VigilAfrica-Alerts/1.0" {
+			t.Fatalf("expected User-Agent header, got %q", got)
+		}
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 			t.Fatalf("decode payload: %v", err)
 		}
@@ -114,6 +117,7 @@ func TestClientNoOpsWhenMissingAPIKey(t *testing.T) {
 func TestClientReturnsErrorForResendFailure(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"message":"domain is not verified"}`))
 	}))
 	defer server.Close()
 
@@ -126,5 +130,8 @@ func TestClientReturnsErrorForResendFailure(t *testing.T) {
 	err := client.SendStalenessAlert(context.Background(), time.Now().Add(-3*time.Hour), 2*time.Hour)
 	if err == nil {
 		t.Fatal("expected Resend failure to return an error")
+	}
+	if !strings.Contains(err.Error(), "domain is not verified") {
+		t.Fatalf("expected Resend response body in error, got %v", err)
 	}
 }

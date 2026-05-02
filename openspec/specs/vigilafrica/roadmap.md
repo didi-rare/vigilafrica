@@ -271,7 +271,7 @@ These are blockers that must be resolved before v0.1 development begins. They ar
 - [ ] Staging API and frontend deployed from `main` and validated before production tagging
 - [ ] Production API and frontend deployed from `release` via annotated SemVer tag with GitHub Environment approval
 - [ ] `/health.version` reports the deployed commit SHA in staging and the SemVer tag in production
-- [ ] Failed-ingestion and staleness Resend alerts verified in staging
+- [x] Failed-ingestion and staleness Resend alerts verified in staging
 - [ ] Rollback workflow verified by redeploying a previous production tag
 - [ ] `CONTRIBUTING.md` is complete and tested
 - [ ] `CODE_OF_CONDUCT.md` is in place

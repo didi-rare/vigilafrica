@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -172,6 +173,7 @@ func (c *Client) sendEmail(ctx context.Context, subject, htmlBody, textBody stri
 	}
 	req.Header.Set("Authorization", "Bearer "+c.cfg.ResendAPIKey)
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "VigilAfrica-Alerts/1.0")
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -180,7 +182,11 @@ func (c *Client) sendEmail(ctx context.Context, subject, htmlBody, textBody stri
 	defer resp.Body.Close()
 
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return fmt.Errorf("resend returned status %d", resp.StatusCode)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		if len(body) == 0 {
+			return fmt.Errorf("resend returned status %d", resp.StatusCode)
+		}
+		return fmt.Errorf("resend returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 	return nil
 }

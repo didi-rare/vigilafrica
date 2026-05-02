@@ -95,8 +95,8 @@ func main() {
 	mux.Handle("GET /docs/", handlers.SwaggerUIHandler())          // local docs/testing
 	mux.Handle("/v1/", handlers.RateLimitMiddleware(v1Mux))        // rate-limited v1 routes
 
-	// Global middleware chain: CORS wraps everything (health + v1 + docs)
-	globalHandler := handlers.CORSMiddleware(mux)
+	// Global middleware chain: security headers + CORS wrap everything (health + v1 + docs)
+	globalHandler := handlers.SecurityHeadersMiddleware(handlers.CORSMiddleware(mux))
 
 	// ── HTTP server ───────────────────────────────────────────────────────────
 	port := os.Getenv("API_PORT")

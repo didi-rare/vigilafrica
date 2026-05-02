@@ -14,23 +14,54 @@ import (
 
 // ─── CORS Middleware ──────────────────────────────────────────────────────────
 
-// CORSMiddleware sets the Access-Control-Allow-Origin header to the value of
-// the CORS_ORIGIN environment variable. Defaults to "*" if unset.
-// Only the configured origin is allowed in production (ADR-002).
+// CORSMiddleware allows only the configured browser origin. CORS_ORIGIN
+// defaults to "*" for local development.
 func CORSMiddleware(next http.Handler) http.Handler {
-	origin := os.Getenv("CORS_ORIGIN")
+	origin := trimSpace(os.Getenv("CORS_ORIGIN"))
 	if origin == "" {
 		origin = "*"
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", origin)
+		requestOrigin := r.Header.Get("Origin")
+		allowedOrigin, allowed := allowedCORSOrigin(origin, requestOrigin)
+		w.Header().Add("Vary", "Origin")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
+		if !allowed {
+			respondWithError(w, http.StatusForbidden, "origin not allowed")
+			return
+		}
+		if allowedOrigin != "" {
+			w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
+		}
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func allowedCORSOrigin(configuredOrigin, requestOrigin string) (string, bool) {
+	if configuredOrigin == "*" {
+		return "*", true
+	}
+	if requestOrigin == "" {
+		return "", true
+	}
+	if requestOrigin == configuredOrigin {
+		return configuredOrigin, true
+	}
+	return "", false
+}
+
+func SecurityHeadersMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()")
 		next.ServeHTTP(w, r)
 	})
 }

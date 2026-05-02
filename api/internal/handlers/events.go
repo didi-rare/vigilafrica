@@ -63,24 +63,30 @@ func (h *EventHandler) ListEvents(w http.ResponseWriter, r *http.Request) {
 
 	filters.Limit = 50
 	if limitStr := query.Get("limit"); limitStr != "" {
-		if limit, err := strconv.Atoi(limitStr); err == nil {
-			if limit < 1 || limit > 200 {
-				respondWithError(w, http.StatusBadRequest, "invalid limit: must be between 1 and 200")
-				return
-			}
-			filters.Limit = limit
+		limit, err := strconv.Atoi(limitStr)
+		if err != nil {
+			respondWithError(w, http.StatusBadRequest, "invalid limit: must be an integer")
+			return
 		}
+		if limit < 1 || limit > 200 {
+			respondWithError(w, http.StatusBadRequest, "invalid limit: must be between 1 and 200")
+			return
+		}
+		filters.Limit = limit
 	}
 
 	filters.Offset = 0
 	if offsetStr := query.Get("offset"); offsetStr != "" {
-		if offset, err := strconv.Atoi(offsetStr); err == nil {
-			if offset < 0 {
-				respondWithError(w, http.StatusBadRequest, "invalid offset")
-				return
-			}
-			filters.Offset = offset
+		offset, err := strconv.Atoi(offsetStr)
+		if err != nil {
+			respondWithError(w, http.StatusBadRequest, "invalid offset: must be an integer")
+			return
 		}
+		if offset < 0 {
+			respondWithError(w, http.StatusBadRequest, "invalid offset")
+			return
+		}
+		filters.Offset = offset
 	}
 
 	events, total, err := h.repo.ListEvents(r.Context(), filters)
