@@ -2,6 +2,7 @@ package normalizer_test
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -105,6 +106,35 @@ func TestNormalizeEvent_BlocksUnsafeSourceURLs(t *testing.T) {
 				t.Fatalf("expected unsafe source URL to be blocked, got %q", *event.SourceURL)
 			}
 		})
+	}
+}
+
+func TestNormalizeEvent_TruncatesOversizedTitleAndSourceURL(t *testing.T) {
+	const maxTitleRunes = 512
+	longTitle := strings.Repeat("x", maxTitleRunes+100)
+	longSourceURL := "https://eonet.gsfc.nasa.gov/" + strings.Repeat("x", 2048)
+	raw := normalizer.RawEONETEvent{
+		ID:    "EONET_LONG_FIELDS",
+		Title: longTitle,
+		Categories: []struct {
+			ID    string `json:"id"`
+			Title string `json:"title"`
+		}{{ID: "wildfires"}},
+		Sources: []struct {
+			ID  string `json:"id"`
+			URL string `json:"url"`
+		}{{ID: "src", URL: longSourceURL}},
+	}
+
+	event, _, err := normalizer.Normalize(raw, []byte(`{}`))
+	if err != nil {
+		t.Fatalf("Normalize returned error: %v", err)
+	}
+	if got := len([]rune(event.Title)); got != maxTitleRunes {
+		t.Fatalf("expected title capped at %d runes, got %d", maxTitleRunes, got)
+	}
+	if event.SourceURL != nil {
+		t.Fatalf("expected oversized source URL to be dropped, got %q", *event.SourceURL)
 	}
 }
 
