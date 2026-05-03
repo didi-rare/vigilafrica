@@ -21,41 +21,43 @@ type EventFilters struct {
 	Offset   int
 }
 
-// ListEvents retrieves a paginated and filtered list of events.
-// It also returns the total count of matched records for pagination.
-func (r *pgRepo) ListEvents(ctx context.Context, filters EventFilters) ([]models.Event, int, error) {
+func appendAllowedEventFilter(conditions []string, args []interface{}, argID int, column, operator string, value interface{}) ([]string, []interface{}, int) {
+	conditions = append(conditions, fmt.Sprintf("%s %s $%d", column, operator, argID))
+	args = append(args, value)
+	return conditions, args, argID + 1
+}
+
+func buildEventFilterClause(filters EventFilters) (string, []interface{}, int) {
 	var conditions []string
 	var args []interface{}
 	argID := 1
 
 	if filters.Category != "" {
-		conditions = append(conditions, fmt.Sprintf("category = $%d", argID))
-		args = append(args, filters.Category)
-		argID++
+		conditions, args, argID = appendAllowedEventFilter(conditions, args, argID, "category", "=", filters.Category)
 	}
 
 	if filters.Country != "" {
-		conditions = append(conditions, fmt.Sprintf("country_name ILIKE $%d", argID))
-		args = append(args, filters.Country)
-		argID++
+		conditions, args, argID = appendAllowedEventFilter(conditions, args, argID, "country_name", "ILIKE", filters.Country)
 	}
 
 	if filters.State != "" {
-		conditions = append(conditions, fmt.Sprintf("state_name ILIKE $%d", argID))
-		args = append(args, filters.State)
-		argID++
+		conditions, args, argID = appendAllowedEventFilter(conditions, args, argID, "state_name", "ILIKE", filters.State)
 	}
 
 	if filters.Status != "" {
-		conditions = append(conditions, fmt.Sprintf("status = $%d", argID))
-		args = append(args, filters.Status)
-		argID++
+		conditions, args, argID = appendAllowedEventFilter(conditions, args, argID, "status", "=", filters.Status)
 	}
 
-	whereClause := ""
-	if len(conditions) > 0 {
-		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	if len(conditions) == 0 {
+		return "", args, argID
 	}
+	return "WHERE " + strings.Join(conditions, " AND "), args, argID
+}
+
+// ListEvents retrieves a paginated and filtered list of events.
+// It also returns the total count of matched records for pagination.
+func (r *pgRepo) ListEvents(ctx context.Context, filters EventFilters) ([]models.Event, int, error) {
+	whereClause, args, argID := buildEventFilterClause(filters)
 
 	// First query: get total count
 	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM events %s", whereClause)

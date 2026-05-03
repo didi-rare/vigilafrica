@@ -17,7 +17,7 @@ func TestNormalizeEvent_PointGeometry(t *testing.T) {
 			{ "id": "floods", "title": "Floods" }
 		],
 		"sources": [
-			{ "id": "GDACS", "url": "http://example.com/source" }
+			{ "id": "NASA", "url": "https://eonet.gsfc.nasa.gov/source" }
 		],
 		"geometry": [
 			{
@@ -59,13 +59,52 @@ func TestNormalizeEvent_PointGeometry(t *testing.T) {
 	if event.Latitude == nil || *event.Latitude != 7.33 {
 		t.Errorf("Expected Latitude 7.33, got %v", event.Latitude)
 	}
-	if event.SourceURL == nil || *event.SourceURL != "http://example.com/source" {
-		t.Errorf("Expected SourceURL http://example.com/source, got %v", event.SourceURL)
+	if event.SourceURL == nil || *event.SourceURL != "https://eonet.gsfc.nasa.gov/source" {
+		t.Errorf("Expected SourceURL https://eonet.gsfc.nasa.gov/source, got %v", event.SourceURL)
 	}
 
 	// Verify GeoJSON structure generically (fields already checked numerically above)
 	if geoJSON == "" {
 		t.Error("Expected non-empty GeoJSON string")
+	}
+}
+
+func TestNormalizeEvent_BlocksUnsafeSourceURLs(t *testing.T) {
+	tests := []struct {
+		name      string
+		sourceURL string
+	}{
+		{name: "javascript scheme", sourceURL: "javascript:alert(1)"},
+		{name: "data scheme", sourceURL: "data:text/html,<script>alert(1)</script>"},
+		{name: "non allowlisted domain", sourceURL: "https://evil.example/source"},
+		{name: "http scheme", sourceURL: "http://eonet.gsfc.nasa.gov/source"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rawPayload := []byte(`{
+				"id": "EONET_UNSAFE",
+				"title": "Unsafe source URL",
+				"categories": [{ "id": "floods", "title": "Floods" }],
+				"sources": [{ "id": "BAD", "url": "` + tt.sourceURL + `" }],
+				"geometry": [
+					{ "type": "Point", "coordinates": [8.13, 7.33], "date": "2026-04-10T12:00:00Z" }
+				]
+			}`)
+
+			var rawEvent normalizer.RawEONETEvent
+			if err := json.Unmarshal(rawPayload, &rawEvent); err != nil {
+				t.Fatalf("Failed to unmarshal raw payload: %v", err)
+			}
+
+			event, _, err := normalizer.Normalize(rawEvent, rawPayload)
+			if err != nil {
+				t.Fatalf("Normalize() returned error: %v", err)
+			}
+			if event.SourceURL != nil {
+				t.Fatalf("expected unsafe source URL to be blocked, got %q", *event.SourceURL)
+			}
+		})
 	}
 }
 

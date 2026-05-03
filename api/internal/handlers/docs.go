@@ -4,6 +4,8 @@ import (
 	_ "embed"
 	"fmt"
 	"net/http"
+	"os"
+	"strings"
 )
 
 //go:embed openapi.yaml
@@ -48,8 +50,17 @@ func scalarHTML(specURL string) string {
 </html>`, specURL)
 }
 
+func docsEnabled() bool {
+	value := strings.ToLower(strings.TrimSpace(os.Getenv("API_DOCS_ENABLED")))
+	return value != "false" && value != "0" && value != "off"
+}
+
 func OpenAPISpecHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if !docsEnabled() {
+			http.NotFound(w, r)
+			return
+		}
 		spec, err := loadOpenAPISpec()
 		if err != nil {
 			respondWithError(w, http.StatusInternalServerError, "failed to load OpenAPI spec")
@@ -64,6 +75,10 @@ func OpenAPISpecHandler() http.HandlerFunc {
 
 func SwaggerUIHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if !docsEnabled() {
+			http.NotFound(w, r)
+			return
+		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(scalarHTML("/openapi.yaml")))
