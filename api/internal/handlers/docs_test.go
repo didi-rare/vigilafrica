@@ -47,3 +47,21 @@ func TestOpenAPISpecHandler_ServesEmbeddedSpec(t *testing.T) {
 		t.Fatalf("expected spec body, got %q", body)
 	}
 }
+
+func TestDocsHandlersCanBeDisabled(t *testing.T) {
+	t.Setenv("API_DOCS_ENABLED", "false")
+
+	specReq := httptest.NewRequest(http.MethodGet, "/openapi.yaml", nil)
+	specRec := httptest.NewRecorder()
+	OpenAPISpecHandler().ServeHTTP(specRec, specReq)
+	if specRec.Code != http.StatusNotFound {
+		t.Fatalf("expected disabled spec status 404, got %d", specRec.Code)
+	}
+
+	docsReq := httptest.NewRequest(http.MethodGet, "/docs", nil)
+	docsRec := httptest.NewRecorder()
+	SwaggerUIHandler().ServeHTTP(docsRec, docsReq)
+	if docsRec.Code != http.StatusNotFound {
+		t.Fatalf("expected disabled docs status 404, got %d", docsRec.Code)
+	}
+}

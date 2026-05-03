@@ -136,7 +136,7 @@ describe('EventsDashboard', () => {
     expect(screen.getByRole('img', { name: /event locations map/i })).toHaveTextContent('Lagos Flood 42')
   })
 
-  it('shows the EONET ingestion error banner when health is degraded', async () => {
+  it('shows a generic degraded banner without leaking ingestion error details', async () => {
     mockFetchHealth.mockResolvedValueOnce({
       ...okHealth,
       status: 'degraded',
@@ -150,8 +150,9 @@ describe('EventsDashboard', () => {
     renderWithProviders(<EventsDashboard />)
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'NASA EONET Ingestion Error: EONET quota exhausted',
+      'Latest ingestion did not complete successfully. Data may be delayed while operators investigate.',
     )
+    expect(screen.queryByText(/EONET quota exhausted/i)).not.toBeInTheDocument()
   })
 
   it('updates URL-backed filters and refetches events for the selected country', async () => {
