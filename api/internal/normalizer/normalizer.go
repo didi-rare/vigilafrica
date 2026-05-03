@@ -3,10 +3,21 @@ package normalizer
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
+	"strings"
 	"time"
 
 	"vigilafrica/api/internal/models"
 )
+
+var allowedSourceURLHostSuffixes = []string{
+	"nasa.gov",
+	"gdacs.org",
+	"usgs.gov",
+	"noaa.gov",
+	"copernicus.eu",
+	"europa.eu",
+}
 
 // RawEONETEvent structures the incoming JSON from NASA's API.
 type RawEONETEvent struct {
@@ -90,10 +101,12 @@ func Normalize(raw RawEONETEvent, rawPayload []byte) (models.Event, string, erro
 		evt.Status = models.StatusOpen
 	}
 
-	// Determine source URL if available
+	// Determine source URL if available. Upstream URLs are treated as untrusted
+	// data; only HTTPS links from known public data providers are retained.
 	if len(raw.Sources) > 0 {
-		url := raw.Sources[0].URL
-		evt.SourceURL = &url
+		if sourceURL, ok := validatedSourceURL(raw.Sources[0].URL); ok {
+			evt.SourceURL = &sourceURL
+		}
 	}
 
 	geoJSON := ""
@@ -126,4 +139,18 @@ func Normalize(raw RawEONETEvent, rawPayload []byte) (models.Event, string, erro
 	}
 
 	return evt, geoJSON, nil
+}
+
+func validatedSourceURL(rawURL string) (string, bool) {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" {
+		return "", false
+	}
+	host := strings.ToLower(parsed.Hostname())
+	for _, suffix := range allowedSourceURLHostSuffixes {
+		if host == suffix || strings.HasSuffix(host, "."+suffix) {
+			return parsed.String(), true
+		}
+	}
+	return "", false
 }
