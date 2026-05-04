@@ -1,16 +1,18 @@
 services:
   demo-db:
-    image: postgis/postgis:15-3.3
+    image: postgis/postgis:15-3.4@sha256:3f4a5d48e0be9580ed70ed618cd039ce57bbb2dd113053d3836e28513f1f87cd
     container_name: vigilafrica-demo-db
     environment:
       - POSTGRES_USER=vigilafrica
       - POSTGRES_PASSWORD=vigilafrica
       - POSTGRES_DB=vigilafrica
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
     volumes:
       - vigil-demo-data:/var/lib/postgresql/data
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U vigilafrica"]
       interval: 5s
@@ -37,6 +39,13 @@ services:
     volumes:
       - maxmind_data:/usr/share/GeoIP:ro
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
       interval: 5s
@@ -44,7 +53,7 @@ services:
       retries: 5
 
   demo-seeder:
-    image: postgis/postgis:15-3.3
+    image: postgis/postgis:15-3.4@sha256:3f4a5d48e0be9580ed70ed618cd039ce57bbb2dd113053d3836e28513f1f87cd
     container_name: vigilafrica-demo-seeder
     depends_on:
       demo-api:
@@ -58,9 +67,13 @@ services:
       psql -h demo-db -U vigilafrica -d vigilafrica -f /seeds/sample_events_nigeria.sql &&
       psql -h demo-db -U vigilafrica -d vigilafrica -f /seeds/sample_events_ghana.sql
       "
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
 
   geoipupdate:
-    image: maxmindinc/geoipupdate
+    image: maxmindinc/geoipupdate:v7.1@sha256:faecdca22579730ab0b7dea5aa9af350bb3c93cb9d39845c173639ead30346d2
     container_name: vigilafrica-demo-geoip
     environment:
       - GEOIPUPDATE_ACCOUNT_ID=${MAXMIND_ACCOUNT_ID:-0}
@@ -69,6 +82,10 @@ services:
       - GEOIPUPDATE_FREQUENCY=168 # update once a week
     volumes:
       - maxmind_data:/usr/share/GeoIP
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
 
 volumes:
   vigil-demo-data:

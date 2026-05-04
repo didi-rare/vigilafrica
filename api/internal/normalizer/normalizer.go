@@ -19,6 +19,11 @@ var allowedSourceURLHostSuffixes = []string{
 	"europa.eu",
 }
 
+const (
+	maxNormalizedTitleRunes = 512
+	maxSourceURLLength      = 2048
+)
+
 // RawEONETEvent structures the incoming JSON from NASA's API.
 type RawEONETEvent struct {
 	ID         string  `json:"id"`
@@ -80,7 +85,7 @@ func Normalize(raw RawEONETEvent, rawPayload []byte) (models.Event, string, erro
 	evt := models.Event{
 		SourceID:   raw.ID,
 		Source:     "eonet",
-		Title:      raw.Title,
+		Title:      truncateRunes(raw.Title, maxNormalizedTitleRunes),
 		RawPayload: rawPayload,
 		IngestedAt: time.Now().UTC(),
 	}
@@ -142,6 +147,9 @@ func Normalize(raw RawEONETEvent, rawPayload []byte) (models.Event, string, erro
 }
 
 func validatedSourceURL(rawURL string) (string, bool) {
+	if len(rawURL) > maxSourceURLLength {
+		return "", false
+	}
 	parsed, err := url.Parse(strings.TrimSpace(rawURL))
 	if err != nil || parsed.Scheme != "https" || parsed.Host == "" {
 		return "", false
@@ -153,4 +161,17 @@ func validatedSourceURL(rawURL string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+func truncateRunes(value string, maxRunes int) string {
+	if maxRunes <= 0 {
+		return ""
+	}
+	for index := range value {
+		if maxRunes == 0 {
+			return value[:index]
+		}
+		maxRunes--
+	}
+	return value
 }
