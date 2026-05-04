@@ -14,6 +14,12 @@ import (
 	"vigilafrica/api/internal/normalizer"
 )
 
+const (
+	maxEONETResponseBytes        = 5 * 1024 * 1024
+	maxRetryAfterSeconds         = 60
+	maxEONETEventRawPayloadBytes = 256 * 1024
+)
+
 // eonetURL is the NASA EONET v3 events endpoint.
 // Declared as var (not const) to allow override in tests via eonetURL = server.URL.
 // TODO(future): refactor into an Ingestor struct field to avoid global mutation (openspec-review §9.5).
@@ -52,6 +58,7 @@ var DefaultCountries = []CountryConfig{
 type IngestResult struct {
 	EventsFetched int
 	EventsStored  int
+	Run           *models.IngestionRun
 }
 
 // Ingest pulls events from NASA EONET for the given country, upserts them
@@ -73,7 +80,8 @@ func Ingest(ctx context.Context, repo database.Repository, country CountryConfig
 
 	result, ingestErr := runIngest(ctx, repo, country)
 
-	duration := time.Since(startedAt)
+	completedAt := time.Now()
+	duration := completedAt.Sub(startedAt)
 
 	if runID > 0 {
 		status := models.RunStatusSuccess
@@ -85,6 +93,16 @@ func Ingest(ctx context.Context, repo database.Repository, country CountryConfig
 		}
 		if completeErr := repo.CompleteIngestionRun(ctx, runID, status, result.EventsFetched, result.EventsStored, errMsg); completeErr != nil {
 			slog.Error("ingestion: failed to complete run record", "run_id", runID, "err", completeErr)
+		}
+		result.Run = &models.IngestionRun{
+			ID:            runID,
+			CountryCode:   country.Code,
+			StartedAt:     startedAt,
+			CompletedAt:   &completedAt,
+			Status:        status,
+			EventsFetched: result.EventsFetched,
+			EventsStored:  result.EventsStored,
+			Error:         errMsg,
 		}
 	}
 
@@ -143,7 +161,7 @@ func runIngest(ctx context.Context, repo database.Repository, country CountryCon
 		}
 
 		if resp.StatusCode == http.StatusOK {
-			body, reqErr = io.ReadAll(resp.Body)
+			body, reqErr = readLimitedResponseBody(resp.Body, maxEONETResponseBytes)
 			resp.Body.Close()
 			if reqErr != nil {
 				return result, fmt.Errorf("failed to read response body: %w", reqErr)
@@ -152,7 +170,7 @@ func runIngest(ctx context.Context, repo database.Repository, country CountryCon
 		}
 
 		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusServiceUnavailable {
-			bodyBytes, _ := io.ReadAll(resp.Body)
+			bodyBytes, _ := readLimitedResponseBody(resp.Body, 64*1024)
 			resp.Body.Close()
 
 			if attempt == maxRetries {
@@ -166,6 +184,9 @@ func runIngest(ctx context.Context, repo database.Repository, country CountryCon
 			// Exponential fallback: 5s, 10s, 20s if retry_after is absent or unparseable.
 			sleepSeconds := 5 * (1 << attempt)
 			if err := json.Unmarshal(bodyBytes, &rateLimitData); err == nil && rateLimitData.RetryAfter > 0 {
+				if rateLimitData.RetryAfter > maxRetryAfterSeconds {
+					return result, fmt.Errorf("EONET retry_after %d exceeds maximum %d seconds", rateLimitData.RetryAfter, maxRetryAfterSeconds)
+				}
 				// Dynamic backoff: honour the server's hint + 5s buffer for clock drift.
 				sleepSeconds = rateLimitData.RetryAfter + 5
 			}
@@ -199,6 +220,9 @@ func runIngest(ctx context.Context, repo database.Repository, country CountryCon
 
 	for _, rawEvt := range root.Events {
 		rawEvtBytes, _ := json.Marshal(rawEvt)
+		if len(rawEvtBytes) > maxEONETEventRawPayloadBytes {
+			return result, fmt.Errorf("EONET event %s raw payload exceeds maximum %d bytes", rawEvt.ID, maxEONETEventRawPayloadBytes)
+		}
 
 		event, geoJSON, err := normalizer.Normalize(rawEvt, rawEvtBytes)
 		if err != nil {
@@ -219,4 +243,16 @@ func runIngest(ctx context.Context, repo database.Repository, country CountryCon
 	}
 
 	return result, nil
+}
+
+func readLimitedResponseBody(r io.Reader, maxBytes int64) ([]byte, error) {
+	limited := io.LimitReader(r, maxBytes+1)
+	body, err := io.ReadAll(limited)
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(body)) > maxBytes {
+		return nil, fmt.Errorf("response body exceeds maximum %d bytes", maxBytes)
+	}
+	return body, nil
 }

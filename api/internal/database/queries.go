@@ -377,6 +377,58 @@ func (r *pgRepo) GetLastIngestionRunAllCountries(ctx context.Context) (map[strin
 	return result, nil
 }
 
+// TryRecordStalenessAlert atomically records a staleness alert reference.
+// It returns false when the same reference was already recorded, which lets
+// multiple API replicas suppress duplicate watchdog emails through Postgres.
+func (r *pgRepo) TryRecordStalenessAlert(ctx context.Context, referenceTime time.Time) (bool, error) {
+	query := `
+		INSERT INTO alert_dedupe (alert_kind, reference_time)
+		VALUES ('staleness', $1)
+		ON CONFLICT (alert_kind, reference_time) DO NOTHING
+	`
+	tag, err := r.pool.Exec(ctx, query, referenceTime.UTC())
+	if err != nil {
+		return false, fmt.Errorf("failed to record staleness alert reference: %w", err)
+	}
+	return tag.RowsAffected() == 1, nil
+}
+
+func (r *pgRepo) TryAcquireSchedulerLock(ctx context.Context, lockName, holder string, ttl time.Duration) (bool, error) {
+	query := `
+		INSERT INTO scheduler_locks (lock_name, holder, locked_until)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (lock_name) DO UPDATE
+		SET holder = EXCLUDED.holder,
+			locked_until = EXCLUDED.locked_until,
+			updated_at = NOW()
+		WHERE scheduler_locks.locked_until <= NOW()
+		   OR scheduler_locks.holder = EXCLUDED.holder
+		RETURNING lock_name
+	`
+	lockedUntil := time.Now().UTC().Add(ttl)
+	var acquired string
+	err := r.pool.QueryRow(ctx, query, lockName, holder, lockedUntil).Scan(&acquired)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to acquire scheduler lock: %w", err)
+	}
+	return true, nil
+}
+
+func (r *pgRepo) ReleaseSchedulerLock(ctx context.Context, lockName, holder string) error {
+	query := `
+		DELETE FROM scheduler_locks
+		WHERE lock_name = $1
+		  AND holder = $2
+	`
+	if _, err := r.pool.Exec(ctx, query, lockName, holder); err != nil {
+		return fmt.Errorf("failed to release scheduler lock: %w", err)
+	}
+	return nil
+}
+
 // EnrichmentStat holds per-country enrichment quality metrics.
 type EnrichmentStat struct {
 	CountryName    *string `json:"country_name"`

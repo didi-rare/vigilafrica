@@ -1,6 +1,6 @@
 services:
   staging-db:
-    image: postgis/postgis:15-3.4
+    image: postgis/postgis:15-3.4@sha256:3f4a5d48e0be9580ed70ed618cd039ce57bbb2dd113053d3836e28513f1f87cd
     container_name: vigilafrica-staging-db
     restart: unless-stopped
     environment:
@@ -11,6 +11,8 @@ services:
       - vigil-staging-data:/var/lib/postgresql/data
     networks:
       - staging-internal
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
@@ -51,6 +53,13 @@ services:
       - staging-maxmind-data:/usr/share/GeoIP:ro
     networks:
       - staging-internal
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
       interval: 15s
@@ -58,7 +67,7 @@ services:
       retries: 5
 
   staging-geoipupdate:
-    image: maxmindinc/geoipupdate
+    image: maxmindinc/geoipupdate:v7.1@sha256:faecdca22579730ab0b7dea5aa9af350bb3c93cb9d39845c173639ead30346d2
     container_name: vigilafrica-staging-geoip
     restart: unless-stopped
     environment:
@@ -70,6 +79,10 @@ services:
       - staging-maxmind-data:/usr/share/GeoIP
     networks:
       - staging-internal
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
 
 volumes:
   vigil-staging-data:

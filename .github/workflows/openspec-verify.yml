@@ -11,17 +11,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '20'
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
           go-version: '1.26'
 
@@ -33,7 +33,7 @@ jobs:
         run: git fetch origin development:development --update-head-ok
 
       - name: Cache Npm Store
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
           path: ~/.npm
           # Keyed on project lockfile hash as a dependency-era proxy.
@@ -43,13 +43,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-npm-
 
-      - name: Install OpenSpec CLI
-        # Global install — npm ci is not applicable here (no lockfile for globals).
-        # Cache above reduces download time on repeat runs.
-        run: npm install -g @fission-ai/openspec@latest
+      - name: Install Root Dependencies
+        run: npm ci
 
       - name: OpenSpec Validate
-        run: openspec validate --specs
+        run: npx openspec validate --specs
 
       # Sentinel Audit: static analysis + compile check.
       # go run cmd/server/main.go is intentionally NOT used here — the server

@@ -38,9 +38,19 @@ func TestUpsertEvent(t *testing.T) {
 		t.Fatalf("initial insert failed: %v", err)
 	}
 
-	// Second upsert with changed status — must not create a duplicate.
+	// Second upsert with changed canonical fields — must not create a duplicate
+	// and must not retain stale upstream-derived state.
 	event.Status = models.StatusClosed
-	if err := testRepo.UpsertEvent(ctx, event, geoJSON); err != nil {
+	event.Title = "Updated Wildfire — Accra"
+	event.Category = models.CategoryWildfires
+	event.Latitude = ptrF64(5.6037)
+	event.Longitude = ptrF64(-0.1870)
+	updatedDate := now.Add(24 * time.Hour)
+	event.EventDate = &updatedDate
+	updatedSourceURL := "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_TEST_UPSERT_UPDATED"
+	event.SourceURL = &updatedSourceURL
+	updatedGeoJSON := `{"type":"Point","coordinates":[-0.1870,5.6037]}`
+	if err := testRepo.UpsertEvent(ctx, event, updatedGeoJSON); err != nil {
 		t.Fatalf("upsert (update) failed: %v", err)
 	}
 
@@ -64,6 +74,18 @@ func TestUpsertEvent(t *testing.T) {
 	}
 	if found != nil && found.Status != models.StatusClosed {
 		t.Errorf("expected status %q after upsert, got %q", models.StatusClosed, found.Status)
+	}
+	if found != nil && found.Category != models.CategoryWildfires {
+		t.Errorf("expected category %q after upsert, got %q", models.CategoryWildfires, found.Category)
+	}
+	if found != nil && found.Latitude != nil && *found.Latitude != 5.6037 {
+		t.Errorf("expected latitude 5.6037 after upsert, got %v", found.Latitude)
+	}
+	if found != nil && found.Longitude != nil && *found.Longitude != -0.1870 {
+		t.Errorf("expected longitude -0.1870 after upsert, got %v", found.Longitude)
+	}
+	if found != nil && (found.SourceURL == nil || *found.SourceURL != updatedSourceURL) {
+		t.Errorf("expected source URL %q after upsert, got %v", updatedSourceURL, found.SourceURL)
 	}
 }
 
@@ -359,6 +381,74 @@ func TestIngestionRunHelpers(t *testing.T) {
 			}())
 		}
 	})
+}
+
+func TestTryRecordStalenessAlertSuppressesDuplicateReference(t *testing.T) {
+	ctx := context.Background()
+	referenceTime := time.Now().UTC().Truncate(time.Second)
+	recorder, ok := testRepo.(interface {
+		TryRecordStalenessAlert(context.Context, time.Time) (bool, error)
+	})
+	if !ok {
+		t.Fatal("test repository does not implement TryRecordStalenessAlert")
+	}
+
+	recorded, err := recorder.TryRecordStalenessAlert(ctx, referenceTime)
+	if err != nil {
+		t.Fatalf("TryRecordStalenessAlert first insert failed: %v", err)
+	}
+	if !recorded {
+		t.Fatal("expected first staleness alert reference to be recorded")
+	}
+
+	recorded, err = recorder.TryRecordStalenessAlert(ctx, referenceTime)
+	if err != nil {
+		t.Fatalf("TryRecordStalenessAlert duplicate insert failed: %v", err)
+	}
+	if recorded {
+		t.Fatal("expected duplicate staleness alert reference to be suppressed")
+	}
+}
+
+func TestSchedulerLockAllowsOnlyOneHolder(t *testing.T) {
+	ctx := context.Background()
+	locker, ok := testRepo.(interface {
+		TryAcquireSchedulerLock(context.Context, string, string, time.Duration) (bool, error)
+		ReleaseSchedulerLock(context.Context, string, string) error
+	})
+	if !ok {
+		t.Fatal("test repository does not implement scheduler locking")
+	}
+
+	lockName := "test-scheduler-lock"
+	acquired, err := locker.TryAcquireSchedulerLock(ctx, lockName, "holder-a", time.Minute)
+	if err != nil {
+		t.Fatalf("first TryAcquireSchedulerLock failed: %v", err)
+	}
+	if !acquired {
+		t.Fatal("expected first holder to acquire scheduler lock")
+	}
+	defer locker.ReleaseSchedulerLock(ctx, lockName, "holder-a")
+
+	acquired, err = locker.TryAcquireSchedulerLock(ctx, lockName, "holder-b", time.Minute)
+	if err != nil {
+		t.Fatalf("second TryAcquireSchedulerLock failed: %v", err)
+	}
+	if acquired {
+		t.Fatal("expected second holder to be blocked while lock is held")
+	}
+
+	if err := locker.ReleaseSchedulerLock(ctx, lockName, "holder-a"); err != nil {
+		t.Fatalf("ReleaseSchedulerLock failed: %v", err)
+	}
+	acquired, err = locker.TryAcquireSchedulerLock(ctx, lockName, "holder-b", time.Minute)
+	if err != nil {
+		t.Fatalf("third TryAcquireSchedulerLock failed: %v", err)
+	}
+	if !acquired {
+		t.Fatal("expected second holder to acquire lock after release")
+	}
+	_ = locker.ReleaseSchedulerLock(ctx, lockName, "holder-b")
 }
 
 // TestEnrichmentAndStates covers GetEnrichmentStats and GetDistinctStatesByCountry.

@@ -14,6 +14,10 @@ type WatchdogConfig struct {
 	StalenessThreshold time.Duration
 }
 
+type stalenessAlertRecorder interface {
+	TryRecordStalenessAlert(ctx context.Context, referenceTime time.Time) (bool, error)
+}
+
 func (cfg WatchdogConfig) withDefaults() WatchdogConfig {
 	if cfg.CheckInterval <= 0 {
 		cfg.CheckInterval = 15 * time.Minute
@@ -57,6 +61,17 @@ func StartStalenessWatchdog(ctx context.Context, repo database.Repository, clien
 						lastAlertReference = time.Time{}
 					}
 					continue
+				}
+				if recorder, ok := repo.(stalenessAlertRecorder); ok {
+					recorded, err := recorder.TryRecordStalenessAlert(ctx, referenceTime)
+					if err != nil {
+						logger.Error("watchdog: failed to record staleness alert dedupe", "err", err)
+						continue
+					}
+					if !recorded {
+						lastAlertReference = referenceTime
+						continue
+					}
 				}
 
 				if err := client.SendStalenessAlert(ctx, referenceTime, cfg.StalenessThreshold); err != nil {
