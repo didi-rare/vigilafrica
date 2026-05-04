@@ -9,3 +9,4 @@ Before any private, admin, operator, or partner endpoints are added:
 - update this policy and the release checklist with the chosen production behavior.
 
 The API handlers fail closed for docs exposure when `API_DOCS_ENABLED` is `false`, `0`, or `off`.
+`docker-compose.staging.yml` keeps docs enabled by default for operator verification, while `docker-compose.prod.yml` disables docs by default unless production explicitly overrides `API_DOCS_ENABLED=true`.
