@@ -16,7 +16,7 @@
     "spec:trace": "openspec trace"
   },
   "devDependencies": {
-    "@fission-ai/openspec": "latest"
+    "@fission-ai/openspec": "1.3.0"
   },
   "author": "",
   "license": "Apache-2.0"

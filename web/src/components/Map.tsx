@@ -10,6 +10,7 @@ setWorkerUrl(maplibreWorkerUrl)
 const SOURCE_ID = 'events-map-source'
 const CLUSTERS_LAYER_ID = 'events-map-clusters'
 const CLUSTER_COUNT_LAYER_ID = 'events-map-cluster-count'
+const SVG_NS = 'http://www.w3.org/2000/svg'
 
 interface EventMarker {
   id: string
@@ -35,20 +36,33 @@ function getMarkerVariant(category: string): 'flood' | 'fire' {
   return category === 'floods' ? 'flood' : 'fire'
 }
 
-function getMarkerGlyph(category: string): string {
+function getMarkerGlyphPath(category: string): string {
   if (category === 'floods') {
-    return `
-      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-        <path d="M4 10.75c1.17 0 1.76.49 2.27.91.46.38.8.66 1.55.66.74 0 1.08-.28 1.54-.66.51-.42 1.1-.91 2.27-.91s1.76.49 2.27.91c.46.38.8.66 1.54.66.75 0 1.09-.28 1.55-.66.51-.42 1.1-.91 2.27-.91v2.3c-.74 0-1.08.28-1.54.66-.51.42-1.1.91-2.28.91-1.17 0-1.76-.49-2.27-.91-.46-.38-.8-.66-1.54-.66-.75 0-1.09.28-1.55.66-.51.42-1.1.91-2.27.91s-1.76-.49-2.27-.91c-.46-.38-.8-.66-1.54-.66-.75 0-1.09.28-1.55.66-.51.42-1.1.91-2.27.91v-2.3c.74 0 1.08-.28 1.54-.66.51-.42 1.1-.91 2.28-.91Zm0 5.1c1.17 0 1.76.49 2.27.91.46.38.8.66 1.55.66.74 0 1.08-.28 1.54-.66.51-.42 1.1-.91 2.27-.91s1.76.49 2.27.91c.46.38.8.66 1.54.66.75 0 1.09-.28 1.55-.66.51-.42 1.1-.91 2.27-.91v2.3c-.74 0-1.08.28-1.54.66-.51.42-1.1.91-2.28.91-1.17 0-1.76-.49-2.27-.91-.46-.38-.8-.66-1.54-.66-.75 0-1.09.28-1.55.66-.51.42-1.1.91-2.27.91s-1.76-.49-2.27-.91c-.46-.38-.8-.66-1.54-.66-.75 0-1.09.28-1.55.66-.51.42-1.1.91-2.27.91v-2.3c.74 0 1.08-.28 1.54-.66.51-.42 1.1-.91 2.28-.91Z" fill="currentColor"/>
-      </svg>
-    `
+    return 'M4 10.75c1.17 0 1.76.49 2.27.91.46.38.8.66 1.55.66.74 0 1.08-.28 1.54-.66.51-.42 1.1-.91 2.27-.91s1.76.49 2.27.91c.46.38.8.66 1.54.66.75 0 1.09-.28 1.55-.66.51-.42 1.1-.91 2.27-.91v2.3c-.74 0-1.08.28-1.54.66-.51.42-1.1.91-2.28.91-1.17 0-1.76-.49-2.27-.91-.46-.38-.8-.66-1.54-.66-.75 0-1.09.28-1.55.66-.51.42-1.1.91-2.27.91s-1.76-.49-2.27-.91c-.46-.38-.8-.66-1.54-.66-.75 0-1.09.28-1.55.66-.51.42-1.1.91-2.27.91v-2.3c.74 0 1.08-.28 1.54-.66.51-.42 1.1-.91 2.28-.91Zm0 5.1c1.17 0 1.76.49 2.27.91.46.38.8.66 1.55.66.74 0 1.08-.28 1.54-.66.51-.42 1.1-.91 2.27-.91s1.76.49 2.27.91c.46.38.8.66 1.54.66.75 0 1.09-.28 1.55-.66.51-.42 1.1-.91 2.27-.91v2.3c-.74 0-1.08.28-1.54.66-.51.42-1.1.91-2.28.91-1.17 0-1.76-.49-2.27-.91-.46-.38-.8-.66-1.54-.66-.75 0-1.09.28-1.55.66-.51.42-1.1.91-2.27.91s-1.76-.49-2.27-.91c-.46-.38-.8-.66-1.54-.66-.75 0-1.09.28-1.55.66-.51.42-1.1.91-2.27.91v-2.3c.74 0 1.08-.28 1.54-.66.51-.42 1.1-.91 2.28-.91Z'
   }
 
-  return `
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path d="M13.8 2.5c.36 1.73-.11 3.24-1.42 4.53-1.12 1.1-1.55 2.17-1.29 3.22.24.95.92 1.77 2.04 2.45-.09-1.45.31-2.62 1.22-3.51.71-.69 1.19-1.62 1.44-2.79 2.15 1.72 3.23 3.95 3.23 6.68 0 1.98-.66 3.67-1.98 5.07-1.32 1.4-3 2.1-5.04 2.1-1.98 0-3.64-.67-4.97-2.02C5.7 16.89 5.03 15.23 5.03 13.25c0-1.7.46-3.2 1.39-4.5.75-1.06 1.95-2.23 3.59-3.51.42 1.12.44 2.12.04 2.99-.21.48-.55.97-1 1.49-.67.76-.95 1.59-.84 2.5.09.72.43 1.37 1.02 1.95-.03-1.35.36-2.47 1.18-3.38.76-.84 1.21-1.58 1.35-2.22.11-.46.12-1.14.04-2.07Z" fill="currentColor"/>
-    </svg>
-  `
+  return 'M13.8 2.5c.36 1.73-.11 3.24-1.42 4.53-1.12 1.1-1.55 2.17-1.29 3.22.24.95.92 1.77 2.04 2.45-.09-1.45.31-2.62 1.22-3.51.71-.69 1.19-1.62 1.44-2.79 2.15 1.72 3.23 3.95 3.23 6.68 0 1.98-.66 3.67-1.98 5.07-1.32 1.4-3 2.1-5.04 2.1-1.98 0-3.64-.67-4.97-2.02C5.7 16.89 5.03 15.23 5.03 13.25c0-1.7.46-3.2 1.39-4.5.75-1.06 1.95-2.23 3.59-3.51.42 1.12.44 2.12.04 2.99-.21.48-.55.97-1 1.49-.67.76-.95 1.59-.84 2.5.09.72.43 1.37 1.02 1.95-.03-1.35.36-2.47 1.18-3.38.76-.84 1.21-1.58 1.35-2.22.11-.46.12-1.14.04-2.07Z'
+}
+
+function createHiddenSpan(className: string): HTMLSpanElement {
+  const span = document.createElement('span')
+  span.className = className
+  span.setAttribute('aria-hidden', 'true')
+  return span
+}
+
+function createGlyph(category: string): SVGSVGElement {
+  const svg = document.createElementNS(SVG_NS, 'svg')
+  svg.setAttribute('viewBox', '0 0 24 24')
+  svg.setAttribute('aria-hidden', 'true')
+  svg.setAttribute('focusable', 'false')
+
+  const path = document.createElementNS(SVG_NS, 'path')
+  path.setAttribute('d', getMarkerGlyphPath(category))
+  path.setAttribute('fill', 'currentColor')
+  svg.appendChild(path)
+
+  return svg
 }
 
 function createMarkerElement(event: EventMarker): HTMLButtonElement {
@@ -57,13 +71,16 @@ function createMarkerElement(event: EventMarker): HTMLButtonElement {
   button.type = 'button'
   button.className = `map-marker map-marker--${variant}`
   button.setAttribute('aria-label', `${event.title} (${event.category})`)
-  button.innerHTML = `
-    <span class="map-marker__pulse" aria-hidden="true"></span>
-    <span class="map-marker__badge" aria-hidden="true">
-      <span class="map-marker__glyph">${getMarkerGlyph(event.category)}</span>
-    </span>
-    <span class="map-marker__pointer" aria-hidden="true"></span>
-  `
+
+  const pulse = createHiddenSpan('map-marker__pulse')
+  const badge = createHiddenSpan('map-marker__badge')
+  const glyph = document.createElement('span')
+  glyph.className = 'map-marker__glyph'
+  glyph.appendChild(createGlyph(event.category))
+  badge.appendChild(glyph)
+  const pointer = createHiddenSpan('map-marker__pointer')
+
+  button.append(pulse, badge, pointer)
 
   return button
 }

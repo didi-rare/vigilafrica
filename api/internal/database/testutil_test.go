@@ -24,7 +24,7 @@ func TestMain(m *testing.M) {
 
 	// PostGIS emits the ready log twice: once for template DB init and once for the
 	// actual database. Waiting for 2 occurrences avoids the "EOF" race on startup.
-	ctr, err := tcpostgres.Run(ctx, "postgis/postgis:15-3.3",
+	ctr, err := tcpostgres.Run(ctx, "postgis/postgis:15-3.4@sha256:3f4a5d48e0be9580ed70ed618cd039ce57bbb2dd113053d3836e28513f1f87cd",
 		tcpostgres.WithDatabase("vigilafrica_test"),
 		tcpostgres.WithUsername("test"),
 		tcpostgres.WithPassword("test"),

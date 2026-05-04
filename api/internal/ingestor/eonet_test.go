@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -260,6 +261,71 @@ func TestRunIngest_ContextCancelledDuringSleep(t *testing.T) {
 	// The error returned by eonetSleepFn is ctx.Err() = context.Canceled.
 	if err != context.Canceled {
 		t.Errorf("expected context.Canceled, got: %v", err)
+	}
+}
+
+func TestRunIngest_RejectsExcessiveRetryAfter(t *testing.T) {
+	defer installInstantSleep(t)()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+		fmt.Fprint(w, `{"retry_after": 86400}`)
+	}))
+	defer srv.Close()
+	defer installTestServer(t, srv)()
+
+	_, err := runIngest(context.Background(), &mockRepo{}, testCountry)
+	if err == nil {
+		t.Fatal("expected excessive retry_after to fail")
+	}
+	if !strings.Contains(err.Error(), "exceeds maximum") {
+		t.Fatalf("expected bounded retry_after error, got %v", err)
+	}
+}
+
+func TestRunIngest_RejectsOversizedEONETResponse(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, strings.Repeat("x", maxEONETResponseBytes+1))
+	}))
+	defer srv.Close()
+	defer installTestServer(t, srv)()
+
+	_, err := runIngest(context.Background(), &mockRepo{}, testCountry)
+	if err == nil {
+		t.Fatal("expected oversized response to fail")
+	}
+	if !strings.Contains(err.Error(), "response body exceeds maximum") {
+		t.Fatalf("expected oversized response error, got %v", err)
+	}
+}
+
+func TestRunIngest_RejectsOversizedRawEventPayload(t *testing.T) {
+	largeTitle := strings.Repeat("x", maxEONETEventRawPayloadBytes)
+	body := fmt.Sprintf(`{
+		"events": [
+			{
+				"id": "EONET_HUGE",
+				"title": %q,
+				"categories": [{"id": "wildfires"}],
+				"geometry": [{"magnitudeValue": null, "magnitudeUnit": null, "date": "2023-01-01T00:00:00Z", "type": "Point", "coordinates": [0.0, 0.0]}]
+			}
+		]
+	}`, largeTitle)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, body)
+	}))
+	defer srv.Close()
+	defer installTestServer(t, srv)()
+
+	_, err := runIngest(context.Background(), &mockRepo{}, testCountry)
+	if err == nil {
+		t.Fatal("expected oversized raw event payload to fail")
+	}
+	if !strings.Contains(err.Error(), "raw payload exceeds maximum") {
+		t.Fatalf("expected raw payload limit error, got %v", err)
 	}
 }
 

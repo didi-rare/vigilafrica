@@ -21,41 +21,43 @@ type EventFilters struct {
 	Offset   int
 }
 
-// ListEvents retrieves a paginated and filtered list of events.
-// It also returns the total count of matched records for pagination.
-func (r *pgRepo) ListEvents(ctx context.Context, filters EventFilters) ([]models.Event, int, error) {
+func appendAllowedEventFilter(conditions []string, args []interface{}, argID int, column, operator string, value interface{}) ([]string, []interface{}, int) {
+	conditions = append(conditions, fmt.Sprintf("%s %s $%d", column, operator, argID))
+	args = append(args, value)
+	return conditions, args, argID + 1
+}
+
+func buildEventFilterClause(filters EventFilters) (string, []interface{}, int) {
 	var conditions []string
 	var args []interface{}
 	argID := 1
 
 	if filters.Category != "" {
-		conditions = append(conditions, fmt.Sprintf("category = $%d", argID))
-		args = append(args, filters.Category)
-		argID++
+		conditions, args, argID = appendAllowedEventFilter(conditions, args, argID, "category", "=", filters.Category)
 	}
 
 	if filters.Country != "" {
-		conditions = append(conditions, fmt.Sprintf("country_name ILIKE $%d", argID))
-		args = append(args, filters.Country)
-		argID++
+		conditions, args, argID = appendAllowedEventFilter(conditions, args, argID, "country_name", "ILIKE", filters.Country)
 	}
 
 	if filters.State != "" {
-		conditions = append(conditions, fmt.Sprintf("state_name ILIKE $%d", argID))
-		args = append(args, filters.State)
-		argID++
+		conditions, args, argID = appendAllowedEventFilter(conditions, args, argID, "state_name", "ILIKE", filters.State)
 	}
 
 	if filters.Status != "" {
-		conditions = append(conditions, fmt.Sprintf("status = $%d", argID))
-		args = append(args, filters.Status)
-		argID++
+		conditions, args, argID = appendAllowedEventFilter(conditions, args, argID, "status", "=", filters.Status)
 	}
 
-	whereClause := ""
-	if len(conditions) > 0 {
-		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	if len(conditions) == 0 {
+		return "", args, argID
 	}
+	return "WHERE " + strings.Join(conditions, " AND "), args, argID
+}
+
+// ListEvents retrieves a paginated and filtered list of events.
+// It also returns the total count of matched records for pagination.
+func (r *pgRepo) ListEvents(ctx context.Context, filters EventFilters) ([]models.Event, int, error) {
+	whereClause, args, argID := buildEventFilterClause(filters)
 
 	// First query: get total count
 	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM events %s", whereClause)
@@ -373,6 +375,58 @@ func (r *pgRepo) GetLastIngestionRunAllCountries(ctx context.Context) (map[strin
 		return nil, fmt.Errorf("rows error in GetLastIngestionRunAllCountries: %w", err)
 	}
 	return result, nil
+}
+
+// TryRecordStalenessAlert atomically records a staleness alert reference.
+// It returns false when the same reference was already recorded, which lets
+// multiple API replicas suppress duplicate watchdog emails through Postgres.
+func (r *pgRepo) TryRecordStalenessAlert(ctx context.Context, referenceTime time.Time) (bool, error) {
+	query := `
+		INSERT INTO alert_dedupe (alert_kind, reference_time)
+		VALUES ('staleness', $1)
+		ON CONFLICT (alert_kind, reference_time) DO NOTHING
+	`
+	tag, err := r.pool.Exec(ctx, query, referenceTime.UTC())
+	if err != nil {
+		return false, fmt.Errorf("failed to record staleness alert reference: %w", err)
+	}
+	return tag.RowsAffected() == 1, nil
+}
+
+func (r *pgRepo) TryAcquireSchedulerLock(ctx context.Context, lockName, holder string, ttl time.Duration) (bool, error) {
+	query := `
+		INSERT INTO scheduler_locks (lock_name, holder, locked_until)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (lock_name) DO UPDATE
+		SET holder = EXCLUDED.holder,
+			locked_until = EXCLUDED.locked_until,
+			updated_at = NOW()
+		WHERE scheduler_locks.locked_until <= NOW()
+		   OR scheduler_locks.holder = EXCLUDED.holder
+		RETURNING lock_name
+	`
+	lockedUntil := time.Now().UTC().Add(ttl)
+	var acquired string
+	err := r.pool.QueryRow(ctx, query, lockName, holder, lockedUntil).Scan(&acquired)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to acquire scheduler lock: %w", err)
+	}
+	return true, nil
+}
+
+func (r *pgRepo) ReleaseSchedulerLock(ctx context.Context, lockName, holder string) error {
+	query := `
+		DELETE FROM scheduler_locks
+		WHERE lock_name = $1
+		  AND holder = $2
+	`
+	if _, err := r.pool.Exec(ctx, query, lockName, holder); err != nil {
+		return fmt.Errorf("failed to release scheduler lock: %w", err)
+	}
+	return nil
 }
 
 // EnrichmentStat holds per-country enrichment quality metrics.

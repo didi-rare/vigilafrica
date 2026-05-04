@@ -308,6 +308,33 @@ describe('Map', () => {
     expect(accraMarker.lngLat).toEqual([-0.187, 5.6037])
   })
 
+  it('does not inject event data into marker HTML', async () => {
+    const maliciousEvent = {
+      id: 'malicious-title',
+      lat: 6.5244,
+      lng: 3.3792,
+      category: 'floods',
+      title: '<img src=x onerror=alert(1)>',
+    }
+    render(<Map events={[maliciousEvent]} />)
+
+    const map = maplibreMock.instances.maps[0]
+    map.sourceFeatures = [unclusteredFeature(maliciousEvent)]
+
+    await act(async () => {
+      map.trigger('load')
+    })
+
+    await waitFor(() => {
+      expect(maplibreMock.instances.markers).toHaveLength(1)
+    })
+
+    const markerElement = maplibreMock.instances.markers[0].options.element
+    expect(markerElement).toHaveAccessibleName('<img src=x onerror=alert(1)> (floods)')
+    expect(markerElement.querySelector('img')).toBeNull()
+    expect(markerElement.innerHTML).not.toContain('onerror')
+  })
+
   it('removes markers for points that become clustered after a viewport change', async () => {
     render(<Map events={events} />)
 

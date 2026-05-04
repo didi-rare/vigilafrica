@@ -100,9 +100,18 @@ func (r *pgRepo) UpsertEvent(ctx context.Context, e models.Event, geoJSON string
 		)
 		ON CONFLICT (source_id)
 		DO UPDATE SET
-			status      = EXCLUDED.status,
+			source      = EXCLUDED.source,
 			title       = EXCLUDED.title,
-			raw_payload = EXCLUDED.raw_payload;`
+			category    = EXCLUDED.category,
+			status      = EXCLUDED.status,
+			geom        = EXCLUDED.geom,
+			geom_type   = EXCLUDED.geom_type,
+			latitude    = EXCLUDED.latitude,
+			longitude   = EXCLUDED.longitude,
+			event_date  = EXCLUDED.event_date,
+			source_url  = EXCLUDED.source_url,
+			raw_payload = EXCLUDED.raw_payload,
+			ingested_at = NOW();`
 
 	_, err := r.pool.Exec(ctx, query,
 		e.SourceID,
