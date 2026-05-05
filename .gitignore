@@ -31,3 +31,7 @@ openspec/traces/
 postgres_data/
 maxmind_data/
 vigil-demo-data/
+
+# Local browser/demo verification artifacts
+.chrome-demo-*/
+web-vite-demo*.log
