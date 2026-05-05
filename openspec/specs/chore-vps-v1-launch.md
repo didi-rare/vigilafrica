@@ -66,7 +66,7 @@ RATE_LIMIT_RPM=60
 CACHE_TTL_SECONDS=300
 RESEND_API_KEY=re_...
 ALERT_FROM_EMAIL=VigilAfrica Alerts <alerts@send.vigilafrica.org>
-ALERTS_TO=didi.pepple@gmail.com
+ALERTS_TO=ops@example.com
 ALERT_STALENESS_THRESHOLD_HOURS=2
 ALERT_STALENESS_CHECK_INTERVAL_MIN=15
 ```
