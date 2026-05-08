@@ -2,35 +2,92 @@ name: VigilAfrica CI/CD
 
 on:
   push:
-    branches: [ development, main, releases ]
+    branches: [ development, main, release ]
   pull_request:
-    branches: [ main, releases ]
+    branches: [ development, main, release ]
 
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
           go-version: '1.26'          # Must match api/go.mod — see ADR-008
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: '20'
+          # Node 22 LTS required: web/package.json pins @types/node@^24, vite@^8,
+          # and @vitejs/plugin-react@^6 — all require Node >=22. Node 22 is current
+          # LTS (since Oct 2024) and is the production-safe choice.
+          node-version: '22'
+
+      - name: Cache Npm Dependencies
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: ~/.npm
+          # Key on package-lock.json across the whole tree for deterministic hits.
+          # Falls back to any prior npm cache for this OS on a miss.
+          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
 
       - name: Install Root & Web Dependencies
+        # npm ci installs exactly what is in package-lock.json — no range
+        # re-resolution, no silent version drift. Fails loudly on lockfile mismatch.
         run: |
-          npm install
-          cd web && npm install
+          npm ci
+          cd web && npm ci
+
+      - name: Check OpenAPI spec in sync
+        run: |
+          node scripts/sync-openapi.js
+          git diff --exit-code api/internal/handlers/openapi.yaml || \
+            (echo "❌ api/internal/handlers/openapi.yaml is out of sync with openspec/specs/vigilafrica/openapi.yaml — run 'npm run sync:openapi' and commit the result." && exit 1)
 
       - name: Run Go Tests
         run: |
           cd api
           go test ./...
+
+      - name: Verify Go Modules Are Tidy
+        run: |
+          cd api
+          go mod tidy
+          git diff --exit-code go.mod go.sum
+
+      - name: Run Go Vulnerability Check
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.3.0
+          cd api
+          govulncheck ./...
+
+      - name: Run Root Dependency Audit
+        run: npm audit --audit-level=moderate
+
+      - name: Run Web Dependency Audit
+        run: |
+          cd web
+          npm audit --audit-level=moderate
+
+      - name: Verify Container Image Pins
+        run: node scripts/check-image-pins.js
+
+      - name: Run Database Integration Tests
+        run: |
+          cd api
+          go test -v -cover -tags=integration ./internal/database/
+
+      - name: Run Frontend Tests
+        run: |
+          cd web
+          npm run test
+
+      - name: Generate milestone data
+        run: node scripts/generate-milestones.js
 
       - name: Build Web
         run: |
@@ -42,32 +99,3 @@ jobs:
           cd api
           go build -o ../vigilafrica ./cmd/server/    # Entry point: api/cmd/server/main.go (ADR-007)
 
-  deploy-staging:
-    needs: build-and-test
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Deploy to Vercel (Staging)
-        uses: amondnet/vercel-action@v25
-        with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          vercel-args: '--staging'
-
-  deploy-production:
-    needs: build-and-test
-    if: github.ref == 'refs/heads/releases'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Deploy to Vercel (Production)
-        uses: amondnet/vercel-action@v25
-        with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          vercel-args: '--prod'

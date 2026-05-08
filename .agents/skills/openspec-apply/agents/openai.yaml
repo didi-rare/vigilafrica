@@ -1,0 +1,4 @@
+interface:
+  display_name: "openspec-apply"
+  short_description: "Apply an approved OpenSpec change"
+  default_prompt: "/openspec-apply <change-id>"

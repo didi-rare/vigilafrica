@@ -1,0 +1,33 @@
+{
+  "name": "openspec",
+  "version": "0.1.0",
+  "description": "Repo-local OpenSpec lifecycle slash commands for proposal, apply, review, and archive workflows.",
+  "author": {
+    "name": "VigilAfrica"
+  },
+  "license": "UNLICENSED",
+  "keywords": [
+    "openspec",
+    "workflow",
+    "slash-commands",
+    "specs"
+  ],
+  "interface": {
+    "displayName": "OpenSpec",
+    "shortDescription": "OpenSpec workflow commands for this repo",
+    "longDescription": "Adds slash commands that drive the repository OpenSpec lifecycle using proposals, specs, review, and archive documents.",
+    "developerName": "VigilAfrica",
+    "category": "Coding",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Draft an OpenSpec proposal for this change",
+      "Apply the active OpenSpec change",
+      "Review this change against OpenSpec"
+    ],
+    "brandColor": "#2563EB",
+    "screenshots": []
+  }
+}

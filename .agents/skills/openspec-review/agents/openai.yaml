@@ -1,0 +1,4 @@
+interface:
+  display_name: "openspec-review"
+  short_description: "Review completed work against OpenSpec"
+  default_prompt: "/openspec-review <change-id>"

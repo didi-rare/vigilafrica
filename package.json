@@ -5,15 +5,20 @@
   "main": "index.js",
   "scripts": {
     "web:dev": "cd web && npm run dev",
-    "web:build": "cd web && npm run build",
-    "api:dev": "go run ./api/cmd/server/",
-    "build": "npm run web:build && go build -o vigilafrica ./api/cmd/server/",
-    "spec:validate": "openspec validate",
+    "web:build": "npm run generate:milestones && cd web && npm run build",
+    "api:dev": "cd api && go run ./cmd/server/",
+    "sync:openapi": "node scripts/sync-openapi.js",
+    "build": "npm run sync:openapi && npm run web:build && go build -o vigilafrica ./api/cmd/server/",
+    "generate:milestones": "node scripts/generate-milestones.js",
+    "prebuild:web": "npm run generate:milestones",
+    "test:load": "k6 run tests/performance/load-test.js",
+    "spec:validate": "openspec validate --all",
     "spec:trace": "openspec trace"
   },
   "devDependencies": {
-    "@fission-ai/openspec": "latest"
+    "@fission-ai/openspec": "1.3.0"
   },
   "author": "",
   "license": "Apache-2.0"
 }
+

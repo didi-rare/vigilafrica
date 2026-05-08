@@ -1,0 +1,220 @@
+#!/usr/bin/env python3
+"""
+Generate a VigilAfrica boundary migration SQL file from an HDX COD GeoJSON.
+
+Usage:
+    python scripts/generate_boundary_migration.py \\
+        --input gha_admbnda_adm1.geojson \\
+        --country-code GH \\
+        --country-name Ghana \\
+        --migration-number 000008
+
+Output: api/db/migrations/000008_boundary_GH.up.sql
+
+Requirements: Python 3.9+, no external dependencies.
+The GeoJSON must be an ADM1-level FeatureCollection from HDX COD Admin Boundaries.
+The feature property containing the state/region name is auto-detected from common
+HDX column patterns (ADM1_EN, admin1Name, NAME_1, etc.).
+"""
+
+import argparse
+import json
+import os
+import sys
+from pathlib import Path
+
+# HDX COD GeoJSON uses various property names for the ADM1 English name.
+# Checked in priority order — first match wins.
+ADM1_NAME_CANDIDATES = [
+    "ADM1_EN",
+    "admin1Name_en",
+    "admin1Name",
+    "NAME_1",
+    "name_en",
+    "name",
+]
+
+ADM0_NAME_CANDIDATES = [
+    "ADM0_EN",
+    "admin0Name_en",
+    "admin0Name",
+    "NAME_0",
+]
+
+
+def detect_property(feature: dict, candidates: list[str]) -> str | None:
+    props = feature.get("properties", {})
+    for key in candidates:
+        if key in props and props[key]:
+            return props[key]
+    return None
+
+
+def geojson_geometry_to_wkt(geometry: dict) -> str:
+    """Convert a GeoJSON geometry to PostGIS-compatible WKT."""
+    gtype = geometry["type"]
+
+    if gtype == "Polygon":
+        rings = geometry["coordinates"]
+        rings_wkt = ", ".join(
+            "(" + ", ".join(f"{c[0]} {c[1]}" for c in ring) + ")"
+            for ring in rings
+        )
+        return f"POLYGON({rings_wkt})"
+
+    elif gtype == "MultiPolygon":
+        polys = geometry["coordinates"]
+        polys_wkt = ", ".join(
+            "(" + ", ".join(
+                "(" + ", ".join(f"{c[0]} {c[1]}" for c in ring) + ")"
+                for ring in poly
+            ) + ")"
+            for poly in polys
+        )
+        return f"MULTIPOLYGON({polys_wkt})"
+
+    else:
+        raise ValueError(f"Unsupported geometry type: {gtype}. Only Polygon and MultiPolygon are supported.")
+
+
+def escape_sql_string(s: str) -> str:
+    return s.replace("'", "''")
+
+
+def generate_migration(
+    input_path: str,
+    country_code: str,
+    country_name: str,
+    migration_number: str,
+    output_dir: str,
+) -> None:
+    with open(input_path, "r", encoding="utf-8") as f:
+        geojson = json.load(f)
+
+    if geojson.get("type") != "FeatureCollection":
+        print(f"ERROR: Expected FeatureCollection, got {geojson.get('type')}", file=sys.stderr)
+        sys.exit(1)
+
+    features = geojson["features"]
+    if not features:
+        print("ERROR: FeatureCollection contains no features.", file=sys.stderr)
+        sys.exit(1)
+
+    # Detect ADM1 name property from the first feature
+    sample = features[0]
+    adm1_prop = detect_property(sample, ADM1_NAME_CANDIDATES)
+    if adm1_prop is None:
+        print(
+            f"ERROR: Could not detect ADM1 name property. Tried: {ADM1_NAME_CANDIDATES}\n"
+            f"Available properties: {list(sample.get('properties', {}).keys())}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    print(f"Detected ADM1 name property: {adm1_prop!r}")
+    print(f"Processing {len(features)} features for {country_name} ({country_code})...")
+
+    cc = country_code.upper()
+    output_filename = f"{migration_number}_boundary_{cc}.up.sql"
+    output_path = Path(output_dir) / output_filename
+
+    inserts = []
+    errors = []
+
+    for i, feature in enumerate(features):
+        props = feature.get("properties", {})
+        adm_name = props.get(adm1_prop, "").strip()
+        if not adm_name:
+            errors.append(f"Feature {i}: empty ADM1 name — skipped")
+            continue
+
+        geometry = feature.get("geometry")
+        if geometry is None:
+            errors.append(f"Feature {i} ({adm_name!r}): null geometry — skipped")
+            continue
+
+        try:
+            wkt = geojson_geometry_to_wkt(geometry)
+        except (ValueError, KeyError) as e:
+            errors.append(f"Feature {i} ({adm_name!r}): geometry error — {e}")
+            continue
+
+        safe_name = escape_sql_string(adm_name)
+        safe_country = escape_sql_string(country_name)
+        inserts.append(
+            f"    ('{cc}', '{safe_country}', 1, '{safe_name}',\n"
+            f"     ST_GeomFromText('{wkt}', 4326))"
+        )
+
+    if errors:
+        print(f"\nWarnings ({len(errors)} features skipped):", file=sys.stderr)
+        for e in errors:
+            print(f"  - {e}", file=sys.stderr)
+
+    if not inserts:
+        print("ERROR: No valid features produced. Check the GeoJSON file.", file=sys.stderr)
+        sys.exit(1)
+
+    sql = f"""\
+-- {country_name} ({cc}) ADM1 boundary data — generated from HDX COD Admin Boundaries
+-- Source: https://data.humdata.org/
+-- Generated by: scripts/generate_boundary_migration.py
+-- Country: {country_name} | Code: {cc} | Features: {len(inserts)}
+-- All geometries use EPSG:4326 (WGS84).
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM admin_boundaries WHERE country_code = '{cc}' AND adm_level = 1) THEN
+
+    INSERT INTO admin_boundaries (country_code, country_name, adm_level, adm_name, geom) VALUES
+{",\n".join(inserts)};
+
+  END IF;
+END $$;
+"""
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(sql)
+
+    print(f"\nSuccess: {len(inserts)} regions written to {output_path}")
+    print(f"Next steps:")
+    print(f"  1. Review {output_path} before applying")
+    print(f"  2. Apply: migrate -database $DATABASE_URL -path api/db/migrations up 1")
+    print(f"  3. Verify: SELECT COUNT(*) FROM admin_boundaries WHERE country_code = '{cc}';")
+    print(f"  4. Check enrichment rate: GET /v1/enrichment-stats")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Generate a VigilAfrica boundary migration from an HDX COD GeoJSON file."
+    )
+    parser.add_argument("--input", required=True, help="Path to HDX COD ADM1 GeoJSON file")
+    parser.add_argument("--country-code", required=True, help="ISO 3166-1 alpha-2 code (e.g. GH)")
+    parser.add_argument("--country-name", required=True, help='English country name (e.g. "Ghana")')
+    parser.add_argument(
+        "--migration-number",
+        required=True,
+        help="Zero-padded migration sequence number (e.g. 000008)",
+    )
+    parser.add_argument(
+        "--output-dir",
+        default="api/db/migrations",
+        help="Output directory for the migration file (default: api/db/migrations)",
+    )
+    args = parser.parse_args()
+
+    if not os.path.isfile(args.input):
+        print(f"ERROR: Input file not found: {args.input}", file=sys.stderr)
+        sys.exit(1)
+
+    generate_migration(
+        input_path=args.input,
+        country_code=args.country_code,
+        country_name=args.country_name,
+        migration_number=args.migration_number,
+        output_dir=args.output_dir,
+    )
+
+
+if __name__ == "__main__":
+    main()

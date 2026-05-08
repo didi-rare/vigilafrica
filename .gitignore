@@ -9,8 +9,9 @@ out/
 
 # Go
 bin/
-vigilafrica
+/vigilafrica
 *.exe
+
 
 # OS
 .DS_Store
@@ -21,6 +22,16 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+.claude/settings.local.json
 
 # OpenSpec
 openspec/traces/
+
+# Docker
+postgres_data/
+maxmind_data/
+vigil-demo-data/
+
+# Local browser/demo verification artifacts
+.chrome-demo-*/
+web-vite-demo*.log

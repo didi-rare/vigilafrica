@@ -1,0 +1,4 @@
+services:
+  demo-api:
+    environment:
+      - RATE_LIMIT_RPM=${PERF_RATE_LIMIT_RPM:-60000}
