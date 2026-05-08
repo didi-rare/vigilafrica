@@ -61,7 +61,7 @@ jobs:
             deploy_tag="$1"
             cd /opt/vigilafrica/production
             git fetch --all --tags
-            git checkout --force -- "${deploy_tag}"
+            git checkout --force "refs/tags/${deploy_tag}"
             APP_VERSION="${deploy_tag}" docker compose -f docker-compose.prod.yml up -d --build
           REMOTE
 
