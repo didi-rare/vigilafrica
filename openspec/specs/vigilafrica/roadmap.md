@@ -21,6 +21,8 @@
 | v0.7      | Second country stable        | Enrichment quality validation         | ✅ Complete |
 | v0.8      | Pre-demo setup               | Demo environment + curated seed data  | ✅ Complete |
 | v1.0      | Credible public launch       | Quality gate (no new F-IDs)           | 🔄 Active |
+| v1.1      | Impact category expansion    | Landslides + temperature extremes     | Proposed |
+| v1.2      | Risk intelligence expansion   | Severe storms + drought               | Deferred |
 
 
 > **Release-state note**: The milestone index above is the authoritative release-state source for milestone tracking. Historical checklist boxes below are preserved as delivery records and are not retroactively rewritten when a milestone is marked release-complete.
@@ -170,19 +172,19 @@ These are blockers that must be resolved before v0.1 development begins. They ar
 | Deduplication | F-013 | Upsert on `source_id` — closed events updated, no duplicates |
 
 **Operational requirements** (milestone blockers, not F-tagged):
-- [ ] Structured JSON logging for all ingestion runs (start, end, events fetched, events stored, errors)
-- [ ] `ingestion_runs` table — one row per run recording: started_at, completed_at, status, events_fetched, events_stored, error message
-- [ ] `/health` endpoint extended with `last_ingestion` block and `status: degraded` when last run failed (ADR-011)
-- [ ] Frontend "last updated" freshness indicator — reads `last_ingestion.completed_at` from `/health`; warns if > 2 hours stale
-- [ ] Resend email alert on every failed ingestion run — `RESEND_API_KEY` env var required (ADR-011)
-- [ ] Staleness watchdog goroutine — emails via Resend if no successful ingestion in > `ALERT_STALENESS_THRESHOLD_HOURS` (default: 2) (ADR-011)
-- [ ] API rate limiting (configurable via `RATE_LIMIT_RPM` env var; default: 60 requests/minute)
-- [ ] Response caching for `GET /v1/events` (5–15 min TTL, configurable)
-- [ ] CORS correctly configured for Vercel production domain via `CORS_ORIGIN` env var
-- [ ] VPS deployment fully documented (Caddy config example, Docker Compose production config)
-- [ ] Contributor setup instructions are complete, tested, and documented in `CONTRIBUTING.md`
-- [ ] Seed dataset committed at `api/db/seeds/sample_events_nigeria.sql` (local dev, no EONET connection needed — Nigeria data only at this stage)
-- [ ] `CODE_OF_CONDUCT.md` added to repo
+- [x] Structured JSON logging for all ingestion runs (start, end, events fetched, events stored, errors)
+- [x] `ingestion_runs` table — one row per run recording: started_at, completed_at, status, events_fetched, events_stored, error message
+- [x] `/health` endpoint extended with `last_ingestion` block and `status: degraded` when last run failed (ADR-011)
+- [x] Frontend "last updated" freshness indicator — reads `last_ingestion.completed_at` from `/health`; warns if > 2 hours stale
+- [x] Resend email alert on every failed ingestion run — `RESEND_API_KEY` env var required (ADR-011)
+- [x] Staleness watchdog goroutine — emails via Resend if no successful ingestion in > `ALERT_STALENESS_THRESHOLD_HOURS` (default: 2) (ADR-011)
+- [x] API rate limiting (configurable via `RATE_LIMIT_RPM` env var; default: 60 requests/minute)
+- [x] Response caching for `GET /v1/events` (5–15 min TTL, configurable)
+- [x] CORS correctly configured for Vercel production domain via `CORS_ORIGIN` env var
+- [x] VPS deployment fully documented (Caddy config example, Docker Compose production config)
+- [x] Contributor setup instructions are complete, tested, and documented in `CONTRIBUTING.md`
+- [x] Seed dataset committed at `api/db/seeds/sample_events_nigeria.sql` (local dev, no EONET connection needed — Nigeria data only at this stage)
+- [x] `CODE_OF_CONDUCT.md` added to repo
 
 **Success signal**: The prototype runs on a VPS, automatically ingests new events every hour, and a contributor can reproduce the full local environment in under 30 minutes by following `CONTRIBUTING.md`. A failed or stalled ingestion triggers an email alert without manual log inspection.
 
@@ -262,25 +264,70 @@ These are blockers that must be resolved before v0.1 development begins. They ar
 **Goal**: A version that is genuinely useful, publicly defensible, and ready for community contributors, NGO partners, and potential funders. This milestone is a quality gate — all v0.x work must be complete and stable before v1.0 is tagged.
 
 **Quality gate criteria** (all must pass before tagging v1.0):
-- [ ] At least 2 African countries supported in depth (enriched to ADM1 level) — Nigeria complete, second country validated at v0.7
-- [ ] At least 2 event categories supported (Floods + Wildfires minimum)
-- [ ] Localized enrichment working consistently for all supported countries
-- [ ] REST API is stable — documented in `api-contract.md` with no breaking changes since v0.3
-- [ ] Frontend is usable without technical knowledge by personas P-01 through P-03
-- [ ] Demo environment live and stable (delivered at v0.8)
-- [ ] Staging API and frontend deployed from `main` and validated before production tagging
+- [x] At least 2 African countries supported in depth (enriched to ADM1 level) — Nigeria complete, second country validated at v0.7
+- [x] At least 2 event categories supported (Floods + Wildfires minimum)
+- [x] Localized enrichment working consistently for all supported countries
+- [x] REST API is stable — documented in `api-contract.md` with no breaking changes since v0.3
+- [x] Frontend is usable without technical knowledge by personas P-01 through P-03
+- [x] Demo environment live and stable (delivered at v0.8)
+- [x] Staging API and frontend deployed from `main` and validated before production tagging
 - [ ] Production API and frontend deployed from `release` via annotated SemVer tag with GitHub Environment approval
-- [ ] `/health.version` reports the deployed commit SHA in staging and the SemVer tag in production
-- [ ] Failed-ingestion and staleness Resend alerts verified in staging
+- [ ] `/health.version` reports the deployed commit SHA in staging and the SemVer tag in production — staging verified; production pending
+- [x] Failed-ingestion and staleness Resend alerts verified in staging
 - [ ] Rollback workflow verified by redeploying a previous production tag
-- [ ] `CONTRIBUTING.md` is complete and tested
-- [ ] `CODE_OF_CONDUCT.md` is in place
-- [ ] Screenshot and 30-second demo GIF committed to repository (delivered at v0.8)
-- [ ] Public roadmap linked from `README.md`
-- [ ] GitHub Discussions enabled or a project contact email exists
+- [x] `CONTRIBUTING.md` is complete and tested
+- [x] `CODE_OF_CONDUCT.md` is in place
+- [x] Screenshot and 30-second demo GIF committed to repository (delivered at v0.8)
+- [x] Public roadmap linked from `README.md`
+- [x] GitHub Issues contact path exists per ADR-006 and `README.md`
 
 **Suggested v1.0 launch message**:
 > "Localized natural event awareness for [2+ African countries] — floods and wildfires shown by state, not coordinates. Open-source and free to use."
+
+---
+
+## v1.1 — Impact Category Expansion
+
+**Goal**: Increase production usefulness after v1.0 by adding two high-impact NASA EONET categories that still fit the current event-map model.
+
+**Scope proposal**: `openspec/changes/feature-v11-impact-categories`
+
+**Planned categories**:
+- `landslides`
+- `tempExtremes`
+
+**Acceptance criteria** (all must pass before v1.1 is tagged):
+- [ ] EONET ingestion requests `floods`, `wildfires`, `landslides`, and `tempExtremes`
+- [ ] Normalization maps each supported category explicitly; unsupported categories do not silently default to floods
+- [ ] Database category constraint accepts the v1.1 category set through a reversible migration path
+- [ ] `GET /v1/events?category=landslides` returns only landslide events
+- [ ] `GET /v1/events?category=tempExtremes` returns only temperature extreme events
+- [ ] Frontend category filter, event cards, detail views, and map markers render all four categories distinctly
+- [ ] Nigeria and Ghana seed/demo data include representative `landslides` and `tempExtremes` events
+- [ ] API contract, architecture, and product/spec references are updated from two-category language to the v1.1 supported set
+
+**What this milestone is not:**
+- Not part of v1.0 production closeout
+- Not adding all NASA EONET categories
+- Not adding `severeStorms` or `drought`
+- Not adding a secondary data oracle
+
+---
+
+## v1.2 — Risk Intelligence Expansion
+
+**Goal**: Continue category expansion after v1.1 with hazards that broaden VigilAfrica from acute event awareness into stronger risk intelligence.
+
+**Scope proposal**: `openspec/proposals/feature-v12-risk-intelligence.md`
+
+**Planned categories**:
+- `severeStorms`
+- `drought`
+
+**Notes**:
+- `severeStorms` likely fits the existing event-map model with modest UI expansion.
+- `drought` is slower-moving and may need different UX language, freshness expectations, and contextual framing.
+- v1.2 should reuse the category registry introduced by v1.1 rather than adding new one-off category branches.
 
 ---
 

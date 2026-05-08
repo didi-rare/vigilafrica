@@ -66,7 +66,7 @@ RATE_LIMIT_RPM=60
 CACHE_TTL_SECONDS=300
 RESEND_API_KEY=re_...
 ALERT_FROM_EMAIL=VigilAfrica Alerts <alerts@send.vigilafrica.org>
-ALERTS_TO=didi.pepple@gmail.com
+ALERTS_TO=ops@example.com
 ALERT_STALENESS_THRESHOLD_HOURS=2
 ALERT_STALENESS_CHECK_INTERVAL_MIN=15
 ```
@@ -84,7 +84,7 @@ ALERT_STALENESS_CHECK_INTERVAL_MIN=15
 
 ---
 
-## Phase 3 — Staging Deployment (Partially Complete)
+## Phase 3 — Staging Deployment ✅ Complete
 
 **3.1 Merge development → main** ✅ — `Deploy Staging` passed in 17s. Commit `ffe0bb7`.
 
@@ -93,7 +93,7 @@ ALERT_STALENESS_CHECK_INTERVAL_MIN=15
 {"status":"ok","version":"ffe0bb7","last_ingestion":{"country_code":"GH","status":"success",...}}
 ```
 
-**3.3 Set up Vercel staging project** ⏳
+**3.3 Set up Vercel staging project** ✅
 
 The frontend staging deployment is separate from the API and runs on Vercel.
 
@@ -104,22 +104,24 @@ The frontend staging deployment is separate from the API and runs on Vercel.
    ```
 3. Add the custom domain `staging.vigilafrica.org` in the Vercel project settings.
 4. **DNS records (CNAME for `staging`, apex for production) are owned by `fix-staging-soft-launch` §8** — operator action tracked there.
-5. Verify `https://staging.vigilafrica.org` loads the frontend and events appear from the staging API.
+5. Verified 2026-04-26: `https://staging.vigilafrica.org` loads the frontend and renders events from `https://api.staging.vigilafrica.org` end-to-end.
 
-**3.4 Verify Resend failure alert** ⏳
+**3.4 Verify Resend failure alert** ✅
 
 1. SSH into VPS, temporarily break the EONET endpoint in staging `.env`.
 2. Set `INGEST_INTERVAL_MIN=1` temporarily.
 3. Restart: `docker compose -f docker-compose.staging.yml up -d`
-4. Wait one cycle. Confirm email arrives at `didi.pepple@gmail.com`.
+4. Wait one cycle. Confirm email arrives at the configured staging recipient.
 5. Restore correct env and restart.
+6. Verified in staging; see `openspec/specs/vigilafrica/roadmap.md` v1.0 quality gate.
 
-**3.5 Verify Resend staleness alert** ⏳
+**3.5 Verify Resend staleness alert** ✅
 
 1. Set `ALERT_STALENESS_THRESHOLD_HOURS=1` and `ALERT_STALENESS_CHECK_INTERVAL_MIN=1`.
 2. Stop ingestion long enough to exceed the threshold.
 3. Confirm exactly one staleness email arrives (deduplication check).
 4. Restore normal values and restart.
+5. Verified in staging; see `openspec/specs/vigilafrica/roadmap.md` v1.0 quality gate.
 
 ---
 
@@ -177,9 +179,9 @@ Expected: `{"status":"ok","version":"v1.0.0", ...}`
 - [x] `staging` and `production` GitHub Environments exist with correct secrets
 - [x] `deploy/provision.sh` executed on the VPS without errors
 - [x] `https://api.staging.vigilafrica.org/health` returns `status: ok` and correct commit SHA
-- [ ] Vercel staging project live at `https://staging.vigilafrica.org` with `VITE_API_BASE_URL` pointing to staging API (DNS sign-off lives in `fix-staging-soft-launch` §8)
-- [ ] Resend failure alert email received on staging
-- [ ] Resend staleness alert email received on staging (exactly once)
+- [x] Vercel staging project live at `https://staging.vigilafrica.org` with `VITE_API_BASE_URL` pointing to staging API (DNS sign-off lives in `fix-staging-soft-launch` §8)
+- [x] Resend failure alert email received on staging
+- [x] Resend staleness alert email received on staging (exactly once)
 - [ ] Rollback workflow exercised via `workflow_dispatch` after v1.0.0 tag
 - [ ] `https://api.vigilafrica.org/health` returns `status: ok` and `version: v1.0.0`
 - [ ] v1.0 marked complete in `roadmap.md`

@@ -132,6 +132,8 @@ NASA EONET → Go Scheduler → PostgreSQL + PostGIS → REST API → React (Ver
                                           MaxMind GeoLite2 (near-me context)
 ```
 
+![VigilAfrica Architecture Flow](docs/screenshots/architecture_flow.png)
+
 **Full architecture**: [`openspec/specs/vigilafrica/architecture.md`](openspec/specs/vigilafrica/architecture.md)
 
 ---
