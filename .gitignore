@@ -22,7 +22,7 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
-.claude/settings.local.json
+.claude/
 
 # OpenSpec
 openspec/traces/

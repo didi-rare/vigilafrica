@@ -1,0 +1,45 @@
+name: PR Title Check
+
+# Conventional-commit format check on PRs that BECOME conventional commits when squash-merged.
+# Runs on PRs targeting `development` (feature/fix entry point) and `release` (hotfix entry point).
+# Promotion PRs (development → main, main → release) are intentionally NOT checked — they become
+# merge commits that release-please ignores by default. See spec contract B5.
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+    branches: [development, release]
+
+permissions:
+  pull-requests: read
+
+concurrency:
+  group: pr-title-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50  # v6.1.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            docs
+            style
+            refactor
+            perf
+            test
+            build
+            ci
+            chore
+            revert
+          requireScope: false
+          subjectPattern: ^[A-Za-z].+$
+          subjectPatternError: |
+            The subject "{subject}" must start with a letter and be a non-empty description
+            of the change. e.g. `fix(api): clamp pagination offset to 0`
