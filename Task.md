@@ -1,40 +1,37 @@
-# governance-sentinel
+# chore-automate-release-tagging
 
-**Branch:** `feat/gov-sentinel`
-**Change:** `openspec/changes/governance-sentinel`
-**Design:** `openspec/changes/governance-sentinel/design.md`
-**Tasks:** `openspec/changes/governance-sentinel/tasks.md`
+**Branch:** `chore/automate-release-tagging`
+**Spec:** [openspec/specs/chore-automate-release-tagging.md](openspec/specs/chore-automate-release-tagging.md)
+**Proposal:** [openspec/proposals/chore-automate-release-tagging.md](openspec/proposals/chore-automate-release-tagging.md)
 
-## 1. Review Decisions
+## Phase 1 — CI Wiring (Dry-Run) — this PR
 
-- [ ] 1.1 Confirm governance gate should block source changes without an OpenSpec change record
-- [ ] 1.2 Confirm `[trivial]` commit-message bypass semantics
-- [ ] 1.3 Confirm allow-list scope, including whether `api/db/migrations/` is exempt
-- [ ] 1.4 Confirm local comparison target should be `origin/development`
+- [x] Add `release-please-config.json` (release-type: simple, target-branch: release)
+- [x] Add `.release-please-manifest.json` seeded `{ ".": "1.0.1" }`
+- [x] Add `.github/workflows/release-please.yml` — dry-run gated, references `RELEASE_PLEASE_TOKEN`
+- [x] Add `.github/workflows/cascade-back-merge.yml` — two-stage, second leg gated on first-leg merge
+- [x] Add `.github/workflows/pr-title-check.yml` — active on PRs to `development` and `release`
+- [x] Update [CONTRIBUTING.md](CONTRIBUTING.md) with conventional-commit PR-title section
+- [x] Update [docs/deployment/release-process.md](docs/deployment/release-process.md) to describe Release PR + cascade flow
+- [x] Pin all third-party actions by full commit SHA (project convention)
+- [x] Set explicit least-privilege `permissions:` block on each workflow
+- [x] Set `concurrency:` and `timeout-minutes:` on each workflow
 
-## 2. Sentinel Auditor
+## Phase 2 — Enable Release-Please — operator follow-up
 
-- [ ] 2.1 Create `api/cmd/sentinel/main.go`
-- [ ] 2.2 Detect changed files with `git diff`
-- [ ] 2.3 Treat `api/internal/*` and `web/src/*` as critical package changes
-- [ ] 2.4 Require an active `openspec/changes/<change-id>/` record for critical changes
-- [ ] 2.5 Support `[trivial]` override for allowed small hygiene commits
+- [ ] Create `RELEASE_PLEASE_TOKEN` repo secret (fine-grained PAT, `contents: write` + `pull-requests: write`, 12-month expiry)
+- [ ] Flip dry-run guard in [release-please.yml](.github/workflows/release-please.yml) from `if: false` to `if: true` (single-line edit)
 
-## 3. CI Integration
+## Phase 3 — First Auto Release — operator follow-up
 
-- [ ] 3.1 Add the Sentinel Auditor to `.github/workflows/openspec-verify.yml`
-- [ ] 3.2 Ensure the workflow checks out enough Git history for diff comparisons
-- [ ] 3.3 Keep existing OpenSpec drift validation behavior intact
+- [ ] First auto Release PR opens against `release`
+- [ ] Maintainer reviews + merges
+- [ ] Tag created automatically; `deploy-production.yml` fires; Environment gate prompts for approval
+- [ ] `/health.version` reports the new tag after deploy
+- [ ] Cascade back-merge auto-merges `release → main` then `main → development`
 
-## 4. Governance Documentation
+## Phase 4 — Closeout — operator follow-up
 
-- [ ] 4.1 Register ADR-010 in `openspec/specs/vigilafrica/decisions.md`
-- [ ] 4.2 Document the blocking behavior and exemption path for contributors
-- [ ] 4.3 Keep the active change checklist synced with `openspec/changes/governance-sentinel/tasks.md`
-
-## 5. Verification
-
-- [ ] 5.1 Run the auditor against a critical change without an OpenSpec record and confirm failure
-- [ ] 5.2 Run the auditor with a `[trivial]` override and confirm success
-- [ ] 5.3 Run `npm run spec:validate`
-- [ ] 5.4 Push `feat/gov-sentinel` and verify GitHub Actions on the PR
+- [ ] Remove "Automated release tagging" from Post-MVP Backlog in [openspec/specs/vigilafrica/roadmap.md](openspec/specs/vigilafrica/roadmap.md)
+- [ ] Calendar reminder created for `RELEASE_PLEASE_TOKEN` rotation 11 months out
+- [ ] Archive the spec to `openspec/archive/spec-chore-automate-release-tagging.md`

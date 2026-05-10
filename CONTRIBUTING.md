@@ -270,6 +270,27 @@ Key documents:
 6. **No ORM** — raw `pgx` queries in `internal/database/` only (ADR-009)
 7. **All SQL in the repository layer** — never in handlers
 
+### PR Title — Conventional Commits
+
+PRs targeting `development` (feature/fix work) or `release` (hotfixes) **must** use a [Conventional Commits](https://www.conventionalcommits.org/) title. The `pr-title-check` CI status enforces this.
+
+Format: `<type>(<optional-scope>): <description>`
+
+**Allowed types**: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`
+
+| Type | Triggers version bump | Example |
+|---|---|---|
+| `feat` | minor (`vX.Y.0`) | `feat(api): add country query parameter to /v1/events` |
+| `fix` | patch (`vX.Y.Z`) | `fix(web): clamp map zoom on small viewports` |
+| `feat!` / `BREAKING CHANGE` in body | major (`vX.0.0`) | `feat(api)!: rename /v1/events response field "category" to "type"` |
+| `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert` | none — appears in CHANGELOG without version bump | `docs(readme): correct setup step ordering` |
+
+**Why this matters**: PRs to `development` get squash-merged, so the PR title becomes the commit message that release-please reads on `release`. A PR title typo (`fx:` vs `fix:`) silently downgrades to "no release."
+
+**Promotion PRs are exempt**: PRs targeting `main` (i.e. `development → main`) are not checked — they become merge commits release-please ignores by default. Use a free-form title like `release: promote v1.2 to staging` if you prefer.
+
+See [docs/deployment/release-process.md](docs/deployment/release-process.md) for the full release flow this convention feeds into.
+
 PR description template:
 ```markdown
 ## What
