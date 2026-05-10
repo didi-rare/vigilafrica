@@ -36,76 +36,55 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
-        with:
-          fetch-depth: 0
-          ref: main
-          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
 
-      - name: Create cascade branch from release
+      - name: Open back-merge PR release -> main
         env:
-          RELEASE_TAG: ${{ github.event.pull_request.title }}
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          TRIGGERING_PR: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
-          git config user.name "vigilafrica-bot"
-          git config user.email "noreply@vigilafrica.org"
-          git fetch origin release:release
-          git checkout -B cascade/release-to-main release
-          git push --force-with-lease origin cascade/release-to-main
-
-      - uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1  # v8.1.1
-        with:
-          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
-          base: main
-          branch: cascade/release-to-main
-          title: "chore: backmerge release into main"
-          body: |
-            Automated cascade back-merge from `release` to `main`.
-
-            Carries the latest CHANGELOG.md update (and any hotfix code that landed on `release`)
-            back to `main` so staging stays in sync. Triggered by the merge of
-            #${{ github.event.pull_request.number }}.
-
-            On merge, this PR triggers the second leg (`main` → `development`) automatically.
-          labels: |
-            cascade
-            automated
+          existing=$(gh pr list --base main --head release --state open --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            echo "Cascade PR release -> main already open: #$existing — skipping"
+            exit 0
+          fi
+          gh pr create \
+            --base main \
+            --head release \
+            --title "chore: backmerge release into main" \
+            --body "Automated cascade back-merge from \`release\` to \`main\`. Carries the latest CHANGELOG.md update (and any hotfix code that landed on \`release\`) back to \`main\` so staging stays in sync. Triggered by the merge of #${TRIGGERING_PR}. On merge, this PR triggers the second leg (\`main\` → \`development\`) automatically." \
+            --label cascade \
+            --label automated
 
   main_to_development:
-    # Fires when the first-leg cascade PR (head: cascade/release-to-main) merges into `main`.
+    # Fires when the first-leg cascade PR (head: release, base: main) merges into main.
+    # No one should be opening release -> main PRs outside this cascade, so the head/base
+    # match is sufficient gating — but if it ever happens manually, propagating to dev is
+    # still the right behaviour, so this stays unguarded.
     if: >-
       github.event.pull_request.merged == true &&
       github.event.pull_request.base.ref == 'main' &&
-      github.event.pull_request.head.ref == 'cascade/release-to-main'
+      github.event.pull_request.head.ref == 'release'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
-        with:
-          fetch-depth: 0
-          ref: development
-          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
 
-      - name: Create cascade branch from main
+      - name: Open back-merge PR main -> development
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          TRIGGERING_PR: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
-          git config user.name "vigilafrica-bot"
-          git config user.email "noreply@vigilafrica.org"
-          git fetch origin main:main
-          git checkout -B cascade/main-to-development main
-          git push --force-with-lease origin cascade/main-to-development
-
-      - uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1  # v8.1.1
-        with:
-          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
-          base: development
-          branch: cascade/main-to-development
-          title: "chore: backmerge main into development"
-          body: |
-            Automated cascade back-merge from `main` to `development`.
-
-            Final leg of the release back-merge — keeps `development` in sync with the
-            latest released CHANGELOG.md and any hotfix code. Triggered by the merge of
-            #${{ github.event.pull_request.number }}.
-          labels: |
-            cascade
-            automated
+          existing=$(gh pr list --base development --head main --state open --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            echo "Cascade PR main -> development already open: #$existing — skipping"
+            exit 0
+          fi
+          gh pr create \
+            --base development \
+            --head main \
+            --title "chore: backmerge main into development" \
+            --body "Automated cascade back-merge from \`main\` to \`development\`. Final leg of the release back-merge — keeps \`development\` in sync with the latest released CHANGELOG.md and any hotfix code. Triggered by the merge of #${TRIGGERING_PR}." \
+            --label cascade \
+            --label automated
