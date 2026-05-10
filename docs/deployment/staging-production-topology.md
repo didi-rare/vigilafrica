@@ -41,6 +41,20 @@ flowchart TD
 - Production deploys require GitHub Environment approval.
 - Rollback redeploys a previous tag through the same production workflow.
 
+## Vercel Project Settings
+
+Both Vercel projects share `web/` as their root directory and consume the same [web/vercel.json](../../web/vercel.json). The branch each project deploys from is enforced via the Ignored Build Step, scripted at [web/scripts/vercel-ignore-build.sh](../../web/scripts/vercel-ignore-build.sh) and parameterised by the `DEPLOY_BRANCH` env var.
+
+| Setting | `vigilafrica-staging` | `vigilafrica-production` |
+| --- | --- | --- |
+| Production Branch | `main` | `release` |
+| Ignored Build Step (Settings → Build and Deployment) | `bash scripts/vercel-ignore-build.sh` | `bash scripts/vercel-ignore-build.sh` |
+| `DEPLOY_BRANCH` env var (Settings → Environments → All Environments) | `main` | `release` |
+
+Without the Ignored Build Step, Vercel auto-creates a preview deployment for every PR push regardless of base branch — so PRs targeting `development` would trigger preview builds on the production project. The script returns exit `0` (skip) for any ref that is not the project's `DEPLOY_BRANCH`, and exit `1` (build) for matching refs.
+
+If a project is ever recreated, both the script reference and the env var must be re-applied — there is no `vercel.json` shortcut for this because both projects share the same file.
+
 ## Operator Runbook
 
 Operator commands for inspecting and probing a deployed environment. Replace `staging` with `production` for the prod stack. SSH access requires that your key is on the VPS and you are listed in the relevant GitHub Environment reviewers.
