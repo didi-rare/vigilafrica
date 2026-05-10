@@ -52,9 +52,7 @@ jobs:
             --base main \
             --head release \
             --title "chore: backmerge release into main" \
-            --body "Automated cascade back-merge from \`release\` to \`main\`. Carries the latest CHANGELOG.md update (and any hotfix code that landed on \`release\`) back to \`main\` so staging stays in sync. Triggered by the merge of #${TRIGGERING_PR}. On merge, this PR triggers the second leg (\`main\` → \`development\`) automatically." \
-            --label cascade \
-            --label automated
+            --body "Automated cascade back-merge from \`release\` to \`main\`. Carries the latest CHANGELOG.md update (and any hotfix code that landed on \`release\`) back to \`main\` so staging stays in sync. Triggered by the merge of #${TRIGGERING_PR}. On merge, this PR triggers the second leg (\`main\` → \`development\`) automatically."
 
   main_to_development:
     # Fires when the first-leg cascade PR (head: release, base: main) merges into main.
@@ -85,6 +83,4 @@ jobs:
             --base development \
             --head main \
             --title "chore: backmerge main into development" \
-            --body "Automated cascade back-merge from \`main\` to \`development\`. Final leg of the release back-merge — keeps \`development\` in sync with the latest released CHANGELOG.md and any hotfix code. Triggered by the merge of #${TRIGGERING_PR}." \
-            --label cascade \
-            --label automated
+            --body "Automated cascade back-merge from \`main\` to \`development\`. Final leg of the release back-merge — keeps \`development\` in sync with the latest released CHANGELOG.md and any hotfix code. Triggered by the merge of #${TRIGGERING_PR}."
