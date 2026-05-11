@@ -1,8 +1,10 @@
 name: Release Please
 
-# DRY-RUN until Phase 2 of chore-automate-release-tagging.
-# To enable: create `RELEASE_PLEASE_TOKEN` repo secret (fine-grained PAT, contents:write + pull-requests:write),
-# then flip `if: false` to `if: true` on the `release-please` job below.
+# Enabled in Phase 2 of chore-automate-release-tagging. Requires the
+# `RELEASE_PLEASE_TOKEN` repo secret (fine-grained PAT, contents:write +
+# pull-requests:write). The PAT is what makes tag pushes here trigger
+# `deploy-production.yml` downstream — `GITHUB_TOKEN` would silently drop
+# that chain.
 # See openspec/specs/chore-automate-release-tagging.md.
 
 on:
@@ -20,7 +22,6 @@ concurrency:
 
 jobs:
   release-please:
-    if: false
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
