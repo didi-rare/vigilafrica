@@ -87,15 +87,26 @@ const AUDIENCE = [
   { icon: <ShieldAlert size={18} />, label: 'Civic Responders',   desc: 'Community preparedness and local response planning' },
 ]
 
+function StagingBanner() {
+  if (import.meta.env.VITE_ENV !== 'staging') return null
+  return (
+    <div
+      id="staging-banner"
+      className="staging-banner"
+      role="note"
+      aria-label="Test environment notice"
+    >
+      Staging environment — pre-release/test data. Do not rely on this for operational decisions.
+    </div>
+  )
+}
+
 function App() {
   return (
     <Router>
       <div id="app">
       <a href="#main" className="skip-link">Skip to main content</a>
-      {/* ── Prototype Banner ── */}
-      <div id="prototype-banner" className="prototype-banner" role="banner" aria-label="Project status">
-        🛰️ Active Development — v0.7 complete · v1.0 staging live · production launch in progress
-      </div>
+      <StagingBanner />
 
       {/* ── Navigation ── */}
       <nav className="nav" aria-label="Main navigation">
@@ -142,16 +153,25 @@ function App() {
 
                   <div className="hero-cta">
                     <a
+                      id="hero-explore-cta"
+                      href="#dashboard"
+                      className="btn btn-primary"
+                    >
+                      Explore latest events →
+                    </a>
+                    <a
                       id="hero-github-cta"
                       href={GITHUB_URL}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="btn btn-primary"
+                      className="btn btn-outline"
                     >
-                      Follow on GitHub →
+                      Contribute on GitHub
                     </a>
-                    <span className="hero-cta-note">Open source · Apache 2.0</span>
                   </div>
+                  <p className="hero-cta-note">
+                    Open source · Nigeria and Ghana live · Apache 2.0
+                  </p>
                 </div>
               </section>
 
@@ -278,31 +298,38 @@ function App() {
       {/* ── Footer ── */}
       <footer className="footer" role="contentinfo">
         <div className="container">
-          <p>
-            <span className="logo-text">VigilAfrica</span> is open source under the{' '}
+          <p className="footer-disclaimer">
+            Awareness tool — not an official emergency alert system.
+          </p>
+          <p className="footer-sub">
+            Sources: NASA EONET ·{' '}
+            <a
+              href={`${GITHUB_URL}/releases/tag/v1.1.0`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              v1.1.0 (release notes)
+            </a>{' '}
+            ·{' '}
+            <a
+              href={`${GITHUB_URL}/blob/main/openspec/specs/vigilafrica/roadmap.md`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Roadmap
+            </a>{' '}
+            ·{' '}
+            <a href={`${GITHUB_URL}/issues`} target="_blank" rel="noopener noreferrer">
+              GitHub Issues
+            </a>{' '}
+            ·{' '}
             <a
               href="https://www.apache.org/licenses/LICENSE-2.0"
               target="_blank"
               rel="noopener noreferrer"
             >
-              Apache 2.0 License
+              Apache 2.0
             </a>
-            . Maintained by{' '}
-            <a
-              href="https://github.com/didi-rare"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              @didi-rare
-            </a>
-            .
-          </p>
-          <p className="footer-sub">
-            For collaboration or feedback, open a{' '}
-            <a href={`${GITHUB_URL}/issues`} target="_blank" rel="noopener noreferrer">
-              GitHub Issue
-            </a>
-            .
           </p>
         </div>
       </footer>

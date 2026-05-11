@@ -348,6 +348,34 @@
   color: var(--text-primary);
 }
 
+/* ── Dashboard Disclaimer (fix-public-trust-quick-wins) ───────────────────── */
+
+.dashboard-disclaimer {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 18px;
+  margin-bottom: 12px;
+  border-radius: 10px;
+  background: rgba(245, 158, 11, 0.06);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.dashboard-disclaimer__icon {
+  flex-shrink: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #fbbf24;
+  line-height: 1.4;
+}
+
+.dashboard-disclaimer p {
+  margin: 0;
+}
+
 /* ── Ingestion Freshness Indicator (v0.5 — ADR-011) ──────────────────────── */
 
 .freshness-banner {
@@ -360,6 +388,12 @@
   font-weight: 500;
   margin-bottom: 8px;
   border: 1px solid;
+}
+
+.freshness-banner--ok {
+  background: rgba(34, 197, 94, 0.08);
+  border-color: rgba(34, 197, 94, 0.3);
+  color: #86efac;
 }
 
 .freshness-banner--warn {
