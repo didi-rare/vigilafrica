@@ -237,4 +237,21 @@ describe('EventsDashboard', () => {
     const results = await axe(container)
     expect(results.violations).toHaveLength(0)
   })
+
+  it('renders the public disclaimer above the dashboard data', async () => {
+    renderWithProviders(<EventsDashboard />)
+
+    const disclaimer = await screen.findByRole('note', {
+      name: /important data limitation notice/i,
+    })
+    expect(disclaimer).toHaveTextContent(/not an official emergency alert system/i)
+    expect(disclaimer).toHaveTextContent(/confirm with local authorities/i)
+  })
+
+  it('renders a "last updated" indicator when ingestion is healthy', async () => {
+    renderWithProviders(<EventsDashboard />)
+
+    await screen.findByText('Lagos Flood')
+    expect(screen.getByRole('status')).toHaveTextContent(/last updated/i)
+  })
 })

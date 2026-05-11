@@ -31,6 +31,14 @@
   color: #fff;
 }
 
+.event-detail-disclaimer {
+  margin: 0.75rem 0 0;
+  font-size: 0.85rem;
+  color: var(--color-text-dim, rgba(255, 255, 255, 0.7));
+  font-style: italic;
+  max-width: 60ch;
+}
+
 .header-meta {
   display: flex;
   flex-direction: column;

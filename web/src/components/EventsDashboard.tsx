@@ -22,33 +22,51 @@ const COUNTRY_CENTERS: Record<SupportedCountry, [number, number]> = {
   Ghana:   [-1.0232, 7.9465],
 }
 
+function formatLastUpdated(minutesAgo: number): string {
+  if (minutesAgo < 1) return 'Last updated just now'
+  if (minutesAgo < 60) return `Last updated ${minutesAgo}m ago`
+  const hoursAgo = Math.floor(minutesAgo / 60)
+  if (hoursAgo < 24) return `Last updated ${hoursAgo}h ago`
+  const daysAgo = Math.floor(hoursAgo / 24)
+  return `Last updated ${daysAgo}d ago`
+}
+
+type FreshnessState =
+  | { kind: 'ok'; message: string }
+  | { kind: 'warn'; message: string }
+  | { kind: 'error'; message: string }
+  | { kind: 'unknown' }
+
 // Module-level selector — Date.now() is called outside React render
-function selectFreshness(health: HealthResponse) {
+function selectFreshness(health: HealthResponse): FreshnessState {
+  const isDegraded = health.status === 'degraded'
+  if (isDegraded) {
+    const message = health.last_ingestion?.status === 'failure'
+      ? 'Latest ingestion did not complete successfully. Data may be delayed while operators investigate.'
+      : 'One or more country ingestion runs did not complete successfully. Some regional data may be delayed.'
+    return { kind: 'error', message }
+  }
+
   const completedAt = health?.last_ingestion?.completed_at
   const lastSuccess = health?.last_ingestion?.status === 'success' && completedAt
     ? new Date(completedAt)
     : null
-  const hoursStale = lastSuccess
-    ? (Date.now() - lastSuccess.getTime()) / (1000 * 60 * 60)
-    : null
-  const isStale = hoursStale !== null && hoursStale > STALENESS_THRESHOLD_HOURS
-  const isDegraded = health.status === 'degraded'
-
-  let message: string | null = null
-  if (isDegraded) {
-    message = health.last_ingestion?.status === 'failure'
-      ? 'Latest ingestion did not complete successfully. Data may be delayed while operators investigate.'
-      : 'One or more country ingestion runs did not complete successfully. Some regional data may be delayed.'
-  } else if (isStale) {
-    message = `Data last updated ${Math.floor(hoursStale!)} hours ago — ingestion may be stalled.`
+  if (!lastSuccess) {
+    return { kind: 'unknown' }
   }
 
-  return {
-    hoursStale,
-    isStale,
-    isDegraded,
-    message,
+  const minutesAgo = Math.floor((Date.now() - lastSuccess.getTime()) / (1000 * 60))
+  const hoursAgo = minutesAgo / 60
+  const isStale = hoursAgo > STALENESS_THRESHOLD_HOURS
+
+  if (isStale) {
+    return {
+      kind: 'warn',
+      message: `Data last updated ${Math.floor(hoursAgo)} hours ago — ingestion may be stalled.`,
+    }
   }
+
+  return { kind: 'ok', message: formatLastUpdated(minutesAgo) }
 }
 
 function FreshnessIndicator() {
@@ -60,18 +78,42 @@ function FreshnessIndicator() {
     select: selectFreshness,
   })
 
-  if (!data?.message) return null
-  const { isDegraded, message } = data
+  if (!data || data.kind === 'unknown') return null
+
+  const variantClass = data.kind === 'error'
+    ? 'freshness-banner--error'
+    : data.kind === 'warn'
+      ? 'freshness-banner--warn'
+      : 'freshness-banner--ok'
+
+  const icon = data.kind === 'error' ? '⚠️' : data.kind === 'warn' ? '🕐' : '🟢'
+  const ariaRole = data.kind === 'ok' ? 'status' : 'alert'
 
   return (
-    <div className={`freshness-banner ${isDegraded ? 'freshness-banner--error' : 'freshness-banner--warn'}`}
-      role="alert"
+    <div
+      className={`freshness-banner ${variantClass}`}
+      role={ariaRole}
       aria-live="polite"
     >
-      <span className="freshness-icon" aria-hidden="true">
-        {isDegraded ? '⚠️' : '🕐'}
-      </span>
-      {message}
+      <span className="freshness-icon" aria-hidden="true">{icon}</span>
+      {data.message}
+    </div>
+  )
+}
+
+function DashboardDisclaimer() {
+  return (
+    <div
+      className="dashboard-disclaimer"
+      role="note"
+      aria-label="Important data limitation notice"
+    >
+      <span className="dashboard-disclaimer__icon" aria-hidden="true">ⓘ</span>
+      <p>
+        VigilAfrica is an awareness and visualization tool, not an official emergency alert system.
+        Event locations and timing may be approximate. Always confirm with local authorities and
+        official emergency agencies before making safety decisions.
+      </p>
     </div>
   )
 }
@@ -168,6 +210,7 @@ export function EventsDashboard() {
           Events ingested from NASA EONET and tagged with African administrative boundaries.
         </p>
 
+        <DashboardDisclaimer />
         <FreshnessIndicator />
 
         {/* ── Filters ── §9.3: visible labels via sr-only + htmlFor */}
