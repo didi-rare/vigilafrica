@@ -58,7 +58,7 @@ VigilAfrica bridges that gap by combining:
 
 ## Current status
 
-> **Pre-launch operational prototype — v0.8 complete.** Real data, two countries, demo assets, and v1.0 deployment work in progress.
+> **v1.0 shipped — running in production.** Two countries, two event categories, staging and production deployed from `release` branch with release-please–driven SemVer tagging, environment-gated approval, and an auto-generated [CHANGELOG.md](CHANGELOG.md).
 
 The system currently:
 
@@ -68,7 +68,12 @@ The system currently:
 - **Displays** events on an interactive satellite map with location-aware "near you" context
 - **Monitors** ingestion health with `/health`, failed-ingestion emails, and a staleness watchdog
 
-Next milestone (v1.0): credible public launch — staging/production deployment, release tagging, and operational alerting validation.
+Live endpoints:
+
+- Production: <https://vigilafrica.org> (frontend), <https://api.vigilafrica.org> (API)
+- Staging: <https://staging.vigilafrica.org> (frontend), <https://api.staging.vigilafrica.org> (API)
+
+Next milestone (v1.1): **Impact category expansion** — add `landslides` and `tempExtremes` to broaden coverage beyond floods + wildfires. Proposal: [`openspec/changes/feature-v11-impact-categories/`](openspec/changes/feature-v11-impact-categories/).
 
 ---
 
@@ -178,7 +183,9 @@ docker-compose.yml  Local dev: PostgreSQL + PostGIS
 | v0.6      | Country expansion model      | ✅ Complete      |
 | v0.7      | Second country stable        | ✅ Complete      |
 | v0.8      | Pre-demo setup               | ✅ Complete      |
-| v1.0      | Credible public launch       | Planned         |
+| v1.0      | Credible public launch       | 🔄 Active       |
+| v1.1      | Impact category expansion    | Proposed        |
+| v1.2      | Risk intelligence expansion  | Deferred        |
 
 Full roadmap with acceptance criteria: [`openspec/specs/vigilafrica/roadmap.md`](openspec/specs/vigilafrica/roadmap.md)
 
