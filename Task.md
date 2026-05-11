@@ -17,10 +17,11 @@
 - [x] Set explicit least-privilege `permissions:` block on each workflow
 - [x] Set `concurrency:` and `timeout-minutes:` on each workflow
 
-## Phase 2 — Enable Release-Please — operator follow-up
+## Phase 2 — Enable Release-Please — this PR
 
-- [ ] Create `RELEASE_PLEASE_TOKEN` repo secret (fine-grained PAT, `contents: write` + `pull-requests: write`, 12-month expiry)
-- [ ] Flip dry-run guard in [release-please.yml](.github/workflows/release-please.yml) from `if: false` to `if: true` (single-line edit)
+- [x] Create `RELEASE_PLEASE_TOKEN` repo secret (fine-grained PAT, `contents: write` + `pull-requests: write`, 12-month expiry)
+- [x] Flip dry-run guard in [release-please.yml](.github/workflows/release-please.yml) from `if: false` to `if: true`
+- [x] Bug-fix carried in same PR: exempt `main`-headed PRs from `pr-title-check.yml` (spec contract B5)
 
 ## Phase 3 — First Auto Release — operator follow-up
 
