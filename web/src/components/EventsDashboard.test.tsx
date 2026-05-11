@@ -254,4 +254,17 @@ describe('EventsDashboard', () => {
     await screen.findByText('Lagos Flood')
     expect(screen.getByRole('status')).toHaveTextContent(/last updated/i)
   })
+
+  it('renders a placeholder freshness state when last_ingestion is absent', async () => {
+    mockFetchHealth.mockResolvedValueOnce({
+      status: 'ok',
+      version: 'test',
+      last_ingestion: null,
+    })
+
+    renderWithProviders(<EventsDashboard />)
+
+    await screen.findByText('Lagos Flood')
+    expect(screen.getByRole('status')).toHaveTextContent(/data freshness unknown/i)
+  })
 })

@@ -78,7 +78,23 @@ function FreshnessIndicator() {
     select: selectFreshness,
   })
 
-  if (!data || data.kind === 'unknown') return null
+  // Pre-load: useQuery hasn't resolved yet. Returning null here is acceptable
+  // because there is no freshness state to render — the loading state for the
+  // dashboard data itself covers UX continuity.
+  if (!data) return null
+
+  if (data.kind === 'unknown') {
+    return (
+      <div
+        className="freshness-banner freshness-banner--ok"
+        role="status"
+        aria-live="polite"
+      >
+        <span className="freshness-icon" aria-hidden="true">🟢</span>
+        Data freshness unknown — no ingestion history available.
+      </div>
+    )
+  }
 
   const variantClass = data.kind === 'error'
     ? 'freshness-banner--error'
