@@ -347,5 +347,4 @@ The following items are explicitly deferred. They must not be built before v1.0 
 | Fundraising / sustainability UI   | Deferred (ADR-005) — post v1.0 launch                         |
 | Multi-language support            | Post-v1.0                                                      |
 | Mobile native app                 | Post-v1.0                                                      |
-| Automated release tagging         | SemVer choice is a human judgment; revisit with release-please |
 
