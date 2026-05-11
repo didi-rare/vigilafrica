@@ -28,8 +28,15 @@ jobs:
       # The default GITHUB_TOKEN cannot create tags that trigger downstream workflows.
       # `deploy-production.yml` listens for `v*.*.*` tag pushes — without a PAT here, the
       # tag would land but the deploy would silently never fire. See spec contract B6.
+      #
+      # `target-branch` MUST be set as an action input. In v5 manifest mode, the same
+      # field in `release-please-config.json` controls multi-branch tracking, not action
+      # routing — when the input is missing, the action falls back to the repo's default
+      # branch (development) and opens the Release PR there. Discovered when PR #66 was
+      # incorrectly opened against development instead of release.
       - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7  # v5.0.0
         with:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          target-branch: release
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
