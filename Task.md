@@ -1,47 +1,43 @@
-# fix-public-trust-quick-wins
+# chore-css-tokens
 
-**Branch:** `fix/public-trust-quick-wins`
-**Spec:** [openspec/specs/fix-public-trust-quick-wins.md](openspec/specs/fix-public-trust-quick-wins.md)
-**Proposal:** [openspec/proposals/fix-public-trust-quick-wins.md](openspec/proposals/fix-public-trust-quick-wins.md)
+**Branch:** `chore/css-tokens`
+**Spec:** [openspec/specs/chore-css-tokens.md](openspec/specs/chore-css-tokens.md)
+**Proposal:** [openspec/proposals/chore-css-tokens.md](openspec/proposals/chore-css-tokens.md)
+**Origin:** finding F1 from `/openspec-review` of fix-public-trust-quick-wins
 
-## Phase 1 — Implementation (this PR)
+## Phase 1 — Token Layer + Audit
 
-- [x] Add `web/src/vite-env.d.ts` typing `VITE_ENV` and other Vite env vars
-- [x] Add Vite HTML transform plugin in [web/vite.config.ts](web/vite.config.ts) to flip `robots` meta to `noindex, nofollow` when `VITE_ENV === 'staging'`
-- [x] Add `og:image`, `twitter:card`, `<link rel="canonical">`, `<link rel="alternate" type="application/rss+xml">` to [web/index.html](web/index.html)
-- [x] Copy `docs/screenshots/demo.png` to `web/public/social-card.png` as stopgap OG asset
-- [x] Repurpose existing `prototype-banner` as conditional `StagingBanner` in [web/src/App.tsx](web/src/App.tsx) — only renders when `import.meta.env.VITE_ENV === 'staging'`
-- [x] Add `DashboardDisclaimer` component above `FreshnessIndicator` in [web/src/components/EventsDashboard.tsx](web/src/components/EventsDashboard.tsx) with locked disclaimer copy
-- [x] Modify `FreshnessIndicator` to always render — "Last updated Xm ago" when healthy (`role="status"`), keep `role="alert"` for warn/error states
-- [x] Replace single-CTA hero with two-CTA structure: primary "Explore latest events" → `#dashboard` anchor, secondary "Contribute on GitHub" → repo URL
-- [x] Update footer microcopy in [web/src/App.tsx](web/src/App.tsx) to spec's locked footer text (disclaimer-anchored, with version link, roadmap, GitHub Issues, license)
-- [x] Add micro-disclaimer line below event title in [web/src/pages/EventDetail.tsx](web/src/pages/EventDetail.tsx)
-- [x] Add CSS for staging banner, disclaimer banner, freshness OK state to [web/src/components/EventsDashboard.css](web/src/components/EventsDashboard.css) and [web/src/App.css](web/src/App.css)
-- [x] Update [web/src/components/EventsDashboard.test.tsx](web/src/components/EventsDashboard.test.tsx) to assert new behaviour (always-render freshness, disclaimer present, no a11y regressions)
-- [x] `npm run lint` passes
-- [x] `npm run test` passes
+- [x] Create [web/src/styles/tokens.css](web/src/styles/tokens.css) with two-layer model: primitive palette + semantic tokens
+- [x] Import tokens.css from [web/src/main.tsx](web/src/main.tsx) before any component CSS
+- [x] Define legacy aliases (`--color-text-dim`, `--color-primary`, `--color-border`) so orphan references in Map.css and EventDetail.css resolve correctly
+- [x] Replace every colour literal in [web/src/index.css](web/src/index.css) → tokens
+- [x] Replace every colour literal in [web/src/App.css](web/src/App.css) → tokens (removed embedded colour `:root` block; kept non-colour tokens for typography/spacing/z-index)
+- [x] Replace every colour literal in [web/src/components/EventsDashboard.css](web/src/components/EventsDashboard.css) → tokens
+- [x] Replace every colour literal in [web/src/components/Map.css](web/src/components/Map.css) → tokens
+- [x] Replace every colour literal in [web/src/pages/EventDetail.css](web/src/pages/EventDetail.css) → tokens
+
+## Phase 2 — Lint Enforcement
+
+- [x] Add `stylelint@17.11.0`, `stylelint-config-standard@40.0.0`, `stylelint-declaration-strict-value@1.11.1` to [web/package.json](web/package.json) devDependencies (pinned exact)
+- [x] Add [web/.stylelintrc.json](web/.stylelintrc.json) with `scale-unlimited/declaration-strict-value` enforcing token references on every colour-bearing property
+- [x] Add `lint:styles` npm script to [web/package.json](web/package.json)
+- [x] Add `Run Frontend Style Lint` step to [.github/workflows/ci-cd.yml](.github/workflows/ci-cd.yml)
+- [x] Sanity-tested: deliberately-added `color: #abc` flagged by stylelint with `scale-unlimited/declaration-strict-value` ✓
+- [x] tokens.css exempted from the strict-value rule via `overrides`
+
+## Phase 3 — Verification
+
+- [x] `npm run lint` clean
+- [x] `npm run lint:styles` clean
+- [x] `npm run test` — 31/31 passing (no test changes expected; visual-only refactor)
 - [x] `npm run build` succeeds
-
-## Phase 2 — Operator Action (after PR is on `release`)
-
-- [ ] Add `VITE_ENV=staging` to the `vigilafrica-staging` Vercel project environment variables (Project Settings → Environment Variables)
-- [ ] Confirm `vigilafrica-production` has NO `VITE_ENV` value (its absence is the signal that this is production)
-- [ ] Optional: replace stopgap `social-card.png` with a designed 1200×630 asset
-
-## Phase 3 — Validation (after deploy)
-
-- [ ] `https://staging.vigilafrica.org` shows the staging banner; `https://vigilafrica.org` does NOT
-- [ ] `curl -s https://staging.vigilafrica.org/ | grep robots` returns `noindex, nofollow`
-- [ ] `curl -s https://vigilafrica.org/ | grep robots` returns `index, follow`
-- [ ] Disclaimer banner visible above the dashboard on prod and staging
-- [ ] Event detail page (`/events/:id`) shows the micro-disclaimer below the event title
-- [ ] Pasting `https://vigilafrica.org` into Slack / X renders a social card with the OG image
-- [ ] Dashboard freshness indicator shows "Last updated Xm ago" when healthy
+- [ ] Manual visual diff at 1280 / 768 / 375 px on a local `npm run preview` — operator action before merge
 
 ## Follow-up specs (NOT in this PR)
 
-- `feat-public-about-page` — single consolidated `/about` page
-- `chore-validate-event-state-tagging` — 20-event sample audit (Nigeria + Ghana, floods + wildfires)
-- `chore-mobile-and-a11y-audit` — Lighthouse + axe + manual mobile/a11y testing
-- `feat-ssr-public-pages` — SEO prerendering decision for the marketing homepage
-- `feat-event-provenance-display` — surface source + timestamps on event cards/detail with confidence labels
+These were named in the spec's "Out of Scope" and are explicitly deferred:
+
+- `chore-spacing-tokens` — extract spacing literals
+- `chore-type-tokens` — extract typography literals
+- `chore-z-index-tokens` — extract z-index literals
+- `feat-dark-mode-toggle` — uses the new colour tokens once they're in place

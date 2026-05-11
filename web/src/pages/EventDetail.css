@@ -28,13 +28,13 @@
 .header-main h1 {
   margin: 0.75rem 0 0;
   font-size: 2.5rem;
-  color: #fff;
+  color: var(--white);
 }
 
 .event-detail-disclaimer {
   margin: 0.75rem 0 0;
   font-size: 0.85rem;
-  color: var(--color-text-dim, rgba(255, 255, 255, 0.7));
+  color: var(--color-text-dim);
   font-style: italic;
   max-width: 60ch;
 }
@@ -80,8 +80,8 @@
 }
 
 .telemetry-log code {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.05);
+  color: var(--white);
+  background: var(--surface-white-soft);
   padding: 0.2rem 0.4rem;
   border-radius: 4px;
 }
