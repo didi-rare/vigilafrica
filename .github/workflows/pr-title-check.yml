@@ -19,6 +19,11 @@ concurrency:
 
 jobs:
   validate:
+    # Exempt promotion PRs whose head is `main` (i.e. `main -> release` promotions).
+    # The base-branch filter above lets these PRs into the workflow, but they should
+    # not be required to follow Conventional Commits — their merge commits are
+    # ignored by release-please anyway. Spec contract B5.
+    if: github.event.pull_request.head.ref != 'main'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
