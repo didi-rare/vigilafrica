@@ -10,7 +10,7 @@ branch: tbd
 
 The v3 external review report identified concrete trust/SEO gaps in the production frontend. This spec implements §16.1 "Quick Wins — Same Day" as a single tactical PR. The disclaimer copy is captured here because it's a positioning commitment, not just a code change — future copy edits should reference this spec before softening or removing it.
 
-Companion artifact: [openspec/proposals/fix-public-trust-quick-wins.md](../proposals/fix-public-trust-quick-wins.md).
+Companion artifact: [openspec/archive/proposal-fix-public-trust-quick-wins.md](proposal-fix-public-trust-quick-wins.md).
 
 ## Decision Log
 

@@ -1,0 +1,183 @@
+/*
+ * VigilAfrica Design Tokens
+ *
+ * Two-layer model:
+ *   1. PRIMITIVES — raw palette values. Reference these from semantic tokens, not from component CSS.
+ *   2. SEMANTIC — purpose-named tokens. Component CSS references these exclusively.
+ *
+ * Adding a colour literal to any other .css file is rejected by stylelint
+ * (see .stylelintrc.json declaration-strict-value rule). Add a new semantic
+ * token here instead, then reference it from the component CSS.
+ *
+ * Owner spec: openspec/archive/spec-chore-css-tokens.md
+ */
+
+:root {
+  /* ──────────────────────────────────────────────
+     1. PRIMITIVES — palette atoms
+     ────────────────────────────────────────────── */
+
+  /* Neutrals */
+  --white: #ffffff;
+  --slate-50: #f8fafc;
+  --slate-400: #94a3b8;
+  --slate-500: #64748b;
+  --navy-950: #050714;
+  --navy-900: #07091a;
+  --navy-850: #090b1f;
+  --navy-800: #0d1127;
+  --navy-750: #111631;
+  --navy-700: #0a0b0e;
+
+  /* Brand & accent colours */
+  --amber-400: #fbbf24;
+  --amber-500: #f59e0b;
+  --amber-600: #d97706;
+  --sky-300: #6fd4ff;
+  --sky-400: #38bdf8;
+  --cyan-500: #06b6d4;
+  --orange-400: #fb923c;
+  --orange-500: #f97316;
+  --green-300: #86efac;
+  --green-400: #34d399;
+  --green-500: #22c55e;
+  --emerald-500: #10b981;
+  --lime-400: #9fd96d;
+  --lime-500: #7dc955;
+  --rose-400: #fb7185;
+  --rose-500: #f43f5e;
+
+  /* ──────────────────────────────────────────────
+     2. SEMANTIC — what each token is *for*
+     ────────────────────────────────────────────── */
+
+  /* Backgrounds */
+  --bg-primary: var(--navy-950);
+  --bg-secondary: var(--navy-850);
+  --bg-card: rgba(15, 23, 42, 0.4);
+  --bg-card-hover: rgba(30, 41, 59, 0.6);
+  --bg-elevated: var(--navy-800);
+  --bg-elevated-hover: var(--navy-750);
+  --bg-nav: rgba(7, 9, 26, 0.85);
+  --bg-hud-overlay: rgba(10, 11, 14, 0.8);
+  --bg-popup: rgba(10, 11, 14, 0.95);
+
+  /* Glass effect */
+  --glass-bg: rgba(15, 23, 42, 0.6);
+  --glass-border: rgba(255, 255, 255, 0.12);
+
+  /* Accents */
+  --accent-amber: var(--amber-500);
+  --accent-blue: var(--sky-400);
+  --accent-orange: var(--orange-400);
+  --accent-green: var(--green-400);
+
+  /* Text */
+  --text-primary: var(--slate-50);
+  --text-secondary: var(--slate-400);
+  --text-muted: var(--slate-500);
+  --text-on-accent: var(--navy-900);
+  --text-disclaimer: rgba(255, 255, 255, 0.92);
+
+  /* Borders — neutral */
+  --border: rgba(255, 255, 255, 0.1);
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-medium: rgba(255, 255, 255, 0.12);
+  --border-strong: rgba(255, 255, 255, 0.2);
+  --border-stronger: rgba(255, 255, 255, 0.25);
+  --border-accent: rgba(245, 158, 11, 0.15);
+
+  /* Surface tints — neutral white overlays on dark bg */
+  --surface-white-faint: rgba(255, 255, 255, 0.03);
+  --surface-white-soft: rgba(255, 255, 255, 0.05);
+  --surface-white-subtle: rgba(255, 255, 255, 0.06);
+  --surface-white-medium: rgba(255, 255, 255, 0.08);
+  --surface-white-popup-border: rgba(255, 255, 255, 0.95);
+
+  /* Surface + border tints — amber family */
+  --surface-amber-subtle: rgba(245, 158, 11, 0.06);
+  --surface-amber-soft: rgba(245, 158, 11, 0.08);
+  --surface-amber-medium: rgba(245, 158, 11, 0.1);
+  --surface-amber-strong: rgba(245, 158, 11, 0.18);
+  --border-amber-soft: rgba(245, 158, 11, 0.2);
+  --border-amber-medium: rgba(245, 158, 11, 0.25);
+  --border-amber-strong: rgba(245, 158, 11, 0.3);
+  --border-amber-emphatic: rgba(245, 158, 11, 0.35);
+
+  /* Surface + border tints — cyan / sky family */
+  --surface-cyan-soft: rgba(6, 182, 212, 0.04);
+  --surface-cyan-medium: rgba(6, 182, 212, 0.12);
+  --surface-cyan-strong: rgba(6, 182, 212, 0.14);
+  --border-cyan-medium: rgba(6, 182, 212, 0.3);
+  --surface-sky-faint: rgba(56, 189, 248, 0.03);
+  --border-sky-medium: rgba(56, 189, 248, 0.3);
+
+  /* Surface + border tints — orange family */
+  --surface-orange-soft: rgba(249, 115, 22, 0.1);
+  --border-orange-medium: rgba(249, 115, 22, 0.3);
+
+  /* Surface + border tints — green family */
+  --surface-green-soft: rgba(34, 197, 94, 0.08);
+  --border-green-medium: rgba(34, 197, 94, 0.3);
+  --surface-emerald-soft: rgba(52, 211, 153, 0.1);
+  --border-emerald-soft: rgba(52, 211, 153, 0.2);
+
+  /* Surface + border tints — rose family (open status, error states) */
+  --surface-rose-soft: rgba(244, 63, 94, 0.08);
+  --border-rose-medium: rgba(244, 63, 94, 0.3);
+  --shadow-rose-glow: rgba(244, 63, 94, 0.4);
+
+  /* Event status indicators */
+  --status-open: var(--rose-500);
+  --status-closed: var(--accent-green);
+
+  /* Freshness banner */
+  --freshness-ok-text: var(--green-300);
+  --freshness-warn-text: var(--amber-400);
+  --freshness-error-text: var(--rose-400);
+
+  /* Disclaimer */
+  --disclaimer-icon: var(--amber-400);
+
+  /* Shadows */
+  --shadow-card-faint: 0 4px 20px rgba(0, 0, 0, 0.2);
+  --shadow-card: 0 12px 40px rgba(0, 0, 0, 0.4);
+  --shadow-sentinel: 0 16px 48px rgba(0, 0, 0, 0.5);
+  --shadow-step-hover: 0 20px 48px rgba(0, 0, 0, 0.5);
+  --shadow-amber-glow: 0 8px 24px rgba(245, 158, 11, 0.35);
+  --shadow-glow-blue: 0 0 100px rgba(56, 189, 248, 0.08);
+  --shadow-glow-orange: 0 0 100px rgba(251, 146, 60, 0.06);
+  --shadow-marker-base: 0 10px 20px rgba(0, 0, 0, 0.3);
+  --shadow-marker-hover: 0 14px 26px rgba(0, 0, 0, 0.34);
+
+  /* Hero glow orbs */
+  --glow-cyan: rgba(6, 182, 212, 0.14);
+  --glow-orange: rgba(249, 115, 22, 0.1);
+
+  /* Status section gradient */
+  --status-card-amber-tint: rgba(245, 158, 11, 0.06);
+  --status-card-cyan-tint: rgba(6, 182, 212, 0.04);
+
+  /* Map markers — distinct visual identity for floods vs wildfires */
+  --marker-fire-top: var(--lime-400);
+  --marker-fire-bottom: var(--lime-500);
+  --marker-fire-glow: var(--lime-400);
+  --marker-flood-top: var(--sky-300);
+  --marker-flood-bottom: var(--sky-400);
+  --marker-flood-glow: var(--sky-300);
+  --marker-online: var(--emerald-500);
+
+  /* ──────────────────────────────────────────────
+     Legacy aliases — reconcile orphan references in
+     pre-existing CSS (Map.css, EventDetail.css). These
+     CSS files reference --color-text-dim, --color-primary,
+     --color-border that were never defined; they were
+     falling through to inherited values. Mapped here to
+     their nearest semantic equivalent to make rendering
+     intent explicit. New code should reference the
+     semantic tokens directly, not these aliases.
+     ────────────────────────────────────────────── */
+  --color-text-dim: var(--text-muted);
+  --color-primary: var(--accent-amber);
+  --color-border: var(--border);
+}

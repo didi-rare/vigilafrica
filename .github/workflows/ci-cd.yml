@@ -81,6 +81,11 @@ jobs:
           cd api
           go test -v -cover -tags=integration ./internal/database/
 
+      - name: Run Frontend Style Lint
+        run: |
+          cd web
+          npm run lint:styles
+
       - name: Run Frontend Tests
         run: |
           cd web

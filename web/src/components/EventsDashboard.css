@@ -15,7 +15,7 @@
   transform: translateX(-50%);
   width: 100%;
   height: 100%;
-  background: radial-gradient(circle at 50% -20%, rgba(56, 189, 248, 0.03) 0%, transparent 60%);
+  background: radial-gradient(circle at 50% -20%, var(--surface-sky-faint) 0%, transparent 60%);
   pointer-events: none;
 }
 
@@ -40,7 +40,7 @@
 }
 
 .dashboard-state-detail code {
-  background: var(--bg-card-hover, rgba(255, 255, 255, 0.05));
+  background: var(--surface-white-soft);
   padding: 0.1rem 0.4rem;
   border-radius: 4px;
 }
@@ -57,8 +57,8 @@
 .dashboard-retry-button {
   margin-top: 1.25rem;
   padding: 0.55rem 1.4rem;
-  background: var(--accent-blue, #4d7cff);
-  color: #fff;
+  background: var(--accent-blue);
+  color: var(--white);
   border: none;
   border-radius: 8px;
   cursor: pointer;
@@ -153,7 +153,7 @@
   width: 4px;
 }
 .dashboard-sidebar::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--surface-white-soft);
 }
 .dashboard-sidebar::-webkit-scrollbar-thumb {
   background: var(--accent-blue);
@@ -185,7 +185,7 @@
 }
 
 .event-card {
-  background: #0D1127; /* More opaque Sentinel Navy */
+  background: var(--bg-elevated);
   border: 1px solid var(--glass-border);
   border-radius: 16px;
   padding: 24px;
@@ -195,7 +195,7 @@
   flex-direction: column;
   gap: 18px;
   position: relative;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-card-faint);
   cursor: pointer;
 }
 
@@ -207,26 +207,26 @@
   left: 16px;
   right: 16px;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
+  background: linear-gradient(90deg, transparent, var(--surface-white-medium), transparent);
 }
 
 .event-card:hover {
   transform: translateY(-5px);
-  border-color: rgba(255, 255, 255, 0.25);
+  border-color: var(--border-stronger);
   box-shadow: var(--shadow-sentinel);
-  background: #111631;
+  background: var(--bg-elevated-hover);
 }
 
 /* Category Accent Borders */
 .event-card--fire {
-  border-bottom: 2px solid rgba(245, 158, 11, 0.3);
+  border-bottom: 2px solid var(--border-amber-strong);
 }
 .event-card--fire:hover {
   border-bottom-color: var(--accent-amber);
 }
 
 .event-card--flood {
-  border-bottom: 2px solid rgba(56, 189, 248, 0.3);
+  border-bottom: 2px solid var(--border-sky-medium);
 }
 .event-card--flood:hover {
   border-bottom-color: var(--accent-blue);
@@ -273,8 +273,8 @@
   min-width: 0;
   padding: 12px 14px;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: var(--surface-white-faint);
+  border: 1px solid var(--surface-white-soft);
   word-break: break-word;
 }
 
@@ -328,12 +328,12 @@
 }
 
 .status-dot.open {
-  background: #f43f5e;
-  box-shadow: 0 0 8px rgba(244, 63, 94, 0.4);
+  background: var(--status-open);
+  box-shadow: 0 0 8px var(--shadow-rose-glow);
 }
 
 .status-dot.closed {
-  background: var(--accent-green);
+  background: var(--status-closed);
 }
 
 .event-link {
@@ -357,9 +357,9 @@
   padding: 14px 18px;
   margin-bottom: 12px;
   border-radius: 10px;
-  background: rgba(245, 158, 11, 0.06);
-  border: 1px solid rgba(245, 158, 11, 0.25);
-  color: rgba(255, 255, 255, 0.92);
+  background: var(--surface-amber-subtle);
+  border: 1px solid var(--border-amber-medium);
+  color: var(--text-disclaimer);
   font-size: 0.875rem;
   line-height: 1.5;
 }
@@ -368,7 +368,7 @@
   flex-shrink: 0;
   font-size: 1.1rem;
   font-weight: 700;
-  color: #fbbf24;
+  color: var(--disclaimer-icon);
   line-height: 1.4;
 }
 
@@ -391,21 +391,21 @@
 }
 
 .freshness-banner--ok {
-  background: rgba(34, 197, 94, 0.08);
-  border-color: rgba(34, 197, 94, 0.3);
-  color: #86efac;
+  background: var(--surface-green-soft);
+  border-color: var(--border-green-medium);
+  color: var(--freshness-ok-text);
 }
 
 .freshness-banner--warn {
-  background: rgba(245, 158, 11, 0.08);
-  border-color: rgba(245, 158, 11, 0.3);
-  color: #fbbf24;
+  background: var(--surface-amber-soft);
+  border-color: var(--border-amber-strong);
+  color: var(--freshness-warn-text);
 }
 
 .freshness-banner--error {
-  background: rgba(244, 63, 94, 0.08);
-  border-color: rgba(244, 63, 94, 0.3);
-  color: #fb7185;
+  background: var(--surface-rose-soft);
+  border-color: var(--border-rose-medium);
+  color: var(--freshness-error-text);
 }
 
 .freshness-icon {

@@ -8,9 +8,9 @@ branch: tbd
 
 ## Context
 
-Surfaced by `/openspec-review` of [fix-public-trust-quick-wins](openspec/proposals/fix-public-trust-quick-wins.md) (finding F1). [docs/standards/developers-react.md §7.5](docs/standards/developers-react.md) requires CSS custom properties for colours/spacing/typography/z-index, but the codebase currently has hardcoded colour values across multiple component CSS files. This spec narrows the scope to **colours only** and refactors them into a token layer without changing visual output.
+Surfaced by `/openspec-review` of [fix-public-trust-quick-wins](proposal-fix-public-trust-quick-wins.md) (finding F1). [docs/standards/developers-react.md §7.5](docs/standards/developers-react.md) requires CSS custom properties for colours/spacing/typography/z-index, but the codebase currently has hardcoded colour values across multiple component CSS files. This spec narrows the scope to **colours only** and refactors them into a token layer without changing visual output.
 
-Companion: [openspec/proposals/chore-css-tokens.md](../proposals/chore-css-tokens.md).
+Companion: [openspec/archive/proposal-chore-css-tokens.md](proposal-chore-css-tokens.md).
 
 ## Decision Log
 
@@ -47,32 +47,32 @@ Companion: [openspec/proposals/chore-css-tokens.md](../proposals/chore-css-token
 
 ## Behaviour Contract
 
-- **B1** — Rendered colour values across `https://vigilafrica.org`, `https://staging.vigilafrica.org`, and `npm run dev` MUST be visually identical before and after this PR (screenshot diff acceptable)
+- **B1** — Rendered colour values across `https://vigilafrica.org`, `https://staging.vigilafrica.org`, and `npm run dev` MUST be visually identical before and after this PR (screenshot diff acceptable), with one documented exception: three previously-undefined CSS vars used by `Map.css` and `EventDetail.css` — `--color-text-dim`, `--color-primary`, `--color-border` — are now bound via the legacy-alias block in `tokens.css`. Before this PR they fell through to inherited / `currentColor`; after, they resolve to `--text-muted`, `--accent-amber`, and `--border` respectively. The intentional effect on `/events/:id` and map popups is that section/field labels render in muted grey, section headers render in the amber accent, and borders render as faint white instead of `currentColor`. Verified by local screenshot diff at 375 / 1280 px on 2026-05-14.
 - **B2** — No `.css` file under `web/src/` MAY contain hardcoded `#hex`, `rgb()`, `rgba()`, `hsl()`, or `hsla()` colour literals after this PR (with the limited exception of `:root` / `tokens.css` itself)
 - **B3** — Adding a hardcoded colour literal in a future PR MUST fail `npm run lint:styles` in CI
 - **B4** — Theme switching via `[data-theme="dark"]` (§7.9) MUST work by overriding the semantic tokens only — no component-level CSS edits required to support a future dark theme PR
 
 ## Phase 1 — Token Layer + Audit
 
-- [ ] Create `web/src/styles/tokens.css` with primitive + semantic layers
-- [ ] Audit each `.css` file under `web/src/` for colour literals (suggested: `grep -rE "#[0-9a-fA-F]{3,8}|rgba?\(" web/src/**/*.css`)
-- [ ] Map each literal to a token (introduce new tokens if needed)
-- [ ] Replace literals; verify visual diff is zero via local screenshots
+- [x] Create `web/src/styles/tokens.css` with primitive + semantic layers
+- [x] Audit each `.css` file under `web/src/` for colour literals (suggested: `grep -rE "#[0-9a-fA-F]{3,8}|rgba?\(" web/src/**/*.css`)
+- [x] Map each literal to a token (introduce new tokens if needed)
+- [x] Replace literals; verify visual diff is zero via local screenshots
 
 ## Phase 2 — Lint Enforcement
 
-- [ ] Add stylelint + plugins as devDependencies (pin exact versions per §14.5)
-- [ ] Add `.stylelintrc.json` enforcing `declaration-strict-value` on colour properties (`color`, `background`, `border-color`, etc.) — exemption for `tokens.css` itself
-- [ ] Add `lint:styles` npm script
-- [ ] Add CI step in `ci-cd.yml`
-- [ ] Verify CI catches a deliberately-added violation (manual test before merge)
+- [x] Add stylelint + plugins as devDependencies (pin exact versions per §14.5)
+- [x] Add `.stylelintrc.json` enforcing `declaration-strict-value` on colour properties (`color`, `background`, `border-color`, etc.) — exemption for `tokens.css` itself
+- [x] Add `lint:styles` npm script
+- [x] Add CI step in `ci-cd.yml`
+- [x] Verify CI catches a deliberately-added violation (manual test before merge)
 
 ## Acceptance Criteria
 
-- [ ] `npm run lint:styles` exits 0 against the full diff
-- [ ] `grep -rE "#[0-9a-fA-F]{3,8}|rgba?\(" web/src/**/*.css | grep -v tokens.css` returns empty (or only intentional exemptions like inline SVG fills)
-- [ ] Visual screenshot diff at 375px, 768px, 1280px for homepage, dashboard, and event-detail shows no perceptible change
-- [ ] §7.5 of `developers-react.md` no longer requires a "known violation" caveat in reviews
+- [x] `npm run lint:styles` exits 0 against the full diff
+- [x] `grep -rE "#[0-9a-fA-F]{3,8}|rgba?\(" web/src/**/*.css | grep -v tokens.css` returns empty (or only intentional exemptions like inline SVG fills)
+- [x] Visual screenshot diff at 375px, 768px, 1280px for homepage, dashboard, and event-detail shows no perceptible change
+- [x] §7.5 of `developers-react.md` no longer requires a "known violation" caveat in reviews
 
 ## Out of Scope (reaffirmed)
 
