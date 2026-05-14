@@ -34,13 +34,36 @@ describe('App', () => {
     expect(container.querySelector('main')).toHaveAttribute('id', 'main')
   })
 
-  it('renders current status copy and milestone accessibility labels', async () => {
+  it('does NOT render the staging banner on production (VITE_ENV unset)', () => {
+    render(<App />)
+
+    expect(screen.queryByLabelText(/test environment notice/i)).not.toBeInTheDocument()
+  })
+
+  it('renders the two-CTA hero with explore as primary and GitHub as secondary', () => {
+    render(<App />)
+
+    const exploreCta = screen.getByRole('link', { name: /explore latest events/i })
+    expect(exploreCta).toHaveAttribute('href', '#dashboard')
+    expect(exploreCta).toHaveClass('btn-primary')
+
+    const contributeCta = screen.getByRole('link', { name: /contribute on github/i })
+    expect(contributeCta).toHaveAttribute('href', 'https://github.com/didi-rare/vigilafrica')
+    expect(contributeCta).toHaveAttribute('target', '_blank')
+    expect(contributeCta).toHaveAttribute('rel', expect.stringContaining('noopener'))
+  })
+
+  it('renders the locked footer disclaimer text', () => {
     render(<App />)
 
     expect(
-      screen.getByRole('banner', { name: /project status/i }),
-    ).toHaveTextContent('v0.7 complete · v1.0 staging live · production launch in progress')
-    expect(screen.getByText(/v1.0 \(Credible Public Launch\) is active/i)).toBeInTheDocument()
+      screen.getByText(/Awareness tool — not an official emergency alert system\./i),
+    ).toBeInTheDocument()
+  })
+
+  it('renders milestone accessibility labels', () => {
+    render(<App />)
+
     expect(screen.getByText(/v0.7 · Second country stable/i)).toHaveTextContent(
       'v0.7 · Second country stable ✅ Complete',
     )

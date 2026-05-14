@@ -1,38 +1,43 @@
-# chore-automate-release-tagging
+# chore-css-tokens
 
-**Branch:** `chore/automate-release-tagging`
-**Spec:** [openspec/specs/chore-automate-release-tagging.md](openspec/specs/chore-automate-release-tagging.md)
-**Proposal:** [openspec/proposals/chore-automate-release-tagging.md](openspec/proposals/chore-automate-release-tagging.md)
+**Branch:** `chore/css-tokens`
+**Spec:** [openspec/archive/spec-chore-css-tokens.md](openspec/archive/spec-chore-css-tokens.md) (archived 2026-05-14)
+**Proposal:** [openspec/archive/proposal-chore-css-tokens.md](openspec/archive/proposal-chore-css-tokens.md) (archived 2026-05-14)
+**Origin:** finding F1 from `/openspec-review` of fix-public-trust-quick-wins
 
-## Phase 1 — CI Wiring (Dry-Run) — this PR
+## Phase 1 — Token Layer + Audit
 
-- [x] Add `release-please-config.json` (release-type: simple, target-branch: release)
-- [x] Add `.release-please-manifest.json` seeded `{ ".": "1.0.1" }`
-- [x] Add `.github/workflows/release-please.yml` — dry-run gated, references `RELEASE_PLEASE_TOKEN`
-- [x] Add `.github/workflows/cascade-back-merge.yml` — two-stage, second leg gated on first-leg merge
-- [x] Add `.github/workflows/pr-title-check.yml` — active on PRs to `development` and `release`
-- [x] Update [CONTRIBUTING.md](CONTRIBUTING.md) with conventional-commit PR-title section
-- [x] Update [docs/deployment/release-process.md](docs/deployment/release-process.md) to describe Release PR + cascade flow
-- [x] Pin all third-party actions by full commit SHA (project convention)
-- [x] Set explicit least-privilege `permissions:` block on each workflow
-- [x] Set `concurrency:` and `timeout-minutes:` on each workflow
+- [x] Create [web/src/styles/tokens.css](web/src/styles/tokens.css) with two-layer model: primitive palette + semantic tokens
+- [x] Import tokens.css from [web/src/main.tsx](web/src/main.tsx) before any component CSS
+- [x] Define legacy aliases (`--color-text-dim`, `--color-primary`, `--color-border`) so orphan references in Map.css and EventDetail.css resolve correctly
+- [x] Replace every colour literal in [web/src/index.css](web/src/index.css) → tokens
+- [x] Replace every colour literal in [web/src/App.css](web/src/App.css) → tokens (removed embedded colour `:root` block; kept non-colour tokens for typography/spacing/z-index)
+- [x] Replace every colour literal in [web/src/components/EventsDashboard.css](web/src/components/EventsDashboard.css) → tokens
+- [x] Replace every colour literal in [web/src/components/Map.css](web/src/components/Map.css) → tokens
+- [x] Replace every colour literal in [web/src/pages/EventDetail.css](web/src/pages/EventDetail.css) → tokens
 
-## Phase 2 — Enable Release-Please — this PR
+## Phase 2 — Lint Enforcement
 
-- [x] Create `RELEASE_PLEASE_TOKEN` repo secret (fine-grained PAT, `contents: write` + `pull-requests: write`, 12-month expiry)
-- [x] Flip dry-run guard in [release-please.yml](.github/workflows/release-please.yml) from `if: false` to `if: true`
-- [x] Bug-fix carried in same PR: exempt `main`-headed PRs from `pr-title-check.yml` (spec contract B5)
+- [x] Add `stylelint@17.11.0`, `stylelint-config-standard@40.0.0`, `stylelint-declaration-strict-value@1.11.1` to [web/package.json](web/package.json) devDependencies (pinned exact)
+- [x] Add [web/.stylelintrc.json](web/.stylelintrc.json) with `scale-unlimited/declaration-strict-value` enforcing token references on every colour-bearing property
+- [x] Add `lint:styles` npm script to [web/package.json](web/package.json)
+- [x] Add `Run Frontend Style Lint` step to [.github/workflows/ci-cd.yml](.github/workflows/ci-cd.yml)
+- [x] Sanity-tested: deliberately-added `color: #abc` flagged by stylelint with `scale-unlimited/declaration-strict-value` ✓
+- [x] tokens.css exempted from the strict-value rule via `overrides`
 
-## Phase 3 — First Auto Release — operator follow-up
+## Phase 3 — Verification
 
-- [ ] First auto Release PR opens against `release`
-- [ ] Maintainer reviews + merges
-- [ ] Tag created automatically; `deploy-production.yml` fires; Environment gate prompts for approval
-- [ ] `/health.version` reports the new tag after deploy
-- [ ] Cascade back-merge auto-merges `release → main` then `main → development`
+- [x] `npm run lint` clean
+- [x] `npm run lint:styles` clean
+- [x] `npm run test` — 31/31 passing (no test changes expected; visual-only refactor)
+- [x] `npm run build` succeeds
+- [x] Visual diff captured via Playwright at 375 / 768 / 1280 px on 2026-05-14; B1 exception documented in spec (three orphan CSS vars now bound; section labels render in muted grey + amber accent on `/events/:id`)
 
-## Phase 4 — Closeout — operator follow-up
+## Follow-up specs (NOT in this PR)
 
-- [ ] Remove "Automated release tagging" from Post-MVP Backlog in [openspec/specs/vigilafrica/roadmap.md](openspec/specs/vigilafrica/roadmap.md)
-- [ ] Calendar reminder created for `RELEASE_PLEASE_TOKEN` rotation 11 months out
-- [ ] Archive the spec to `openspec/archive/spec-chore-automate-release-tagging.md`
+These were named in the spec's "Out of Scope" and are explicitly deferred:
+
+- `chore-spacing-tokens` — extract spacing literals
+- `chore-type-tokens` — extract typography literals
+- `chore-z-index-tokens` — extract z-index literals
+- `feat-dark-mode-toggle` — uses the new colour tokens once they're in place

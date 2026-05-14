@@ -37,6 +37,9 @@ export function EventDetail() {
               {event.category === 'floods' ? '🌊 Floods' : '🔥 Wildfires'}
             </span>
             <h1>{event.title}</h1>
+            <p className="event-detail-disclaimer" role="note">
+              Location may be approximate — confirm with local authorities before making safety decisions.
+            </p>
           </div>
           <div className="header-meta">
              <span className="status-indicator">
