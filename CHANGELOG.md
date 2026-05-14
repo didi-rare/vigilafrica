@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.1.1](https://github.com/didi-rare/vigilafrica/compare/v1.1.0...v1.1.1) (2026-05-14)
+
+
+### Bug Fixes
+
+* **web:** cover unknown freshness state + queue css-tokens follow-up ([fef7846](https://github.com/didi-rare/vigilafrica/commit/fef7846a9cfba239d2de384c7844efcce529b5c1))
+* **web:** public trust quick wins (banners, CTAs, OG meta, freshness) ([0b89e3a](https://github.com/didi-rare/vigilafrica/commit/0b89e3a5f963d6d1f738b6259c79457c0cf38888))
+* **web:** public trust quick wins (banners, CTAs, OG meta, freshness) ([f950fb3](https://github.com/didi-rare/vigilafrica/commit/f950fb356ca2f0579e64a92b0300cf73fa5d9a32))
+
 ## [1.1.0](https://github.com/didi-rare/vigilafrica/compare/v1.0.1...v1.1.0) (2026-05-11)
 
 
