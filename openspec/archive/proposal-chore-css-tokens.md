@@ -1,6 +1,6 @@
 # Proposal: Extract Hardcoded CSS Colours into Design Tokens (chore-css-tokens)
 
-**Status:** Proposed — surfaced by `/openspec-review` of [fix-public-trust-quick-wins](openspec/proposals/fix-public-trust-quick-wins.md) as finding **F1**.
+**Status:** Archived 2026-05-14 — surfaced by `/openspec-review` of [fix-public-trust-quick-wins](proposal-fix-public-trust-quick-wins.md) as finding **F1**.
 
 ## Why
 
