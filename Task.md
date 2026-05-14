@@ -1,8 +1,8 @@
 # chore-css-tokens
 
 **Branch:** `chore/css-tokens`
-**Spec:** [openspec/specs/chore-css-tokens.md](openspec/specs/chore-css-tokens.md)
-**Proposal:** [openspec/proposals/chore-css-tokens.md](openspec/proposals/chore-css-tokens.md)
+**Spec:** [openspec/archive/spec-chore-css-tokens.md](openspec/archive/spec-chore-css-tokens.md) (archived 2026-05-14)
+**Proposal:** [openspec/archive/proposal-chore-css-tokens.md](openspec/archive/proposal-chore-css-tokens.md) (archived 2026-05-14)
 **Origin:** finding F1 from `/openspec-review` of fix-public-trust-quick-wins
 
 ## Phase 1 — Token Layer + Audit

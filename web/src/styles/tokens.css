@@ -9,7 +9,7 @@
  * (see .stylelintrc.json declaration-strict-value rule). Add a new semantic
  * token here instead, then reference it from the component CSS.
  *
- * Owner spec: openspec/specs/chore-css-tokens.md
+ * Owner spec: openspec/archive/spec-chore-css-tokens.md
  */
 
 :root {

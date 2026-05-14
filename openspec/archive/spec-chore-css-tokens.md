@@ -10,7 +10,7 @@ branch: tbd
 
 Surfaced by `/openspec-review` of [fix-public-trust-quick-wins](openspec/proposals/fix-public-trust-quick-wins.md) (finding F1). [docs/standards/developers-react.md §7.5](docs/standards/developers-react.md) requires CSS custom properties for colours/spacing/typography/z-index, but the codebase currently has hardcoded colour values across multiple component CSS files. This spec narrows the scope to **colours only** and refactors them into a token layer without changing visual output.
 
-Companion: [openspec/proposals/chore-css-tokens.md](../proposals/chore-css-tokens.md).
+Companion: [openspec/archive/proposal-chore-css-tokens.md](proposal-chore-css-tokens.md).
 
 ## Decision Log
 
