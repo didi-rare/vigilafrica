@@ -290,7 +290,7 @@ These are blockers that must be resolved before v0.1 development begins. They ar
 
 **Goal**: Increase production usefulness after v1.0 by adding two high-impact NASA EONET categories that still fit the current event-map model.
 
-**Scope proposal**: `openspec/changes/feature-v11-impact-categories`
+**Scope proposal**: `openspec/changes/feature-impact-categories`
 
 **Planned categories**:
 - `landslides`

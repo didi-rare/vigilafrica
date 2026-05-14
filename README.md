@@ -73,7 +73,7 @@ Live endpoints:
 - Production: <https://vigilafrica.org> (frontend), <https://api.vigilafrica.org> (API)
 - Staging: <https://staging.vigilafrica.org> (frontend), <https://api.staging.vigilafrica.org> (API)
 
-Next milestone (v1.1): **Impact category expansion** — add `landslides` and `tempExtremes` to broaden coverage beyond floods + wildfires. Proposal: [`openspec/changes/feature-v11-impact-categories/`](openspec/changes/feature-v11-impact-categories/).
+Next milestone: **Impact category expansion** — add `landslides` and `tempExtremes` to broaden coverage beyond floods + wildfires. Proposal: [`openspec/changes/feature-impact-categories/`](openspec/changes/feature-impact-categories/).
 
 ---
 

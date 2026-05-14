@@ -1,6 +1,6 @@
-# Proposal: v1.1 Impact Category Expansion (feature-v11-impact-categories)
+# Proposal: Impact Category Expansion (feature-impact-categories)
 
-**Status:** Proposed for v1.1, after v1.0 production launch
+**Status:** Proposed — v1.0 production launched; v1.1.0 was a release-please CI infra release, so this proposal will land in the next functional release.
 
 ## Why
 
