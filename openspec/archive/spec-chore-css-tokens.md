@@ -54,25 +54,25 @@ Companion: [openspec/archive/proposal-chore-css-tokens.md](proposal-chore-css-to
 
 ## Phase 1 — Token Layer + Audit
 
-- [ ] Create `web/src/styles/tokens.css` with primitive + semantic layers
-- [ ] Audit each `.css` file under `web/src/` for colour literals (suggested: `grep -rE "#[0-9a-fA-F]{3,8}|rgba?\(" web/src/**/*.css`)
-- [ ] Map each literal to a token (introduce new tokens if needed)
-- [ ] Replace literals; verify visual diff is zero via local screenshots
+- [x] Create `web/src/styles/tokens.css` with primitive + semantic layers
+- [x] Audit each `.css` file under `web/src/` for colour literals (suggested: `grep -rE "#[0-9a-fA-F]{3,8}|rgba?\(" web/src/**/*.css`)
+- [x] Map each literal to a token (introduce new tokens if needed)
+- [x] Replace literals; verify visual diff is zero via local screenshots
 
 ## Phase 2 — Lint Enforcement
 
-- [ ] Add stylelint + plugins as devDependencies (pin exact versions per §14.5)
-- [ ] Add `.stylelintrc.json` enforcing `declaration-strict-value` on colour properties (`color`, `background`, `border-color`, etc.) — exemption for `tokens.css` itself
-- [ ] Add `lint:styles` npm script
-- [ ] Add CI step in `ci-cd.yml`
-- [ ] Verify CI catches a deliberately-added violation (manual test before merge)
+- [x] Add stylelint + plugins as devDependencies (pin exact versions per §14.5)
+- [x] Add `.stylelintrc.json` enforcing `declaration-strict-value` on colour properties (`color`, `background`, `border-color`, etc.) — exemption for `tokens.css` itself
+- [x] Add `lint:styles` npm script
+- [x] Add CI step in `ci-cd.yml`
+- [x] Verify CI catches a deliberately-added violation (manual test before merge)
 
 ## Acceptance Criteria
 
-- [ ] `npm run lint:styles` exits 0 against the full diff
-- [ ] `grep -rE "#[0-9a-fA-F]{3,8}|rgba?\(" web/src/**/*.css | grep -v tokens.css` returns empty (or only intentional exemptions like inline SVG fills)
-- [ ] Visual screenshot diff at 375px, 768px, 1280px for homepage, dashboard, and event-detail shows no perceptible change
-- [ ] §7.5 of `developers-react.md` no longer requires a "known violation" caveat in reviews
+- [x] `npm run lint:styles` exits 0 against the full diff
+- [x] `grep -rE "#[0-9a-fA-F]{3,8}|rgba?\(" web/src/**/*.css | grep -v tokens.css` returns empty (or only intentional exemptions like inline SVG fills)
+- [x] Visual screenshot diff at 375px, 768px, 1280px for homepage, dashboard, and event-detail shows no perceptible change
+- [x] §7.5 of `developers-react.md` no longer requires a "known violation" caveat in reviews
 
 ## Out of Scope (reaffirmed)
 

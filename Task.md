@@ -31,7 +31,7 @@
 - [x] `npm run lint:styles` clean
 - [x] `npm run test` — 31/31 passing (no test changes expected; visual-only refactor)
 - [x] `npm run build` succeeds
-- [ ] Manual visual diff at 1280 / 768 / 375 px on a local `npm run preview` — operator action before merge
+- [x] Visual diff captured via Playwright at 375 / 768 / 1280 px on 2026-05-14; B1 exception documented in spec (three orphan CSS vars now bound; section labels render in muted grey + amber accent on `/events/:id`)
 
 ## Follow-up specs (NOT in this PR)
 
