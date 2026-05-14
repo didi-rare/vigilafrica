@@ -47,7 +47,7 @@ Companion: [openspec/proposals/chore-css-tokens.md](../proposals/chore-css-token
 
 ## Behaviour Contract
 
-- **B1** — Rendered colour values across `https://vigilafrica.org`, `https://staging.vigilafrica.org`, and `npm run dev` MUST be visually identical before and after this PR (screenshot diff acceptable)
+- **B1** — Rendered colour values across `https://vigilafrica.org`, `https://staging.vigilafrica.org`, and `npm run dev` MUST be visually identical before and after this PR (screenshot diff acceptable), with one documented exception: three previously-undefined CSS vars used by `Map.css` and `EventDetail.css` — `--color-text-dim`, `--color-primary`, `--color-border` — are now bound via the legacy-alias block in `tokens.css`. Before this PR they fell through to inherited / `currentColor`; after, they resolve to `--text-muted`, `--accent-amber`, and `--border` respectively. The intentional effect on `/events/:id` and map popups is that section/field labels render in muted grey, section headers render in the amber accent, and borders render as faint white instead of `currentColor`. Verified by local screenshot diff at 375 / 1280 px on 2026-05-14.
 - **B2** — No `.css` file under `web/src/` MAY contain hardcoded `#hex`, `rgb()`, `rgba()`, `hsl()`, or `hsla()` colour literals after this PR (with the limited exception of `:root` / `tokens.css` itself)
 - **B3** — Adding a hardcoded colour literal in a future PR MUST fail `npm run lint:styles` in CI
 - **B4** — Theme switching via `[data-theme="dark"]` (§7.9) MUST work by overriding the semantic tokens only — no component-level CSS edits required to support a future dark theme PR
