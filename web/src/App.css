@@ -1,41 +1,20 @@
 /* VigilAfrica — Design System */
 /* F-009: VigilAfrica Landing Page */
+/* Colour tokens live in styles/tokens.css (loaded first by main.tsx). */
 
 /* ─────────────────────────────────────
-   Design Tokens
+   Non-Colour Design Tokens
+   (colour tokens: see styles/tokens.css)
 ───────────────────────────────────── */
 :root {
-  /* Palette Refinement */
-  --bg-primary:     #050714;
-  --bg-secondary:   #090B1F;
-  --bg-card:        rgba(15, 23, 42, 0.4);
-  --bg-card-hover:  rgba(30, 41, 59, 0.6);
-  --glass-bg:       rgba(15, 23, 42, 0.6);
-  --glass-border:   rgba(255, 255, 255, 0.12);
-
-  --accent-amber:   #F59E0B;
-  --accent-blue:    #38BDF8;   /* Slightly more vibrant sky blue */
-  --accent-orange:  #FB923C;
-  --accent-green:   #34D399;
-
-  --text-primary:   #F8FAFC;
-  --text-secondary: #94A3B8;
-  --text-muted:     #64748B;
-
-  --border:         rgba(255, 255, 255, 0.1);
-  --border-accent:  rgba(245, 158, 11, 0.15);
-
-  --shadow-glow-blue:   0 0 100px rgba(56, 189, 248, 0.08);
-  --shadow-glow-orange: 0 0 100px rgba(251, 146, 60, 0.06);
-  --shadow-sentinel:    0 16px 48px rgba(0, 0, 0, 0.5);
-  --shadow-card:        0 12px 40px rgba(0, 0, 0, 0.4);
-
   /* Typography */
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
 
   /* Spacing */
   --container-max: 1160px;
-  --section-py:    128px;
+  --section-py: 128px;
+
+  /* z-index */
   --z-nav: 100;
   --z-skip-link: 1000;
 }
@@ -126,13 +105,13 @@ h2[id],
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--accent-amber), #D97706);
-  color: #07091A;
+  background: linear-gradient(135deg, var(--accent-amber), var(--amber-600));
+  color: var(--text-on-accent);
 }
 
 .btn-primary:hover {
   transform: translateY(-1px);
-  box-shadow: 0 8px 24px rgba(245, 158, 11, 0.35);
+  box-shadow: var(--shadow-amber-glow);
 }
 
 .btn-outline {
@@ -142,7 +121,7 @@ h2[id],
 }
 
 .btn-outline:hover {
-  border-color: rgba(255,255,255,0.2);
+  border-color: var(--border-strong);
   background: var(--bg-card);
 }
 
@@ -152,7 +131,7 @@ h2[id],
   left: 8px;
   z-index: var(--z-skip-link);
   background: var(--accent-amber);
-  color: #07091A;
+  color: var(--text-on-accent);
   padding: 8px 14px;
   border-radius: 6px;
   font-weight: 600;
@@ -163,15 +142,15 @@ h2[id],
 }
 
 /* ─────────────────────────────────────
-   Prototype Banner
+   Staging Banner — renders only when VITE_ENV === 'staging'
 ───────────────────────────────────── */
-.prototype-banner {
-  background: linear-gradient(90deg, rgba(245,158,11,0.12), rgba(6,182,212,0.08));
-  border-bottom: 1px solid rgba(245,158,11,0.2);
+.staging-banner {
+  background: linear-gradient(90deg, var(--surface-amber-strong), var(--surface-amber-medium));
+  border-bottom: 1px solid var(--border-amber-emphatic);
   text-align: center;
-  padding: 9px 16px;
+  padding: 10px 16px;
   font-size: 0.8125rem;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--accent-amber);
   letter-spacing: 0.01em;
 }
@@ -187,7 +166,7 @@ h2[id],
   align-items: center;
   justify-content: space-between;
   padding: 16px 32px;
-  background: rgba(7, 9, 26, 0.85);
+  background: var(--bg-nav);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--border);
@@ -240,7 +219,7 @@ h2[id],
 .hero-glow--blue {
   width: 600px;
   height: 600px;
-  background: radial-gradient(circle, rgba(6,182,212,0.14) 0%, transparent 70%);
+  background: radial-gradient(circle, var(--glow-cyan) 0%, transparent 70%);
   top: -80px;
   right: -100px;
   animation: float 8s ease-in-out infinite;
@@ -249,7 +228,7 @@ h2[id],
 .hero-glow--orange {
   width: 500px;
   height: 500px;
-  background: radial-gradient(circle, rgba(249,115,22,0.10) 0%, transparent 70%);
+  background: radial-gradient(circle, var(--glow-orange) 0%, transparent 70%);
   bottom: -60px;
   left: -80px;
   animation: float 10s ease-in-out infinite reverse;
@@ -260,7 +239,7 @@ h2[id],
   content: '';
   position: absolute;
   inset: 0;
-  background-image: radial-gradient(rgba(255,255,255,0.06) 1px, transparent 1px);
+  background-image: radial-gradient(var(--surface-white-subtle) 1px, transparent 1px);
   background-size: 32px 32px;
   z-index: 0;
   mask-image: radial-gradient(ellipse 80% 60% at 50% 50%, black 40%, transparent 100%);
@@ -306,14 +285,14 @@ h2[id],
 }
 
 .badge--flood {
-  background: rgba(6, 182, 212, 0.12);
-  border: 1px solid rgba(6, 182, 212, 0.3);
+  background: var(--surface-cyan-medium);
+  border: 1px solid var(--border-cyan-medium);
   color: var(--accent-blue);
 }
 
 .badge--fire {
-  background: rgba(249, 115, 22, 0.1);
-  border: 1px solid rgba(249, 115, 22, 0.3);
+  background: var(--surface-orange-soft);
+  border: 1px solid var(--border-orange-medium);
   color: var(--accent-orange);
 }
 
@@ -351,6 +330,7 @@ h2[id],
 .hero-cta-note {
   font-size: 0.875rem;
   color: var(--text-muted);
+  margin: 16px 0 0;
 }
 
 /* ─────────────────────────────────────
@@ -384,9 +364,9 @@ h2[id],
 
 .step:hover {
   background: var(--bg-card-hover);
-  border-color: rgba(255,255,255,0.15);
+  border-color: var(--border-medium);
   transform: translateY(-6px);
-  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-step-hover);
 }
 
 .step-icon {
@@ -395,7 +375,7 @@ h2[id],
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255,255,255,0.03);
+  background: var(--surface-white-faint);
   border-radius: 12px;
   margin-bottom: 24px;
   color: var(--accent-blue);
@@ -453,7 +433,7 @@ h2[id],
 
 .audience-card:hover {
   background: var(--bg-card-hover);
-  border-color: rgba(255,255,255,0.12);
+  border-color: var(--border-medium);
   transform: translateY(-2px);
 }
 
@@ -485,7 +465,7 @@ h2[id],
 }
 
 .status-card {
-  background: linear-gradient(135deg, rgba(245,158,11,0.06), rgba(6,182,212,0.04));
+  background: linear-gradient(135deg, var(--status-card-amber-tint), var(--status-card-cyan-tint));
   border: 1px solid var(--border-accent);
   border-radius: 20px;
   padding: 48px;
@@ -597,15 +577,15 @@ h2[id],
   font-weight: 600;
   padding: 3px 10px;
   border-radius: 999px;
-  background: rgba(245,158,11,0.1);
+  background: var(--surface-amber-medium);
   color: var(--accent-amber);
-  border: 1px solid rgba(245,158,11,0.2);
+  border: 1px solid var(--border-amber-soft);
 }
 
 .milestone-tag--complete {
-  background: rgba(52, 211, 153, 0.1);
+  background: var(--surface-emerald-soft);
   color: var(--accent-green);
-  border-color: rgba(52, 211, 153, 0.2);
+  border-color: var(--border-emerald-soft);
 }
 
 .milestone--complete {
@@ -647,6 +627,12 @@ h2[id],
 
 .footer a:hover {
   color: var(--text-primary);
+}
+
+.footer-disclaimer {
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  font-weight: 500;
 }
 
 .footer-sub {

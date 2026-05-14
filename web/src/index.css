@@ -14,8 +14,8 @@ html, body, #root {
 }
 
 body {
-  background-color: #07091A;
-  color: #F8FAFC;
+  background-color: var(--navy-900);
+  color: var(--text-primary);
 }
 
 img, picture, video, canvas, svg {
