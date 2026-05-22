@@ -69,12 +69,17 @@ DATABASE_URL=postgres://vigilafrica:vigilafrica@localhost:5432/vigilafrica
 
 For email alerting (optional for local dev), also set:
 ```env
+APP_ENV=local
 RESEND_API_KEY=re_...
 ALERT_EMAIL_TO=your@email.com
 ALERT_FROM_EMAIL=VigilAfrica Alerts <alerts@vigilafrica.org>
 ALERT_STALENESS_THRESHOLD_HOURS=2
 ALERT_STALENESS_CHECK_INTERVAL_MIN=15
 ```
+
+`APP_ENV` tags alert subjects with `[VigilAfrica:<env>]` so local test alerts
+don't masquerade as production. The staging/prod docker-compose files hardcode
+this; locally it defaults to `local`.
 
 ### 4. Start PostgreSQL with PostGIS
 

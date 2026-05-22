@@ -138,6 +138,7 @@ func loadAlertConfigFromEnv() alert.Config {
 		ResendAPIKey: os.Getenv("RESEND_API_KEY"),
 		FromEmail:    envOrDefault("ALERT_FROM_EMAIL", "VigilAfrica Alerts <alerts@vigilafrica.org>"),
 		ToEmails:     alert.ParseRecipients(envOrDefaultTrimmed("ALERTS_TO", os.Getenv("ALERT_EMAIL_TO"))),
+		Environment:  envOrDefaultTrimmed("APP_ENV", "unknown"),
 	}
 }
 
