@@ -34,6 +34,7 @@ services:
       - DATABASE_URL=postgres://vigilafrica:vigilafrica@demo-db:5432/vigilafrica?sslmode=disable
       - INGEST_INTERVAL_MIN=0
       - GEOIP_DB_PATH=/usr/share/GeoIP/GeoLite2-City.mmdb
+      - APP_ENV=demo
     ports:
       - "8080:8080"
     volumes:
