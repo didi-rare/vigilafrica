@@ -12,7 +12,7 @@ After the 2026-05-11 staging incident, the maintainer could not tell at a glance
 
 The frontend already detects environment via `VITE_ENV=staging|production` (see [openspec/proposals/fix-staging-vite-env-flag.md](openspec/proposals/fix-staging-vite-env-flag.md) and [web/vite.config.ts:13-14](web/vite.config.ts#L13-L14)). This spec introduces the backend equivalent — `APP_ENV` — and wires it into alert subjects.
 
-Companion: [openspec/proposals/chore-alert-env-label.md](openspec/proposals/chore-alert-env-label.md).
+Companion: [openspec/archive/proposal-chore-alert-env-label.md](proposal-chore-alert-env-label.md).
 
 ## Decision Log
 
