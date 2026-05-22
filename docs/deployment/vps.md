@@ -78,6 +78,11 @@ MAXMIND_ACCOUNT_ID=<optional>
 MAXMIND_LICENSE_KEY=<optional>
 ```
 
+`APP_ENV` does not need to appear in these `.env` files: `docker-compose.staging.yml`
+and `docker-compose.prod.yml` hardcode it (`staging` / `production` respectively) so
+the alert subject prefix stays bound to the compose file the operator chose. Override
+only when running the stack outside its intended compose file.
+
 Production should use `CORS_ORIGIN=https://vigilafrica.org`.
 Use placeholder addresses in committed docs only. Set real alert recipients
 directly in `/opt/vigilafrica/staging/.env` and

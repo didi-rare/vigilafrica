@@ -23,6 +23,9 @@ type Config struct {
 	FromEmail    string
 	ToEmails     []string
 	Endpoint     string
+	// Environment tags alert subjects so staging pages can be told apart from production at a glance.
+	// Sourced from APP_ENV in main.go; defaults to "unknown" so missing config is visible, not silent.
+	Environment string
 }
 
 // Client sends VigilAfrica operational alerts through Resend's HTTP API.
@@ -40,6 +43,9 @@ func NewClient(cfg Config, logger *slog.Logger) *Client {
 	}
 	if cfg.FromEmail == "" {
 		cfg.FromEmail = "VigilAfrica Alerts <alerts@vigilafrica.org>"
+	}
+	if cfg.Environment == "" {
+		cfg.Environment = "unknown"
 	}
 	cfg.ToEmails = cleanRecipients(cfg.ToEmails)
 	if logger == nil {
@@ -115,7 +121,7 @@ func (c *Client) SendIngestFailure(ctx context.Context, run *models.IngestionRun
 		return fmt.Errorf("render failure alert: %w", err)
 	}
 
-	subject := fmt.Sprintf("[VigilAfrica] Ingestion failed for %s at %s", run.CountryCode, data.StartedAt)
+	subject := fmt.Sprintf("[VigilAfrica:%s] Ingestion failed for %s at %s", c.cfg.Environment, run.CountryCode, data.StartedAt)
 	if err := c.sendEmail(ctx, subject, htmlBody, textBody); err != nil {
 		return fmt.Errorf("send failure alert: %w", err)
 	}
@@ -145,7 +151,7 @@ func (c *Client) SendStalenessAlert(ctx context.Context, lastSuccessAt time.Time
 		return fmt.Errorf("render staleness alert: %w", err)
 	}
 
-	subject := fmt.Sprintf("[VigilAfrica] No successful ingestion in %d hours", hoursStale)
+	subject := fmt.Sprintf("[VigilAfrica:%s] No successful ingestion in %d hours", c.cfg.Environment, hoursStale)
 	if err := c.sendEmail(ctx, subject, htmlBody, textBody); err != nil {
 		return fmt.Errorf("send staleness alert: %w", err)
 	}
