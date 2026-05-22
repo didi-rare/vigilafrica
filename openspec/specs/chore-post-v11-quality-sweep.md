@@ -38,7 +38,7 @@ Companion: [openspec/proposals/chore-post-v11-quality-sweep.md](openspec/proposa
 | [api/internal/ingestor/eonet.go](api/internal/ingestor/eonet.go) | Fix "%d retries" → "%d attempts"; refactor package globals into `Ingestor` struct | B5, B6 |
 | [api/cmd/server/main.go](api/cmd/server/main.go) | Bump source-default `version` from `"0.7.0"` to current release | B8 |
 | Multiple handlers | Add `// best-effort` comments or Debug logs for uncommented ignored `Encode` errors | B9 |
-| New: `api/db/migrations/000007_alert_dedupe_sent_at.up.sql` (only if D1 chooses the `sent_at` path) | Add nullable `sent_at TIMESTAMPTZ` to `alert_dedupe` | B1 |
+| New: `api/db/migrations/000007_alert_dedupe_sent_at.up.sql` (only if the implementer chooses the `sent_at` column path for B1) | Add nullable `sent_at TIMESTAMPTZ` to `alert_dedupe` | B1 |
 
 ### Frontend (React / TypeScript) — `web/src/`
 
@@ -49,7 +49,7 @@ Companion: [openspec/proposals/chore-post-v11-quality-sweep.md](openspec/proposa
 | [web/vite.config.ts](web/vite.config.ts) | Build-time assertion on `VITE_API_BASE_URL` when `VITE_ENV !== 'local'` | F3 |
 | [web/src/api/events.ts](web/src/api/events.ts) | Convert `fetchEventById`/`fetchContext`/`fetchHealth`/`fetchStates` to throw `ApiError` | F4 |
 | [web/src/components/EventsDashboard.tsx](web/src/components/EventsDashboard.tsx) | Drop fragile title regex OR move to normalizer; move `Date.now()` out of `selectFreshness`; type-guard filter for lat/lng; explicit locale on `toLocaleDateString()` | F5, F6, F7, F8 |
-| `web/package.json` (only if F2 picks the `react-error-boundary` path) | Add `react-error-boundary` dependency (~5KB, ADR-rationale needed per §10.2) | F2 |
+| `web/package.json` (only if F2 picks the `react-error-boundary` path) | Add `react-error-boundary` dependency (~5KB); ADR-rationale required per §10.2 **and** the approved-deps list in §10.4 must be updated | F2 |
 
 ### Deliberately untouched
 
@@ -116,7 +116,7 @@ Companion: [openspec/proposals/chore-post-v11-quality-sweep.md](openspec/proposa
 - [ ] At least one of Phase 2 / Phase 3 PRs has shipped; the rest may be deferred to future cleanup proposals if the implementer prefers to split them
 - [ ] `go test ./...` (from `api/`) passes; `npm run test` (from `web/`) passes
 - [ ] `go vet ./...` clean
-- [ ] `npm run build` (frontend) succeeds; static type-check passes
+- [ ] `npm run build` (frontend) succeeds (Vite's TypeScript pipeline type-checks implicitly during build)
 - [ ] Live staging probe against `api.staging.vigilafrica.org` shows no regression vs. current behaviour
 - [ ] B1 acceptance test: simulate a Resend failure → verify next tick retries → verify second tick (after success) suppresses
 - [ ] F2 acceptance test: force a render error in a child component → verify `PageError` (or replacement) renders → verify link back to dashboard works
