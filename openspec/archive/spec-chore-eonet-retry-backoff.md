@@ -17,7 +17,7 @@ On 2026-05-11 EONET stalled upstream for one hourly tick. TCP connected but no r
 
 A small retry-with-backoff for transient conditions absorbs this class of incident silently.
 
-Companion: [openspec/proposals/chore-eonet-retry-backoff.md](openspec/proposals/chore-eonet-retry-backoff.md).
+Companion: [openspec/archive/proposal-chore-eonet-retry-backoff.md](proposal-chore-eonet-retry-backoff.md).
 
 ## Decision Log
 
