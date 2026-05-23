@@ -45,8 +45,13 @@ func (h *EventHandler) ListEvents(w http.ResponseWriter, r *http.Request) {
 		filters.Category = cat
 	}
 
-	if country := query.Get("country"); country != "" {
-		filters.Country = country
+	canonical, present, err := resolveCountry(query)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if present {
+		filters.Country = canonical
 	}
 
 	if state := query.Get("state"); state != "" {
