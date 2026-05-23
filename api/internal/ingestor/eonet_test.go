@@ -2,6 +2,7 @@ package ingestor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +15,33 @@ import (
 	"vigilafrica/api/internal/database"
 	"vigilafrica/api/internal/models"
 )
+
+// failOnceRoundTripper returns failWith on the first RoundTrip call, then
+// delegates to base for subsequent calls. Used to drive the eonetHTTPClient
+// injection seam for tests that need a transport-layer failure on the first
+// attempt — something httptest.Server can't reproduce directly.
+type failOnceRoundTripper struct {
+	base     http.RoundTripper
+	count    int32
+	failWith error
+}
+
+func (rt *failOnceRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	if atomic.AddInt32(&rt.count, 1) == 1 {
+		return nil, rt.failWith
+	}
+	return rt.base.RoundTrip(req)
+}
+
+// installHTTPClient replaces eonetHTTPClient with c and returns a restore fn.
+// Mirrors installTestServer / installInstantSleep for the new injection seam
+// added in chore-eonet-retry-backoff.
+func installHTTPClient(t *testing.T, c *http.Client) func() {
+	t.Helper()
+	orig := eonetHTTPClient
+	eonetHTTPClient = c
+	return func() { eonetHTTPClient = orig }
+}
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -430,32 +458,27 @@ func TestRunIngest_5xx_ExhaustsTransientRetries(t *testing.T) {
 }
 
 // TestRunIngest_NetworkError_ThenSuccess verifies the transient retry path
-// for a network-level error (closed connection, no HTTP response). The first
-// request gets RST'd via srv.CloseClientConnections, the second succeeds.
+// for a network-level error (no HTTP response). Uses the eonetHTTPClient
+// injection seam (chore-eonet-retry-backoff D5) with a failOnceRoundTripper
+// so the first request fails at the transport layer before reaching the
+// server, and the second succeeds normally.
 func TestRunIngest_NetworkError_ThenSuccess(t *testing.T) {
 	defer installInstantSleep(t)()
 
-	var requestCount int32
-	var srv *httptest.Server
-	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if atomic.AddInt32(&requestCount, 1) == 1 {
-			// Hijack and close so the client sees a network error, not an HTTP response.
-			hj, ok := w.(http.Hijacker)
-			if !ok {
-				t.Fatal("ResponseWriter does not support Hijacker")
-			}
-			conn, _, err := hj.Hijack()
-			if err != nil {
-				t.Fatalf("hijack failed: %v", err)
-			}
-			conn.Close()
-			return
-		}
+	var serverHits int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&serverHits, 1)
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprint(w, okBody)
 	}))
 	defer srv.Close()
 	defer installTestServer(t, srv)()
+
+	rt := &failOnceRoundTripper{
+		base:     http.DefaultTransport,
+		failWith: errors.New("simulated network timeout"),
+	}
+	defer installHTTPClient(t, &http.Client{Timeout: 30 * time.Second, Transport: rt})()
 
 	result, err := runIngest(context.Background(), &mockRepo{}, testCountry)
 	if err != nil {
@@ -464,8 +487,13 @@ func TestRunIngest_NetworkError_ThenSuccess(t *testing.T) {
 	if result.EventsFetched != 1 {
 		t.Errorf("expected 1 event fetched, got %d", result.EventsFetched)
 	}
-	if got := atomic.LoadInt32(&requestCount); got != 2 {
-		t.Errorf("expected 2 requests (1 network-error + 1 success), got %d", got)
+	// First request fails at the RoundTripper before hitting the server,
+	// second request reaches the server normally.
+	if got := atomic.LoadInt32(&rt.count); got != 2 {
+		t.Errorf("expected 2 RoundTrip calls (1 fail + 1 success), got %d", got)
+	}
+	if got := atomic.LoadInt32(&serverHits); got != 1 {
+		t.Errorf("expected 1 server hit (transport-layer fail doesn't reach server), got %d", got)
 	}
 }
 

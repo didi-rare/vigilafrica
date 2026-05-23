@@ -205,7 +205,9 @@ func runIngest(ctx context.Context, repo database.Repository, country CountryCon
 		}
 
 		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusServiceUnavailable {
-			bodyBytes, _ := readLimitedResponseBody(resp.Body, 64*1024)
+			// best-effort: a read error here just yields empty bytes, which
+			// fall through to the exponential-backoff branch below (§4.7).
+			bodyBytes, _ := readLimitedResponseBody(resp.Body, 64*1024) //nolint:errcheck
 			resp.Body.Close()
 
 			if attempt == maxRetries {
