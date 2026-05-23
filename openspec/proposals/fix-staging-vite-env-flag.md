@@ -1,7 +1,7 @@
 ---
 id: fix-staging-vite-env-flag
 status: proposed
-branch: tbd
+branch: fix/staging-vite-env-flag
 ---
 
 # Proposal: Wire `VITE_ENV=staging` into Vercel Staging Deploy (fix-staging-vite-env-flag)
@@ -46,6 +46,7 @@ This is a deploy/config chore, not a code change. The repository does not own Ve
 ## Verification
 
 After the change:
+
 - [ ] `curl -s https://staging.vigilafrica.org/ | grep '<meta name="robots"'` → `noindex, nofollow`
 - [ ] `curl -s https://vigilafrica.org/ | grep '<meta name="robots"'` → `index, follow` (unchanged)
 - [ ] Staging banner visible at the top of `https://staging.vigilafrica.org/`
