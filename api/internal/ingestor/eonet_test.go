@@ -329,9 +329,11 @@ func TestRunIngest_RejectsOversizedRawEventPayload(t *testing.T) {
 	}
 }
 
-// TestRunIngest_NonRetryableStatus confirms that unexpected non-retriable
-// status codes (e.g. 401, 500) are surfaced as errors without retrying.
-func TestRunIngest_NonRetryableStatus(t *testing.T) {
+// TestRunIngest_NonRetryable4xx confirms that 4xx status codes (other than
+// 429) are surfaced as errors without retrying. 5xx codes now follow the
+// transient retry path (see TestRunIngest_5xx_*) and 429 keeps its own
+// dynamic-backoff branch (TestRunIngest_429_ThenSuccess).
+func TestRunIngest_NonRetryable4xx(t *testing.T) {
 	defer installInstantSleep(t)()
 
 	tests := []struct {
@@ -339,7 +341,7 @@ func TestRunIngest_NonRetryableStatus(t *testing.T) {
 		status int
 	}{
 		{"unauthorized", http.StatusUnauthorized},
-		{"internal server error", http.StatusInternalServerError},
+		{"forbidden", http.StatusForbidden},
 		{"not found", http.StatusNotFound},
 	}
 
@@ -361,11 +363,109 @@ func TestRunIngest_NonRetryableStatus(t *testing.T) {
 			if err == nil {
 				t.Errorf("status %d: expected error, got nil", tt.status)
 			}
-			// Must fail on the first attempt — no retries for non-retriable codes.
+			// Must fail on the first attempt — no retries for 4xx (non-429).
 			if got := atomic.LoadInt32(&requestCount); got != 1 {
 				t.Errorf("status %d: expected exactly 1 request (no retry), got %d", tt.status, got)
 			}
 		})
+	}
+}
+
+// TestRunIngest_5xx_ThenSuccess verifies the transient retry path for a 5xx
+// response other than 503 (which has its own retry_after-aware branch).
+// First request 500, second 200 → ingestion succeeds.
+func TestRunIngest_5xx_ThenSuccess(t *testing.T) {
+	defer installInstantSleep(t)()
+
+	var requestCount int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if atomic.AddInt32(&requestCount, 1) == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, okBody)
+	}))
+	defer srv.Close()
+	defer installTestServer(t, srv)()
+
+	result, err := runIngest(context.Background(), &mockRepo{}, testCountry)
+	if err != nil {
+		t.Fatalf("expected success after 5xx retry, got err: %v", err)
+	}
+	if result.EventsFetched != 1 {
+		t.Errorf("expected 1 event fetched, got %d", result.EventsFetched)
+	}
+	if got := atomic.LoadInt32(&requestCount); got != 2 {
+		t.Errorf("expected 2 requests (1 server-error + 1 success), got %d", got)
+	}
+}
+
+// TestRunIngest_5xx_ExhaustsTransientRetries verifies that maxTransientRetries
+// bounds the 5xx retry loop. Always 500 → maxTransientRetries+1 total attempts
+// then error.
+func TestRunIngest_5xx_ExhaustsTransientRetries(t *testing.T) {
+	defer installInstantSleep(t)()
+
+	var requestCount int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&requestCount, 1)
+		w.WriteHeader(http.StatusBadGateway)
+	}))
+	defer srv.Close()
+	defer installTestServer(t, srv)()
+
+	_, err := runIngest(context.Background(), &mockRepo{}, testCountry)
+	if err == nil {
+		t.Fatal("expected error after exhausting transient retries, got nil")
+	}
+	if !strings.Contains(err.Error(), "transient retries") {
+		t.Errorf("expected transient-retries error, got: %v", err)
+	}
+	// 1 initial attempt + maxTransientRetries (=2) = 3 total requests
+	wantRequests := int32(maxTransientRetries + 1)
+	if got := atomic.LoadInt32(&requestCount); got != wantRequests {
+		t.Errorf("expected %d requests (1 initial + %d retries), got %d", wantRequests, maxTransientRetries, got)
+	}
+}
+
+// TestRunIngest_NetworkError_ThenSuccess verifies the transient retry path
+// for a network-level error (closed connection, no HTTP response). The first
+// request gets RST'd via srv.CloseClientConnections, the second succeeds.
+func TestRunIngest_NetworkError_ThenSuccess(t *testing.T) {
+	defer installInstantSleep(t)()
+
+	var requestCount int32
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if atomic.AddInt32(&requestCount, 1) == 1 {
+			// Hijack and close so the client sees a network error, not an HTTP response.
+			hj, ok := w.(http.Hijacker)
+			if !ok {
+				t.Fatal("ResponseWriter does not support Hijacker")
+			}
+			conn, _, err := hj.Hijack()
+			if err != nil {
+				t.Fatalf("hijack failed: %v", err)
+			}
+			conn.Close()
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, okBody)
+	}))
+	defer srv.Close()
+	defer installTestServer(t, srv)()
+
+	result, err := runIngest(context.Background(), &mockRepo{}, testCountry)
+	if err != nil {
+		t.Fatalf("expected success after network-error retry, got err: %v", err)
+	}
+	if result.EventsFetched != 1 {
+		t.Errorf("expected 1 event fetched, got %d", result.EventsFetched)
+	}
+	if got := atomic.LoadInt32(&requestCount); got != 2 {
+		t.Errorf("expected 2 requests (1 network-error + 1 success), got %d", got)
 	}
 }
 
