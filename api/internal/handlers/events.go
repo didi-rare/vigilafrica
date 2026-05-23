@@ -45,10 +45,12 @@ func (h *EventHandler) ListEvents(w http.ResponseWriter, r *http.Request) {
 		filters.Category = cat
 	}
 
-	if canonical, ok, err := resolveCountry(query); err != nil {
+	canonical, present, err := resolveCountry(query)
+	if err != nil {
 		respondWithError(w, http.StatusBadRequest, err.Error())
 		return
-	} else if ok {
+	}
+	if present {
 		filters.Country = canonical
 	}
 

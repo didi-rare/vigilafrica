@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"fmt"
+	"errors"
 	"net/url"
 	"strings"
 )
@@ -26,9 +26,11 @@ var countryNameToCode = func() map[string]string {
 	return m
 }()
 
-// errUnknownCountry is the public-facing 400 message. Lists supported values
-// in both code and name form so callers learn the contract from the error.
-var errUnknownCountry = fmt.Errorf("unknown country: supported values are NG, GH (or Nigeria, Ghana)")
+// errUnknownCountry is the package-level sentinel for unrecognised country
+// inputs. The message doubles as the public 400 body — it lists supported
+// values in both code and name form so callers learn the contract from the
+// error itself (developers-go.md §4.8).
+var errUnknownCountry = errors.New("unknown country: supported values are NG, GH (or Nigeria, Ghana)")
 
 // resolveCountry inspects the `country` and `country_code` query params and
 // returns the canonical country_name for filtering downstream queries.
