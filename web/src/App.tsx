@@ -16,6 +16,7 @@ import {
   Newspaper,
   Truck,
   ShieldAlert,
+  AlertTriangle,
 } from 'lucide-react'
 
 import { BrowserRouter as Router, Routes, Route, useRouteError } from 'react-router-dom'
@@ -96,7 +97,8 @@ function StagingBanner() {
       role="note"
       aria-label="Test environment notice"
     >
-      Staging environment — pre-release/test data. Do not rely on this for operational decisions.
+      <AlertTriangle className="staging-banner__icon" size={16} aria-hidden="true" />
+      <span>Staging environment — pre-release/test data. Do not rely on this for operational decisions.</span>
     </div>
   )
 }
