@@ -172,6 +172,8 @@ h2[id],
 
 .staging-banner__icon {
   flex-shrink: 0;
+  /* Explicit colour decouples the icon from any future banner text-colour change */
+  color: var(--accent-amber);
 }
 
 @keyframes staging-banner-stripe-pulse {
