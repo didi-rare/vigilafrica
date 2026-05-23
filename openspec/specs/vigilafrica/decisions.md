@@ -334,7 +334,7 @@ v0.5 introduces scheduled ingestion via gocron. A scheduled job that fails silen
 
 **3. Failure alert**
 - On every failed ingestion run, an email is sent immediately via Resend
-- Subject: `[VigilAfrica] Ingestion failed at {time}`
+- Subject: `[VigilAfrica] Ingestion failed at {time}` *(superseded 2026-05-22 by [chore-alert-env-label](../../proposals/chore-alert-env-label.md); the active subject is `[VigilAfrica:<env>] Ingestion failed for <country> at <time>` where `<env>` is `staging`, `production`, `local`, `demo`, or `unknown`)*
 - Body includes: error message, events fetched, events stored, run duration
 
 **4. Staleness watchdog**

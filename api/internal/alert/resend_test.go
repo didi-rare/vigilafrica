@@ -34,6 +34,7 @@ func TestClientSendIngestFailurePostsToResend(t *testing.T) {
 		FromEmail:    "alerts@vigilafrica.org",
 		ToEmails:     []string{"ops@example.com", "maintainer@example.com"},
 		Endpoint:     server.URL,
+		Environment:  "staging",
 	}, nil)
 
 	err := client.SendIngestFailure(context.Background(), &models.IngestionRun{
@@ -52,8 +53,9 @@ func TestClientSendIngestFailurePostsToResend(t *testing.T) {
 	if payload["from"] != "alerts@vigilafrica.org" {
 		t.Fatalf("unexpected from: %v", payload["from"])
 	}
-	if payload["subject"] == "" || !strings.Contains(payload["subject"].(string), "Ingestion failed") {
-		t.Fatalf("unexpected subject: %v", payload["subject"])
+	subject, _ := payload["subject"].(string)
+	if !strings.HasPrefix(subject, "[VigilAfrica:staging] Ingestion failed") {
+		t.Fatalf("unexpected subject: %q", subject)
 	}
 	recipients, ok := payload["to"].([]any)
 	if !ok {
@@ -111,6 +113,65 @@ func TestClientNoOpsWhenMissingAPIKey(t *testing.T) {
 	}
 	if called {
 		t.Fatal("expected missing API key to skip HTTP call")
+	}
+}
+
+func TestClientSubjectUsesEnvironmentPrefix(t *testing.T) {
+	cases := []struct {
+		name        string
+		environment string
+		wantPrefix  string
+	}{
+		{name: "staging", environment: "staging", wantPrefix: "[VigilAfrica:staging]"},
+		{name: "production", environment: "production", wantPrefix: "[VigilAfrica:production]"},
+		{name: "empty defaults to unknown", environment: "", wantPrefix: "[VigilAfrica:unknown]"},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			var failureSubject, stalenessSubject string
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var payload map[string]any
+				if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+					t.Fatalf("decode payload: %v", err)
+				}
+				subject, _ := payload["subject"].(string)
+				if strings.Contains(subject, "Ingestion failed") {
+					failureSubject = subject
+				} else {
+					stalenessSubject = subject
+				}
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer server.Close()
+
+			client := NewClient(Config{
+				ResendAPIKey: "re_test",
+				ToEmails:     []string{"ops@example.com"},
+				Endpoint:     server.URL,
+				Environment:  tc.environment,
+			}, nil)
+
+			if err := client.SendIngestFailure(context.Background(), &models.IngestionRun{
+				ID:          1,
+				CountryCode: "NG",
+				StartedAt:   time.Date(2026, 5, 11, 10, 0, 0, 0, time.UTC),
+				Status:      models.RunStatusFailure,
+			}); err != nil {
+				t.Fatalf("SendIngestFailure: %v", err)
+			}
+			if err := client.SendStalenessAlert(context.Background(), time.Now().Add(-3*time.Hour), 2*time.Hour); err != nil {
+				t.Fatalf("SendStalenessAlert: %v", err)
+			}
+
+			if !strings.HasPrefix(failureSubject, tc.wantPrefix+" ") {
+				t.Errorf("failure subject = %q, want prefix %q", failureSubject, tc.wantPrefix)
+			}
+			if !strings.HasPrefix(stalenessSubject, tc.wantPrefix+" ") {
+				t.Errorf("staleness subject = %q, want prefix %q", stalenessSubject, tc.wantPrefix)
+			}
+		})
 	}
 }
 
