@@ -17,7 +17,7 @@ Live validation on 2026-05-14 confirmed both fail on `staging.vigilafrica.org` â
 
 Both Vercel projects (production: `vigilafrica.org`, staging: `staging.vigilafrica.org`) share the same `web/` directory and the same [web/vercel.json](web/vercel.json) per [docs/deployment/staging-production-topology.md:46-56](docs/deployment/staging-production-topology.md#L46-L56). They are differentiated only by their respective dashboard env vars and the Ignored Build Step.
 
-Companion: [openspec/proposals/fix-staging-vite-env-flag.md](openspec/proposals/fix-staging-vite-env-flag.md).
+Companion: [openspec/archive/proposal-fix-staging-vite-env-flag.md](proposal-fix-staging-vite-env-flag.md).
 
 ## Decision Log
 
