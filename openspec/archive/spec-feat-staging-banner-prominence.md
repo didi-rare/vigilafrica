@@ -10,7 +10,7 @@ branch: feat/staging-banner-prominence
 
 `fix-staging-vite-env-flag` (PR #86) wired `VITE_ENV=staging` through the Vercel build so the `<StagingBanner>` component in [web/src/App.tsx:90-102](web/src/App.tsx#L90-L102) renders on `staging.vigilafrica.org`. Browser confirmation on 2026-05-23 showed the banner appears, but reads as a thin amber text strip — easy to miss. This spec adds visual weight without changing the banner's gate, copy, or position.
 
-Companion: [openspec/proposals/feat-staging-banner-prominence.md](openspec/proposals/feat-staging-banner-prominence.md).
+Companion: [openspec/archive/proposal-feat-staging-banner-prominence.md](proposal-feat-staging-banner-prominence.md).
 
 ## Decision Log
 

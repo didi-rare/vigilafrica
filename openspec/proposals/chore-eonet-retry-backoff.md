@@ -1,7 +1,7 @@
 ---
 id: chore-eonet-retry-backoff
 status: proposed
-branch: tbd
+branch: chore/eonet-retry-backoff
 ---
 
 # Proposal: EONET Client Retry with Backoff (chore-eonet-retry-backoff)

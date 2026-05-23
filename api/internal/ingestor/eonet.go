@@ -18,7 +18,26 @@ const (
 	maxEONETResponseBytes        = 5 * 1024 * 1024
 	maxRetryAfterSeconds         = 60
 	maxEONETEventRawPayloadBytes = 256 * 1024
+	// maxTransientRetries bounds retries for network errors and 5xx-non-503
+	// responses (chore-eonet-retry-backoff). Distinct from the 429/503
+	// retry budget which uses maxRetries (=3) inside runIngest.
+	maxTransientRetries = 2
 )
+
+// transientRetryDelays are the fixed waits before retry attempts 1 and 2 on
+// the transient path (network errors, 5xx non-503). Indices 0 and 1 are
+// consumed in order.
+var transientRetryDelays = [maxTransientRetries]time.Duration{
+	5 * time.Second,
+	15 * time.Second,
+}
+
+// eonetHTTPClient is the HTTP client used to fetch EONET events.
+// Declared as a package-level var so tests can inject a transport that
+// simulates network errors (which httptest.Server can't reproduce directly).
+// TODO(future): move onto an Ingestor struct field alongside eonetURL /
+// eonetSleepFn (see chore-post-v11-quality-sweep B6).
+var eonetHTTPClient = &http.Client{Timeout: 30 * time.Second}
 
 // eonetURL is the NASA EONET v3 events endpoint.
 // Declared as var (not const) to allow override in tests via eonetURL = server.URL.
@@ -132,8 +151,6 @@ func Ingest(ctx context.Context, repo database.Repository, country CountryConfig
 func runIngest(ctx context.Context, repo database.Repository, country CountryConfig) (*IngestResult, error) {
 	result := &IngestResult{}
 
-	client := &http.Client{Timeout: 30 * time.Second}
-
 	bbox := fmt.Sprintf("%.4f,%.4f,%.4f,%.4f",
 		country.BBox[0], country.BBox[1],
 		country.BBox[2], country.BBox[3],
@@ -146,6 +163,7 @@ func runIngest(ctx context.Context, repo database.Repository, country CountryCon
 	var reqErr error
 	var resp *http.Response
 	maxRetries := 3
+	transientAttempt := 0 // counts retries on the transient path (network errors, 5xx non-503)
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
@@ -155,9 +173,26 @@ func runIngest(ctx context.Context, repo database.Repository, country CountryCon
 		req.Header.Set("Accept", "application/json")
 		req.Header.Set("User-Agent", "VigilAfrica-Ingestor")
 
-		resp, reqErr = client.Do(req)
+		resp, reqErr = eonetHTTPClient.Do(req)
 		if reqErr != nil {
-			return result, fmt.Errorf("http request failed: %w", reqErr)
+			// Network error (TCP stall, connection reset, DNS, request timeout).
+			// Retry up to maxTransientRetries with fixed 5s/15s delays.
+			if transientAttempt >= maxTransientRetries {
+				return result, fmt.Errorf("http request failed after %d retries: %w", maxTransientRetries, reqErr)
+			}
+			sleepDuration := transientRetryDelays[transientAttempt]
+			slog.Warn("ingestion: transient error, retrying",
+				"country", country.Code,
+				"cause", "network-error",
+				"attempt", transientAttempt+1,
+				"sleep_sec", int(sleepDuration.Seconds()),
+				"err", reqErr,
+			)
+			transientAttempt++
+			if err := eonetSleepFn(ctx, sleepDuration); err != nil {
+				return result, err
+			}
+			continue
 		}
 
 		if resp.StatusCode == http.StatusOK {
@@ -170,7 +205,9 @@ func runIngest(ctx context.Context, repo database.Repository, country CountryCon
 		}
 
 		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusServiceUnavailable {
-			bodyBytes, _ := readLimitedResponseBody(resp.Body, 64*1024)
+			// best-effort: a read error here just yields empty bytes, which
+			// fall through to the exponential-backoff branch below (§4.7).
+			bodyBytes, _ := readLimitedResponseBody(resp.Body, 64*1024) //nolint:errcheck
 			resp.Body.Close()
 
 			if attempt == maxRetries {
@@ -204,6 +241,29 @@ func runIngest(ctx context.Context, repo database.Repository, country CountryCon
 			continue
 		}
 
+		// 5xx other than 503 — transient server error, retry with the same
+		// 2-retry / 5s,15s budget as network errors.
+		if resp.StatusCode >= 500 && resp.StatusCode < 600 {
+			resp.Body.Close()
+			if transientAttempt >= maxTransientRetries {
+				return result, fmt.Errorf("unexpected EONET status %d after %d transient retries", resp.StatusCode, maxTransientRetries)
+			}
+			sleepDuration := transientRetryDelays[transientAttempt]
+			slog.Warn("ingestion: transient error, retrying",
+				"country", country.Code,
+				"cause", "server-error-5xx",
+				"status", resp.StatusCode,
+				"attempt", transientAttempt+1,
+				"sleep_sec", int(sleepDuration.Seconds()),
+			)
+			transientAttempt++
+			if err := eonetSleepFn(ctx, sleepDuration); err != nil {
+				return result, err
+			}
+			continue
+		}
+
+		// 4xx (non-429) and any other unexpected status — no retry.
 		resp.Body.Close()
 		return result, fmt.Errorf("unexpected EONET status: %d", resp.StatusCode)
 	}
