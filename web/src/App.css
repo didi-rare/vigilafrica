@@ -145,14 +145,52 @@ h2[id],
    Staging Banner — renders only when VITE_ENV === 'staging'
 ───────────────────────────────────── */
 .staging-banner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   background: linear-gradient(90deg, var(--surface-amber-strong), var(--surface-amber-medium));
   border-bottom: 1px solid var(--border-amber-emphatic);
-  text-align: center;
-  padding: 10px 16px;
+  padding: 10px 16px 10px 20px;
   font-size: 0.8125rem;
   font-weight: 600;
   color: var(--accent-amber);
   letter-spacing: 0.01em;
+}
+
+.staging-banner::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--accent-amber);
+  animation: staging-banner-stripe-pulse 2.5s ease-in-out infinite;
+}
+
+.staging-banner__icon {
+  flex-shrink: 0;
+  /* Explicit colour decouples the icon from any future banner text-colour change */
+  color: var(--accent-amber);
+}
+
+@keyframes staging-banner-stripe-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+
+  50% {
+    box-shadow: 0 0 12px 1px var(--accent-amber);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .staging-banner::before {
+    animation: none;
+  }
 }
 
 /* ─────────────────────────────────────

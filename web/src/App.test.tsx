@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { axe } from 'vitest-axe'
 
 import App from './App'
@@ -38,6 +38,29 @@ describe('App', () => {
     render(<App />)
 
     expect(screen.queryByLabelText(/test environment notice/i)).not.toBeInTheDocument()
+  })
+
+  describe('staging banner (VITE_ENV=staging)', () => {
+    afterEach(() => {
+      vi.unstubAllEnvs()
+    })
+
+    it('renders the banner with icon, copy, and accessible label', () => {
+      vi.stubEnv('VITE_ENV', 'staging')
+
+      render(<App />)
+
+      const banner = screen.getByLabelText(/test environment notice/i)
+      expect(banner).toBeInTheDocument()
+      expect(banner).toHaveClass('staging-banner')
+      expect(banner).toHaveAttribute('role', 'note')
+      expect(banner).toHaveTextContent(/Staging environment — pre-release\/test data/i)
+
+      // Icon is decoratively hidden so screen readers don't double-announce
+      const icon = banner.querySelector('.staging-banner__icon')
+      expect(icon).not.toBeNull()
+      expect(icon).toHaveAttribute('aria-hidden', 'true')
+    })
   })
 
   it('renders the two-CTA hero with explore as primary and GitHub as secondary', () => {
