@@ -127,18 +127,27 @@ Returns a paginated list of enriched natural events. Supports filtering by categ
 ### Request
 
 ```
-GET /v1/events[?category=<value>][&state=<value>][&status=<value>][&limit=<n>][&offset=<n>]
+GET /v1/events[?country=<name>|country_code=<iso>][&category=<value>][&state=<value>][&status=<value>][&limit=<n>][&offset=<n>]
 ```
 
 ### Query Parameters
 
-| Param      | Type    | Allowed Values            | Default      | Description                              |
-|------------|---------|---------------------------|--------------|------------------------------------------|
-| `category` | string  | `floods`, `wildfires`     | — (all)      | Filter by event category                 |
-| `state`    | string  | Any Nigerian state name    | — (all)      | Filter by enriched state name (case-insensitive) |
-| `status`   | string  | `open`, `closed`          | `open`       | Filter by event status                   |
-| `limit`    | integer | 1–200                     | 50           | Maximum results per page                 |
-| `offset`   | integer | ≥ 0                       | 0            | Pagination offset                         |
+| Param          | Type    | Allowed Values            | Default | Description                                       |
+|----------------|---------|---------------------------|---------|---------------------------------------------------|
+| `country`      | string  | `Nigeria`, `Ghana`        | — (all) | Filter by country name (case-insensitive)         |
+| `country_code` | string  | `NG`, `GH`                | — (all) | Filter by ISO 3166-1 alpha-2 code (case-insens.)  |
+| `category`     | string  | `floods`, `wildfires`     | — (all) | Filter by event category                          |
+| `state`        | string  | Any enriched state name   | — (all) | Filter by state name (case-insensitive)           |
+| `status`       | string  | `open`, `closed`          | `open`  | Filter by event status                            |
+| `limit`        | integer | 1–200                     | 50      | Maximum results per page                          |
+| `offset`       | integer | ≥ 0                       | 0       | Pagination offset                                 |
+
+**Country input semantics:**
+
+- `country` and `country_code` are interchangeable inputs for the same filter — pass one or the other.
+- If both are supplied, `country_code` wins; `country` is ignored.
+- Unknown values (e.g. `country=Atlantis`, `country_code=XX`) return HTTP 400 with `{"error":"unknown country: supported values are NG, GH (or Nigeria, Ghana)"}`.
+- Omit both to return the unfiltered list.
 
 ### Response: 200 OK
 
