@@ -1,7 +1,7 @@
 ---
 id: chore-hdx-boundaries
 status: proposed
-branch: tbd
+branch: chore/hdx-boundaries
 ---
 
 # Proposal: Replace Rectangular Boundary Approximations with HDX COD Data (chore-hdx-boundaries)

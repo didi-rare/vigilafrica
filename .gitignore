@@ -12,6 +12,10 @@ bin/
 /vigilafrica
 *.exe
 
+# Python (scripts/ are operator-run; cache dirs shouldn't be tracked)
+__pycache__/
+*.pyc
+
 
 # OS
 .DS_Store
