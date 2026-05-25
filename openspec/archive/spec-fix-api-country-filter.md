@@ -19,7 +19,7 @@ This produces the most common shape of "API filter is broken" bug report: caller
 
 The fix is additive — accept `country_code` alongside the existing `country`, validate both, and return HTTP 400 when neither resolves. No breaking change for existing callers (web frontend, bookmarks).
 
-Companion: [openspec/proposals/fix-api-country-filter.md](openspec/proposals/fix-api-country-filter.md).
+Companion: [openspec/archive/proposal-fix-api-country-filter.md](proposal-fix-api-country-filter.md).
 
 ## Decision Log
 

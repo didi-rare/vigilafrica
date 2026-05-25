@@ -24,8 +24,10 @@ import sys
 from pathlib import Path
 
 # HDX COD GeoJSON uses various property names for the ADM1 English name.
-# Checked in priority order — first match wins.
+# Checked in priority order — first match wins. The 2025 HDX COD release for
+# Nigeria and Ghana uses `adm1_name` (lowercased), so it's the first candidate.
 ADM1_NAME_CANDIDATES = [
+    "adm1_name",
     "ADM1_EN",
     "admin1Name_en",
     "admin1Name",
@@ -35,6 +37,7 @@ ADM1_NAME_CANDIDATES = [
 ]
 
 ADM0_NAME_CANDIDATES = [
+    "adm0_name",
     "ADM0_EN",
     "admin0Name_en",
     "admin0Name",
@@ -43,10 +46,14 @@ ADM0_NAME_CANDIDATES = [
 
 
 def detect_property(feature: dict, candidates: list[str]) -> str | None:
+    """Return the first candidate KEY whose value is truthy on this feature.
+
+    Note: returns the key name (for downstream lookup), not the value itself.
+    """
     props = feature.get("properties", {})
     for key in candidates:
         if key in props and props[key]:
-            return props[key]
+            return key
     return None
 
 
