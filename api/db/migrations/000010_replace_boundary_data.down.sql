@@ -1,0 +1,10 @@
+-- no-op: irreversible, see header of 000010_replace_boundary_data.up.sql.
+--
+-- Rolling back from production-grade HDX polygons to the simplified rectangles
+-- from migration 000005 would deliberately downgrade enrichment accuracy. If
+-- a rollback is genuinely required (e.g. to debug a data-corruption incident),
+-- the procedure is:
+--   1. DELETE FROM admin_boundaries WHERE country_code IN ('NG', 'GH');
+--   2. Manually re-apply 000005_admin_boundary_data.up.sql.
+--   3. UPDATE events SET geom = geom WHERE geom IS NOT NULL;  -- re-enrich.
+-- See chore-hdx-boundaries D5 for the rationale.
