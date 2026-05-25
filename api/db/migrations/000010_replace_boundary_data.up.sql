@@ -10,6 +10,10 @@
 -- This migration is irreversible — the down.sql restores nothing because
 -- going back to rectangles loses accuracy. If you genuinely need rollback,
 -- re-apply 000005 manually after dropping these rows.
+--
+-- HOW TO REVIEW / VERIFY THIS 2.3MB FILE: regenerate it from HDX rather than
+-- reading the WKT line-by-line. See scripts/README.md "Regenerate boundary
+-- migration" for the exact commands; the output should diff-equal this file.
 
 BEGIN;
 
@@ -140,6 +144,11 @@ FROM admin_boundaries WHERE country_code = 'GH' AND adm_level = 1;
 
 -- 5. Re-enrich existing events against the new boundaries. The enrichment
 --    trigger (000006) fires on UPDATE OF geom; touching geom is sufficient.
+--    SCALE NOTE: this rewrites every event row. Fine today (~hundreds of
+--    rows) and on staging (~hundreds-to-thousands). When the events table
+--    grows past ~100k rows, replace this with a batched separate migration
+--    or an offline reconciliation job — risk of statement_timeout.
+--    See chore-hdx-boundaries spec, R1.
 UPDATE events SET geom = geom WHERE geom IS NOT NULL;
 
 COMMIT;
