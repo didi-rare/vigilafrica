@@ -41,6 +41,11 @@
   },
   {
     "label": "v1.0 · Credible public launch",
+    "active": false,
+    "complete": true
+  },
+  {
+    "label": "v1.1 · Quality + observability",
     "active": true,
     "complete": false
   }

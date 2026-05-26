@@ -59,7 +59,20 @@ paths:
           in: query
           schema:
             type: string
-          description: Filter by enriched country name.
+            enum: [Nigeria, Ghana]
+          description: |
+            Filter by enriched country name (case-insensitive). Accepts the canonical
+            country name. Unknown values return 400. If both `country` and `country_code`
+            are supplied, `country_code` wins.
+        - name: country_code
+          in: query
+          schema:
+            type: string
+            enum: [NG, GH]
+          description: |
+            Filter by ISO 3166-1 alpha-2 country code (case-insensitive). Equivalent
+            to passing the corresponding `country` name. Wins over `country` when both
+            are supplied. Unknown values return 400.
         - name: state
           in: query
           schema:
@@ -138,7 +151,18 @@ paths:
           in: query
           schema:
             type: string
-          description: Country name to scope the state list.
+            enum: [Nigeria, Ghana]
+          description: |
+            Filter by country name (case-insensitive). Unknown values return 400.
+            If both `country` and `country_code` are supplied, `country_code` wins.
+        - name: country_code
+          in: query
+          schema:
+            type: string
+            enum: [NG, GH]
+          description: |
+            Filter by ISO 3166-1 alpha-2 country code (case-insensitive). Wins over
+            `country` when both are supplied. Unknown values return 400.
       responses:
         '200':
           description: OK
@@ -146,6 +170,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/StatesResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
 
   /v1/enrichment-stats:
     get:

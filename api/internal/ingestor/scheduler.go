@@ -67,7 +67,21 @@ func StartScheduler(ctx context.Context, repo database.Repository, alertClient *
 	}()
 }
 
-func runAllCountriesWithLock(ctx context.Context, repo database.Repository, alertClient *alert.Client, interval time.Duration) {
+// schedulerLockTTL bounds how long a crashed/disappeared scheduler holds the
+// lock before another replica may take over. Decoupled from the ingestion
+// interval (chore-post-v11-quality-sweep B2) — the previous coupling meant a
+// crash at the start of a 60-minute interval left the lock orphaned for the
+// whole interval. 5 minutes comfortably covers the worst-case ingestion run
+// today (~3 min for both NG and GH including retries) while keeping crash
+// recovery tight.
+//
+// SCALE NOTE: if event volume or country count grows such that runAllCountries
+// exceeds ~4 minutes, either bump this value or implement a heartbeat that
+// extends the lock while the run is in progress. The latter is the proper fix
+// for multi-replica HA and is captured as a follow-up.
+const schedulerLockTTL = 5 * time.Minute
+
+func runAllCountriesWithLock(ctx context.Context, repo database.Repository, alertClient *alert.Client, _ time.Duration) {
 	lockRepo, ok := repo.(schedulerLockRepository)
 	if !ok {
 		runAllCountries(ctx, repo, alertClient)
@@ -75,11 +89,7 @@ func runAllCountriesWithLock(ctx context.Context, repo database.Repository, aler
 	}
 
 	holder := schedulerLockHolder()
-	ttl := interval
-	if ttl < 5*time.Minute {
-		ttl = 5 * time.Minute
-	}
-	acquired, err := lockRepo.TryAcquireSchedulerLock(ctx, schedulerLockName, holder, ttl)
+	acquired, err := lockRepo.TryAcquireSchedulerLock(ctx, schedulerLockName, holder, schedulerLockTTL)
 	if err != nil {
 		slog.Error("scheduler: failed to acquire scheduler lock", "err", err)
 		return

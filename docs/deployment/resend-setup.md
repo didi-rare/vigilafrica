@@ -43,6 +43,13 @@ addresses only in ignored runtime env files:
 `ALERT_EMAIL_TO` remains a single-recipient compatibility fallback for existing
 deployments, but new deployments should use `ALERTS_TO`.
 
+Alert subjects are prefixed with `[VigilAfrica:<env>]` where `<env>` comes from
+the `APP_ENV` variable. `docker-compose.staging.yml` and `docker-compose.prod.yml`
+hardcode this to `staging` and `production` respectively, so it does not need to
+be set in the runtime `.env`. If `APP_ENV` is unset the prefix falls back to
+`[VigilAfrica:unknown]` — a deliberate visible signal that the compose file was
+bypassed.
+
 If `RESEND_API_KEY` and all recipient variables are missing, the API logs a
 warning and skips email delivery. Local development remains unaffected.
 

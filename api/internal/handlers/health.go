@@ -48,6 +48,12 @@ func NewReadinessHandler(version string, repo database.Repository) *HealthHandle
 }
 
 func runToResponse(run *models.IngestionRun, includeErrors bool) *lastIngestionResponse {
+	// Defensive nil-check: all current callers guard with `if run != nil`, but
+	// a future caller that forgets would otherwise panic on the dereference
+	// below. See chore-post-v11-quality-sweep B3.
+	if run == nil {
+		return nil
+	}
 	statusStr := string(run.Status)
 	resp := &lastIngestionResponse{
 		CountryCode: run.CountryCode,

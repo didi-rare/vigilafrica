@@ -10,7 +10,6 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"vigilafrica/api/internal/database"
-	"vigilafrica/api/internal/models"
 )
 
 type EventHandler struct {
@@ -28,7 +27,8 @@ type APIError struct {
 func respondWithError(w http.ResponseWriter, code int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(APIError{Error: message})
+	// best-effort — status code already framed; encode errors are network-level (§4.7).
+	_ = json.NewEncoder(w).Encode(APIError{Error: message})
 }
 
 func (h *EventHandler) ListEvents(w http.ResponseWriter, r *http.Request) {
@@ -45,8 +45,13 @@ func (h *EventHandler) ListEvents(w http.ResponseWriter, r *http.Request) {
 		filters.Category = cat
 	}
 
-	if country := query.Get("country"); country != "" {
-		filters.Country = country
+	canonical, present, err := resolveCountry(query)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if present {
+		filters.Country = canonical
 	}
 
 	if state := query.Get("state"); state != "" {
@@ -89,15 +94,11 @@ func (h *EventHandler) ListEvents(w http.ResponseWriter, r *http.Request) {
 		filters.Offset = offset
 	}
 
+	// Note: repo.ListEvents guarantees a non-nil slice — no defensive nil-coalesce needed here.
 	events, total, err := h.repo.ListEvents(r.Context(), filters)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "internal server error")
 		return
-	}
-
-	// Always output an empty array instead of null
-	if events == nil {
-		events = make([]models.Event, 0)
 	}
 
 	response := map[string]interface{}{
@@ -111,7 +112,8 @@ func (h *EventHandler) ListEvents(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
+	// best-effort — status code already framed; encode errors are network-level (§4.7).
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 func (h *EventHandler) GetEventByID(w http.ResponseWriter, r *http.Request) {
@@ -139,5 +141,6 @@ func (h *EventHandler) GetEventByID(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(event)
+	// best-effort — status code already framed; encode errors are network-level (§4.7).
+	_ = json.NewEncoder(w).Encode(event)
 }

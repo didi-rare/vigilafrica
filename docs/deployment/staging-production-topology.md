@@ -28,6 +28,8 @@ flowchart TD
 |---|---|---|
 | `CORS_ORIGIN` | `https://staging.vigilafrica.org` | `https://vigilafrica.org` |
 | `VITE_API_BASE_URL` | `https://api.staging.vigilafrica.org` | `https://api.vigilafrica.org` |
+| `VITE_ENV` | `staging` (drives the staging banner + `noindex` robots tag) | `production` |
+| `APP_ENV` | `staging` (hardcoded in `docker-compose.staging.yml`) | `production` (hardcoded in `docker-compose.prod.yml`) |
 | `RESEND_API_KEY` | staging sending key | production sending key |
 | `ALERTS_TO` | comma-separated maintainer inboxes in VPS `.env` | comma-separated maintainer inboxes in VPS `.env` |
 | `APP_VERSION` | short commit SHA | SemVer tag |
@@ -54,6 +56,8 @@ Both Vercel projects share `web/` as their root directory and consume the same [
 Without the Ignored Build Step, Vercel auto-creates a preview deployment for every PR push regardless of base branch — so PRs targeting `development` would trigger preview builds on the production project. The script returns exit `0` (skip) for any ref that is not the project's `DEPLOY_BRANCH`, and exit `1` (build) for matching refs.
 
 If a project is ever recreated, both the script reference and the env var must be re-applied — there is no `vercel.json` shortcut for this because both projects share the same file.
+
+The same dashboard-only constraint applies to `VITE_ENV`: it must be set per project (staging project → `staging`, production project → `production`) via Settings → Environments → All Environments. **Do not** add `VITE_ENV` to `vercel.json` `build.env` — that would apply the same value to both projects and break the staging-only behaviour (the `noindex` robots tag and the staging banner). See [openspec/proposals/fix-staging-vite-env-flag.md](../../openspec/proposals/fix-staging-vite-env-flag.md).
 
 ## Operator Runbook
 
