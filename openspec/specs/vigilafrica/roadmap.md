@@ -316,7 +316,7 @@ These are blockers that must be resolved before v0.1 development begins. They ar
 - Watchdog dedupe-vs-send order fix — Resend hiccups no longer permanently drop alerts.
 - React error boundary restored via `react-error-boundary`.
 - "Project Status" landing-page copy refresh + footer link fix.
-- ~10 other smaller cleanups from `chore-post-v11-quality-sweep` (B6 eonet.go Ingestor-struct refactor deferred to a focused follow-up — see [[chore-post-v11-deferred-b6]]).
+- ~10 other smaller cleanups from `chore-post-v11-quality-sweep` (B6 eonet.go Ingestor-struct refactor deferred to a focused follow-up).
 
 ---
 
