@@ -20,8 +20,12 @@ import (
 )
 
 // version is injected at build time via:
-// go build -ldflags "-X main.version=0.5.0" ./cmd/server/
-var version = "0.7.0"
+// go build -ldflags "-X main.version=1.1.1" ./cmd/server/
+//
+// The source-level fallback should match the most recent shipped release so
+// that an accidentally ldflag-less build doesn't silently report a wildly
+// stale version. Bump alongside each tagged release.
+var version = "1.1.1"
 
 func main() {
 	// ── Structured JSON logging ───────────────────────────────────────────────

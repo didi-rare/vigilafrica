@@ -16,6 +16,7 @@ type WatchdogConfig struct {
 
 type stalenessAlertRecorder interface {
 	TryRecordStalenessAlert(ctx context.Context, referenceTime time.Time) (bool, error)
+	ReleaseStalenessAlertClaim(ctx context.Context, referenceTime time.Time) error
 }
 
 func (cfg WatchdogConfig) withDefaults() WatchdogConfig {
@@ -62,13 +63,16 @@ func StartStalenessWatchdog(ctx context.Context, repo database.Repository, clien
 					}
 					continue
 				}
-				if recorder, ok := repo.(stalenessAlertRecorder); ok {
+				recorder, hasRecorder := repo.(stalenessAlertRecorder)
+				if hasRecorder {
 					recorded, err := recorder.TryRecordStalenessAlert(ctx, referenceTime)
 					if err != nil {
 						logger.Error("watchdog: failed to record staleness alert dedupe", "err", err)
 						continue
 					}
 					if !recorded {
+						// Another replica already claimed (and presumably sent) this
+						// reference time. Locally mark it so we skip future ticks.
 						lastAlertReference = referenceTime
 						continue
 					}
@@ -76,6 +80,14 @@ func StartStalenessWatchdog(ctx context.Context, repo database.Repository, clien
 
 				if err := client.SendStalenessAlert(ctx, referenceTime, cfg.StalenessThreshold); err != nil {
 					logger.Error("watchdog: failed to send staleness alert", "err", err)
+					// Release the dedupe claim so the next tick can retry.
+					// Without this, a single Resend hiccup permanently blocks
+					// future alerts for the same reference time (B1).
+					if hasRecorder {
+						if releaseErr := recorder.ReleaseStalenessAlertClaim(ctx, referenceTime); releaseErr != nil {
+							logger.Error("watchdog: failed to release staleness alert claim after send failure", "err", releaseErr)
+						}
+					}
 					continue
 				}
 				lastAlertReference = referenceTime
@@ -91,16 +103,21 @@ func latestIngestionReference(ctx context.Context, repo database.Repository, log
 		return time.Time{}, false
 	}
 
-	var firstRun *models.IngestionRun
-	if lastSuccessRun == nil {
-		firstRun, err = repo.GetFirstIngestionRun(ctx)
-		if err != nil {
-			logger.Error("watchdog: failed to query first ingestion run", "err", err)
-			return time.Time{}, false
+	if lastSuccessRun != nil {
+		referenceTime, ok := stalenessReferenceTime(lastSuccessRun, nil)
+		if !ok {
+			logger.Warn("watchdog: no ingestion runs found yet")
 		}
+		return referenceTime, ok
 	}
 
-	referenceTime, ok := stalenessReferenceTime(lastSuccessRun, firstRun)
+	firstRun, err := repo.GetFirstIngestionRun(ctx)
+	if err != nil {
+		logger.Error("watchdog: failed to query first ingestion run", "err", err)
+		return time.Time{}, false
+	}
+
+	referenceTime, ok := stalenessReferenceTime(nil, firstRun)
 	if !ok {
 		logger.Warn("watchdog: no ingestion runs found yet")
 	}

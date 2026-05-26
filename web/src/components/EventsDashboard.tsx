@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { fetchEvents, fetchContext, fetchHealth, fetchStates, getApiBaseUrl, eventKeys, stateKeys, healthKeys, contextKeys } from '../api/events'
@@ -31,42 +31,38 @@ function formatLastUpdated(minutesAgo: number): string {
   return `Last updated ${daysAgo}d ago`
 }
 
-type FreshnessState =
-  | { kind: 'ok'; message: string }
-  | { kind: 'warn'; message: string }
+type FreshnessSnapshot =
   | { kind: 'error'; message: string }
   | { kind: 'unknown' }
+  | { kind: 'healthy'; lastSuccess: Date }
 
-// Module-level selector — Date.now() is called outside React render
-function selectFreshness(health: HealthResponse): FreshnessState {
-  const isDegraded = health.status === 'degraded'
-  if (isDegraded) {
+// selectFreshness returns the raw snapshot the UI needs WITHOUT computing any
+// time-relative strings. Date.now() lives in the FreshnessIndicator component
+// instead, so the "X minutes ago" label ticks on every render and stays
+// accurate between refetches (chore-post-v11-quality-sweep F6).
+function selectFreshness(health: HealthResponse): FreshnessSnapshot {
+  if (health.status === 'degraded') {
     const message = health.last_ingestion?.status === 'failure'
       ? 'Latest ingestion did not complete successfully. Data may be delayed while operators investigate.'
       : 'One or more country ingestion runs did not complete successfully. Some regional data may be delayed.'
     return { kind: 'error', message }
   }
-
   const completedAt = health?.last_ingestion?.completed_at
-  const lastSuccess = health?.last_ingestion?.status === 'success' && completedAt
-    ? new Date(completedAt)
-    : null
-  if (!lastSuccess) {
-    return { kind: 'unknown' }
+  if (health?.last_ingestion?.status === 'success' && completedAt) {
+    return { kind: 'healthy', lastSuccess: new Date(completedAt) }
   }
+  return { kind: 'unknown' }
+}
 
-  const minutesAgo = Math.floor((Date.now() - lastSuccess.getTime()) / (1000 * 60))
-  const hoursAgo = minutesAgo / 60
-  const isStale = hoursAgo > STALENESS_THRESHOLD_HOURS
-
-  if (isStale) {
-    return {
-      kind: 'warn',
-      message: `Data last updated ${Math.floor(hoursAgo)} hours ago — ingestion may be stalled.`,
-    }
-  }
-
-  return { kind: 'ok', message: formatLastUpdated(minutesAgo) }
+// useNowTick re-renders the caller every `intervalMs`. Used by
+// FreshnessIndicator to keep the "X minutes ago" label ticking accurately.
+function useNowTick(intervalMs: number): number {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), intervalMs)
+    return () => window.clearInterval(id)
+  }, [intervalMs])
+  return now
 }
 
 function FreshnessIndicator() {
@@ -77,13 +73,34 @@ function FreshnessIndicator() {
     staleTime: 60 * 1000,
     select: selectFreshness,
   })
+  // Force re-render every minute so the relative-time label stays fresh even
+  // when no new query data has arrived (refetchInterval is 5 minutes).
+  const now = useNowTick(60 * 1000)
 
   // Pre-load: useQuery hasn't resolved yet. Returning null here is acceptable
   // because there is no freshness state to render — the loading state for the
   // dashboard data itself covers UX continuity.
   if (!data) return null
 
-  if (data.kind === 'unknown') {
+  // Compute the time-relative description here, in render, against the ticking
+  // `now`. The selector only returns the raw lastSuccess timestamp (F6).
+  let resolved: { kind: 'ok' | 'warn' | 'error'; message: string } | { kind: 'unknown' }
+  if (data.kind === 'error' || data.kind === 'unknown') {
+    resolved = data
+  } else {
+    const minutesAgo = Math.floor((now - data.lastSuccess.getTime()) / (1000 * 60))
+    const hoursAgo = minutesAgo / 60
+    if (hoursAgo > STALENESS_THRESHOLD_HOURS) {
+      resolved = {
+        kind: 'warn',
+        message: `Data last updated ${Math.floor(hoursAgo)} hours ago — ingestion may be stalled.`,
+      }
+    } else {
+      resolved = { kind: 'ok', message: formatLastUpdated(minutesAgo) }
+    }
+  }
+
+  if (resolved.kind === 'unknown') {
     return (
       <div
         className="freshness-banner freshness-banner--ok"
@@ -96,14 +113,14 @@ function FreshnessIndicator() {
     )
   }
 
-  const variantClass = data.kind === 'error'
+  const variantClass = resolved.kind === 'error'
     ? 'freshness-banner--error'
-    : data.kind === 'warn'
+    : resolved.kind === 'warn'
       ? 'freshness-banner--warn'
       : 'freshness-banner--ok'
 
-  const icon = data.kind === 'error' ? '⚠️' : data.kind === 'warn' ? '🕐' : '🟢'
-  const ariaRole = data.kind === 'ok' ? 'status' : 'alert'
+  const icon = resolved.kind === 'error' ? '⚠️' : resolved.kind === 'warn' ? '🕐' : '🟢'
+  const ariaRole = resolved.kind === 'ok' ? 'status' : 'alert'
 
   return (
     <div
@@ -112,7 +129,7 @@ function FreshnessIndicator() {
       aria-live="polite"
     >
       <span className="freshness-icon" aria-hidden="true">{icon}</span>
-      {data.message}
+      {resolved.message}
     </div>
   )
 }
@@ -194,16 +211,19 @@ export function EventsDashboard() {
     queryFn: () => fetchContext(),
   })
 
-  // Filter out events without coordinates to prevent MapLibre from crashing
-  const mapEvents = eventsData?.data
-    ?.filter(e => e.latitude !== null && e.longitude !== null)
-    ?.map(e => ({
+  // Filter out events without coordinates to prevent MapLibre from crashing.
+  // The type predicate narrows lat/lng to number, replacing the previous
+  // `as number` cast (chore-post-v11-quality-sweep F7).
+  const mapEvents = (eventsData?.data ?? [])
+    .filter((e): e is typeof e & { latitude: number; longitude: number } =>
+      e.latitude !== null && e.longitude !== null)
+    .map(e => ({
       id: e.id,
-      lat: e.latitude as number,   // safe: filtered null above
-      lng: e.longitude as number,  // safe: filtered null above
+      lat: e.latitude,
+      lng: e.longitude,
       category: e.category,
-      title: e.title
-    })) || []
+      title: e.title,
+    }))
 
   // Map center: selected country centroid > IP geolocation > Nigeria default
   const mapCenter: [number, number] =
@@ -320,9 +340,9 @@ export function EventsDashboard() {
               <div className="events-list">
                 {eventsData.data.map((event) => {
                   const categoryClass = event.category === 'floods' ? 'flood' : 'fire'
-                  const titleMatch = event.title.match(/^(.*)\s(\d+)$/)
-                  const displayTitle = titleMatch ? titleMatch[1] : event.title
-                  const eventId = titleMatch ? titleMatch[2] : ''
+                  // F5: render the raw event title rather than splitting off a
+                  // trailing number as an "ID". The regex was fragile — titles
+                  // like "Flood in Lagos 2024" treated 2024 as an event ID.
 
                   return (
                     <Link
@@ -336,12 +356,12 @@ export function EventsDashboard() {
                             {event.category === 'floods' ? '🌊 Floods' : '🔥 Wildfires'}
                           </span>
                           <span className="event-date">
-                            {event.event_date ? new Date(event.event_date).toLocaleDateString() : 'Active'}
+                            {/* F8: explicit en-GB locale so the same event renders the same date everywhere. */}
+                            {event.event_date ? new Date(event.event_date).toLocaleDateString('en-GB') : 'Active'}
                           </span>
                         </div>
                         <h3 className="event-title">
-                          {displayTitle}
-                          {eventId && <span className="event-id"> {eventId}</span>}
+                          {event.title}
                         </h3>
 
                         <div className="event-location glass-effect">

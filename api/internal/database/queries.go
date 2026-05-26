@@ -377,9 +377,13 @@ func (r *pgRepo) GetLastIngestionRunAllCountries(ctx context.Context) (map[strin
 	return result, nil
 }
 
-// TryRecordStalenessAlert atomically records a staleness alert reference.
-// It returns false when the same reference was already recorded, which lets
+// TryRecordStalenessAlert atomically claims a staleness alert reference.
+// It returns false when the same reference was already claimed, which lets
 // multiple API replicas suppress duplicate watchdog emails through Postgres.
+//
+// Pair with ReleaseStalenessAlertClaim: if the email send fails after a
+// successful claim, the caller MUST release the claim so the next tick can
+// retry. See chore-post-v11-quality-sweep B1.
 func (r *pgRepo) TryRecordStalenessAlert(ctx context.Context, referenceTime time.Time) (bool, error) {
 	query := `
 		INSERT INTO alert_dedupe (alert_kind, reference_time)
@@ -391,6 +395,26 @@ func (r *pgRepo) TryRecordStalenessAlert(ctx context.Context, referenceTime time
 		return false, fmt.Errorf("failed to record staleness alert reference: %w", err)
 	}
 	return tag.RowsAffected() == 1, nil
+}
+
+// ReleaseStalenessAlertClaim removes a previously-claimed dedupe row so the
+// next watchdog tick can retry the send. Called by the watchdog only when
+// TryRecordStalenessAlert returned true and the subsequent SendStalenessAlert
+// failed — i.e. the claim existed but no email actually went out.
+//
+// Race-condition note: in a multi-replica deployment, only the replica that
+// won the claim should call Release. The watchdog enforces this by only
+// invoking Release on the same iteration where TryRecord returned true.
+func (r *pgRepo) ReleaseStalenessAlertClaim(ctx context.Context, referenceTime time.Time) error {
+	query := `
+		DELETE FROM alert_dedupe
+		WHERE alert_kind = 'staleness'
+		  AND reference_time = $1
+	`
+	if _, err := r.pool.Exec(ctx, query, referenceTime.UTC()); err != nil {
+		return fmt.Errorf("failed to release staleness alert claim: %w", err)
+	}
+	return nil
 }
 
 func (r *pgRepo) TryAcquireSchedulerLock(ctx context.Context, lockName, holder string, ttl time.Duration) (bool, error) {

@@ -65,7 +65,8 @@ func GetContext(db database.Repository, geo *geoip.Reader) http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(resp)
+		// best-effort — status code already framed; encode errors are network-level (§4.7).
+		_ = json.NewEncoder(w).Encode(resp)
 	}
 }
 
