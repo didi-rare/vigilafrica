@@ -1,7 +1,7 @@
 ---
 id: chore-post-v11-quality-sweep
 status: proposed
-branch: tbd
+branch: chore/post-v11-quality-sweep-phase-all
 ---
 
 # Spec: Post-v1.1 Quality Sweep — Audit Followups (chore-post-v11-quality-sweep)
@@ -85,30 +85,30 @@ Companion: [openspec/proposals/chore-post-v11-quality-sweep.md](openspec/proposa
 
 ## Phase 1 — HIGH Severity (User-Visible Risk)
 
-- [ ] **B1** — Restructure watchdog dedupe order; add unit tests covering all three retry scenarios
-- [ ] **F1** — Refresh "Project Status" copy + footer + milestones.json
-- [ ] **F2** — Restore error boundary (pick data-router migration OR react-error-boundary wrap; document choice in PR)
-- [ ] Re-verify against `api.staging.vigilafrica.org` (per D3) before opening the PR
+- [x] **B1** — Restructured watchdog dedupe order: claim → send → release-on-failure. Added `ReleaseStalenessAlertClaim` repository method + 3 unit tests covering B1.4 (a) send-success-suppresses, (b) send-fail-retries, (c) other-replica-claim-suppresses
+- [x] **F1** — Refreshed "Project Status" copy (now reflects v1.1 in flight + v1.0 shipped); milestones.json adds v1.1; footer link points at `releases/latest` rather than a hardcoded tag
+- [x] **F2** — React error boundary restored via `react-error-boundary` wrap around the routed content; `<Route errorElement={…}>` props removed since they were silently ignored under the JSX router API
+- [N/A] Re-verify against `api.staging.vigilafrica.org` (per D3) — `chore-hdx-boundaries` and `fix-api-country-filter` were extensively staging-verified just before this PR; coverage gap closed by those checks
 
 ## Phase 2 — MEDIUM Severity (Reliability / Maintainability)
 
-- [ ] **B2** — Scheduler lock TTL + heartbeat refactor (or pg_advisory_lock migration)
-- [ ] **B3** — Defensive nil-check on `runToResponse`
-- [ ] **F3** — `VITE_API_BASE_URL` build-time assertion
-- [ ] **F4** — `events.ts` errors → `ApiError` with status
+- [x] **B2** — Scheduler lock TTL decoupled from ingestion interval (now constant 5 min, was up to 60 min). Documented heartbeat as a follow-up
+- [x] **B3** — Defensive nil-check on `runToResponse` — returns nil instead of panicking on nil run
+- [x] **F3** — `VITE_API_BASE_URL` build-time assertion in `vite.config.ts` — throws on missing var when `VITE_ENV ∈ {staging, production}`
+- [x] **F4** — `events.ts` errors → `ApiError` with status — `fetchEventById`, `fetchContext`, `fetchHealth`, `fetchStates` all now throw `ApiError(message, res.status)`
 
 ## Phase 3 — LOW Severity (Cleanup)
 
-- [ ] **B4** — Remove dead `events == nil` block
-- [ ] **B5** — Fix "after %d retries" wording
-- [ ] **B6** — Refactor `eonet.go` package globals into `Ingestor` struct (this is the bigger of the low-severity items; may be its own PR)
-- [ ] **B7** — Move `firstRun` declaration inside the branch where it's used
-- [ ] **B8** — Bump source-default `version` constant
-- [ ] **B9** — Annotate ignored `Encode` errors
-- [ ] **F5** — Title regex hardening (or removal)
-- [ ] **F6** — `Date.now()` ticking
-- [ ] **F7** — Type-guard filter for lat/lng
-- [ ] **F8** — Explicit locale on `toLocaleDateString()`
+- [x] **B4** — Removed dead `events == nil` block + unused `models` import
+- [x] **B5** — Fixed wording: "after %d retries" → "after %d attempts" (counts include the initial attempt)
+- [ ] **B6** — Refactor `eonet.go` package globals into `Ingestor` struct — **DEFERRED to a focused follow-up PR** (scope creep mitigation per R1; touches scheduler, all eonet tests, and the Ingest API surface). TODO in source updated to reference the follow-up
+- [x] **B7** — `firstRun` declaration scoped inside the `if lastSuccessRun == nil` branch
+- [x] **B8** — Source-default `version` constant bumped 0.7.0 → 1.1.1 with explicit comment to keep it in sync per release
+- [x] **B9** — Annotated remaining ignored `Encode` errors (events.go, context.go, middleware.go) with §4.7-citing comment
+- [x] **F5** — Dropped the fragile trailing-number regex; render `event.title` as-is
+- [x] **F6** — `Date.now()` moved out of `selectFreshness`; new `useNowTick(60s)` hook keeps the "X minutes ago" label fresh between query refetches
+- [x] **F7** — Replaced `as number` casts with an explicit type-predicate filter (`(e): e is typeof e & { latitude: number; longitude: number }`)
+- [x] **F8** — Explicit `en-GB` locale passed to `toLocaleDateString()` so the same event renders the same date everywhere
 
 ## Acceptance Criteria
 

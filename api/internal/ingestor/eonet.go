@@ -32,21 +32,27 @@ var transientRetryDelays = [maxTransientRetries]time.Duration{
 	15 * time.Second,
 }
 
+// Package-level test seams below. Three vars (eonetHTTPClient, eonetURL,
+// eonetSleepFn) form an implicit Ingestor surface — tests override them via
+// the install* helpers in eonet_test.go. Consolidating these into an explicit
+// Ingestor struct is **deferred to a follow-up PR** (chore-eonet-ingestor-struct
+// or similar) — the change is larger than the rest of chore-post-v11-quality-sweep
+// Phase 3 combined (touches scheduler.go, all eonet tests, and any other
+// caller of Ingest), and R1 of the sweep spec explicitly authorizes splitting
+// Phase 3 items into focused follow-ups when scope creep risks bloating one PR.
+// See chore-post-v11-quality-sweep B6.
+
 // eonetHTTPClient is the HTTP client used to fetch EONET events.
 // Declared as a package-level var so tests can inject a transport that
 // simulates network errors (which httptest.Server can't reproduce directly).
-// TODO(future): move onto an Ingestor struct field alongside eonetURL /
-// eonetSleepFn (see chore-post-v11-quality-sweep B6).
 var eonetHTTPClient = &http.Client{Timeout: 30 * time.Second}
 
 // eonetURL is the NASA EONET v3 events endpoint.
 // Declared as var (not const) to allow override in tests via eonetURL = server.URL.
-// TODO(future): refactor into an Ingestor struct field to avoid global mutation (openspec-review §9.5).
 var eonetURL = "https://eonet.gsfc.nasa.gov/api/v3/events"
 
 // eonetSleepFn is the sleep function used between retries.
 // Replaced in tests to avoid real wall-clock waits (openspec-review §9.11).
-// TODO(future): inject via Ingestor struct rather than package-level var.
 var eonetSleepFn = func(ctx context.Context, d time.Duration) error {
 	select {
 	case <-ctx.Done():
@@ -211,7 +217,9 @@ func runIngest(ctx context.Context, repo database.Repository, country CountryCon
 			resp.Body.Close()
 
 			if attempt == maxRetries {
-				return result, fmt.Errorf("unexpected EONET status after %d retries: %d", maxRetries, resp.StatusCode)
+				// The outer loop runs attempts 0..maxRetries inclusive, so reaching this
+				// branch means we already tried maxRetries+1 times. Report that honestly.
+				return result, fmt.Errorf("unexpected EONET status after %d attempts: %d", maxRetries+1, resp.StatusCode)
 			}
 
 			var rateLimitData struct {

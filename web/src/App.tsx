@@ -19,12 +19,17 @@ import {
   AlertTriangle,
 } from 'lucide-react'
 
-import { BrowserRouter as Router, Routes, Route, useRouteError } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import { ErrorBoundary, type FallbackProps } from 'react-error-boundary'
 import './App.css'
 import MILESTONES from './data/milestones.json'
 
-function PageError() {
-  const error = useRouteError()
+// PageError is the fallback rendered when any descendant of the ErrorBoundary
+// throws during render. The previous implementation used useRouteError() from
+// react-router, which only fires under the data-router (createBrowserRouter)
+// API — under the JSX <Routes>+<Route> setup we use, errorElement is silently
+// ignored, so the fallback never rendered. chore-post-v11-quality-sweep F2.
+function PageError({ error }: FallbackProps) {
   const message = error instanceof Error ? error.message : 'Something went wrong. Please try again.'
   return (
     <div className="container section" role="alert">
@@ -106,6 +111,14 @@ function StagingBanner() {
 function App() {
   return (
     <Router>
+      <ErrorBoundary
+        FallbackComponent={PageError}
+        onError={(err) => {
+          // Keep render-time errors visible in the console for local debugging.
+          // eslint-disable-next-line no-console
+          console.error('[app] caught render error:', err)
+        }}
+      >
       <div id="app">
       <a href="#main" className="skip-link">Skip to main content</a>
       <StagingBanner />
@@ -131,7 +144,7 @@ function App() {
 
       <main id="main">
         <Routes>
-          <Route path="/" errorElement={<PageError />} element={
+          <Route path="/" element={
             <>
               <section id="hero" className="hero" aria-labelledby="hero-heading">
                 <div className="hero-glow hero-glow--blue" aria-hidden="true" />
@@ -235,10 +248,10 @@ function App() {
                     </h2>
 
                     <p>
-                      VigilAfrica is being built milestone by milestone. v0.7 (Second Country Stable)
-                      is complete — Nigeria and Ghana run end-to-end on the same pipeline. v1.0
-                      (Credible Public Launch) is active: staging is live, and production deploy is
-                      gated on final reviewer approval.
+                      VigilAfrica is being built milestone by milestone. v1.0 (Credible Public Launch)
+                      shipped — Nigeria and Ghana run end-to-end in production. v1.1 is in flight,
+                      sharpening observability, alerting, and the country boundary data behind the
+                      enrichment pipeline. Staging and production both deploy continuously.
                     </p>
 
                     <nav aria-label="Milestone progress">
@@ -292,7 +305,6 @@ function App() {
                 <EventDetail />
               </Suspense>
             }
-            errorElement={<PageError />}
           />
         </Routes>
       </main>
@@ -306,11 +318,11 @@ function App() {
           <p className="footer-sub">
             Sources: NASA EONET ·{' '}
             <a
-              href={`${GITHUB_URL}/releases/tag/v1.1.0`}
+              href={`${GITHUB_URL}/releases/latest`}
               target="_blank"
               rel="noopener noreferrer"
             >
-              v1.1.0 (release notes)
+              Latest release
             </a>{' '}
             ·{' '}
             <a
@@ -336,6 +348,7 @@ function App() {
         </div>
       </footer>
       </div>
+      </ErrorBoundary>
     </Router>
   )
 }

@@ -12,7 +12,7 @@ Migration `000005_admin_boundary_data.up.sql` seeded NG (36 states + FCT) and GH
 
 Events within ~50 km of a state border may enrich to the wrong adjacent state. This was an accepted v0.6 limitation, originally captured as Note D in the v0.6 openspec-review (2026-04-18) and kept open in memory since. This spec replaces those rectangles with real HDX COD polygons.
 
-Companion: [openspec/proposals/chore-hdx-boundaries.md](openspec/proposals/chore-hdx-boundaries.md).
+Companion: [openspec/archive/proposal-chore-hdx-boundaries.md](proposal-chore-hdx-boundaries.md).
 
 ## Decision Log
 
