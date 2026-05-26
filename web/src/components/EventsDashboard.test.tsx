@@ -129,7 +129,7 @@ describe('EventsDashboard', () => {
   it('renders localized event cards and the map alternative from API data', async () => {
     renderWithProviders(<EventsDashboard />)
 
-    expect(await screen.findByText('Lagos Flood')).toBeInTheDocument()
+    expect(await screen.findByRole("heading", { level: 3, name: /Lagos Flood 42/i })).toBeInTheDocument()
     expect(screen.getByText('Accra Wildfire')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /Lagos Flood.*Lagos, Nigeria/i })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /Accra Wildfire.*Greater Accra, Ghana/i })).toBeInTheDocument()
@@ -159,7 +159,7 @@ describe('EventsDashboard', () => {
     const user = userEvent.setup()
     renderWithProviders(<EventsDashboard />)
 
-    await screen.findByText('Lagos Flood')
+    await screen.findByRole("heading", { level: 3, name: /Lagos Flood 42/i })
     await user.selectOptions(screen.getByLabelText(/filter by country/i), 'Ghana')
 
     await waitFor(() => {
@@ -233,7 +233,7 @@ describe('EventsDashboard', () => {
   it('has no obvious accessibility violations in the loaded dashboard state', async () => {
     const { container } = renderWithProviders(<EventsDashboard />)
 
-    await screen.findByText('Lagos Flood')
+    await screen.findByRole("heading", { level: 3, name: /Lagos Flood 42/i })
     const results = await axe(container)
     expect(results.violations).toHaveLength(0)
   })
@@ -251,7 +251,7 @@ describe('EventsDashboard', () => {
   it('renders a "last updated" indicator when ingestion is healthy', async () => {
     renderWithProviders(<EventsDashboard />)
 
-    await screen.findByText('Lagos Flood')
+    await screen.findByRole("heading", { level: 3, name: /Lagos Flood 42/i })
     expect(screen.getByRole('status')).toHaveTextContent(/last updated/i)
   })
 
@@ -264,7 +264,7 @@ describe('EventsDashboard', () => {
 
     renderWithProviders(<EventsDashboard />)
 
-    await screen.findByText('Lagos Flood')
+    await screen.findByRole("heading", { level: 3, name: /Lagos Flood 42/i })
     expect(screen.getByRole('status')).toHaveTextContent(/data freshness unknown/i)
   })
 })

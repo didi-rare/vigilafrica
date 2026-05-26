@@ -78,7 +78,7 @@ export async function fetchEvents(category?: EventCategory, stateName?: string, 
 export async function fetchEventById(id: string): Promise<VigilEvent> {
   const res = await fetch(buildApiUrl(`/v1/events/${id}`))
   if (!res.ok) {
-    throw new Error(`Failed to fetch event ${id}`)
+    throw new ApiError(`Failed to fetch event ${id} (HTTP ${res.status})`, res.status)
   }
   return res.json()
 }
@@ -86,7 +86,7 @@ export async function fetchEventById(id: string): Promise<VigilEvent> {
 export async function fetchContext(): Promise<ContextResponse> {
   const res = await fetch(buildApiUrl('/v1/context'))
   if (!res.ok) {
-    throw new Error('Failed to fetch user context')
+    throw new ApiError(`Failed to fetch user context (HTTP ${res.status})`, res.status)
   }
   return res.json()
 }
@@ -112,7 +112,7 @@ export interface HealthResponse {
 export async function fetchHealth(): Promise<HealthResponse> {
   const res = await fetch(buildApiUrl('/health'))
   if (!res.ok) {
-    throw new Error('Failed to fetch health status')
+    throw new ApiError(`Failed to fetch health status (HTTP ${res.status})`, res.status)
   }
   return res.json()
 }
@@ -146,7 +146,7 @@ export async function fetchStates(country?: string): Promise<string[]> {
 
   const res = await fetch(url.toString())
   if (!res.ok) {
-    throw new Error('Failed to fetch states')
+    throw new ApiError(`Failed to fetch states (HTTP ${res.status})`, res.status)
   }
   const data: { states: string[] } = await res.json()
   return data.states

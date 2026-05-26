@@ -311,7 +311,8 @@ func rateLimitMiddlewareFromEnv(next http.Handler, rpmEnv string, fallbackRPM in
 			w.Header().Set("Content-Type", "application/json")
 			w.Header().Set("Retry-After", "1")
 			w.WriteHeader(http.StatusTooManyRequests)
-			json.NewEncoder(w).Encode(map[string]string{"error": "rate limit exceeded"})
+			// best-effort — status already framed; encode errors are network-level (§4.7).
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "rate limit exceeded"})
 			return
 		}
 		next.ServeHTTP(w, r)
