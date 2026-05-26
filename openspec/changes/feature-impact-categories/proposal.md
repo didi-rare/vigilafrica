@@ -1,6 +1,6 @@
 # Proposal: Impact Category Expansion (feature-impact-categories)
 
-**Status:** Proposed — v1.0 production launched; v1.1.0 was a release-please CI infra release, so this proposal will land in the next functional release.
+**Status:** Proposed — re-targeted to v1.3. v1.1.0 was a release-please CI infra release and v1.2.0 was the post-v1.1 audit roll-up; neither shipped new EONET categories. This proposal lands **first** in the v1.3 cycle (introducing the category registry), with [feature-v13-risk-intelligence](../../proposals/feature-v13-risk-intelligence.md) landing second on top of it. Both ship before the v1.3.0 tag.
 
 ## Why
 
@@ -19,7 +19,7 @@ Reference: https://eonet.gsfc.nasa.gov/api/v3/categories
 
 ## What Changes
 
-v1.1 expands the supported category set from:
+v1.3 expands the supported category set from:
 
 - `floods`
 - `wildfires`
@@ -48,27 +48,32 @@ branches.
 
 ### Modified Capabilities
 
-- `natural-event-ingestion`: EONET polling requests all v1.1 supported
-  categories.
-- `event-api`: Category filters and validation accept the v1.1 supported set.
+- `natural-event-ingestion`: EONET polling requests all categories supported by
+  this proposal (and is extended further by `feature-v13-risk-intelligence`).
+- `event-api`: Category filters and validation accept the expanded supported set.
 - `event-map-ui`: Marker, badge, and filter rendering supports four categories
   without collapsing every non-flood category into wildfire styling.
-- `seed-data`: Demo/local seed data includes representative v1.1 events for
-  Nigeria and Ghana.
+- `seed-data`: Demo/local seed data includes representative `landslides` and
+  `tempExtremes` events for Nigeria and Ghana.
 
 ## Out of Scope
 
 - No v1.0 launch-gate changes.
 - No secondary data oracle; NASA EONET remains the only upstream source.
-- No `severeStorms` or `drought` implementation in v1.1. Those are reserved
-  for v1.2.
+- No `severeStorms` or `drought` implementation in this proposal — those are
+  the scope of the companion proposal
+  [feature-v13-risk-intelligence](../../proposals/feature-v13-risk-intelligence.md),
+  which lands second in the v1.3 cycle on top of the category registry this
+  proposal introduces.
 - No user accounts, subscriptions, SMS, push notifications, or alert routing.
 - No generic "all NASA categories" support.
 
 ## User Impact
 
-Users will see a broader, more meaningful set of natural hazards after v1.0:
-landslides and temperature extremes can appear in the API, filters, event cards,
-detail views, and map markers with category-specific labels and styling. If live
-EONET volume is sparse in a supported country, curated seed/demo records will
-still let reviewers understand the intended experience.
+Users will see a broader, more meaningful set of natural hazards once v1.3
+ships: landslides and temperature extremes can appear in the API, filters,
+event cards, detail views, and map markers with category-specific labels and
+styling. If live EONET volume is sparse in a supported country, curated
+seed/demo records will still let reviewers understand the intended experience.
+`severeStorms` and `drought` join in the same v1.3 release via the companion
+risk-intelligence proposal.

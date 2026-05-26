@@ -1,7 +1,7 @@
 ---
 id: chore-post-v11-quality-sweep
 status: proposed
-branch: tbd
+branch: chore/post-v11-quality-sweep-phase-all
 ---
 
 # Proposal: Post-v1.1 Quality Sweep — Audit Followups (chore-post-v11-quality-sweep)
