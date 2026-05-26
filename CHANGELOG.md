@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.2.0](https://github.com/didi-rare/vigilafrica/compare/v1.1.1...v1.2.0) (2026-05-26)
+
+
+### Features
+
+* **staging:** add stripe + icon + pulse to staging banner ([340a944](https://github.com/didi-rare/vigilafrica/commit/340a94411365bd2018242cc414507a6a506102b2))
+* **staging:** add stripe + icon + pulse to staging banner ([3e69a15](https://github.com/didi-rare/vigilafrica/commit/3e69a1542072e676cb8be09add094c6a3a522c4a))
+
+
+### Bug Fixes
+
+* **api:** accept country_code alongside country; 400 on unknown values ([e674e7e](https://github.com/didi-rare/vigilafrica/commit/e674e7ee124c1c99ed26ea3847ca3cd5603c5914))
+* **api:** accept country_code alongside country; 400 on unknown values ([a0c607f](https://github.com/didi-rare/vigilafrica/commit/a0c607f23f69b1ad94e57221315ba00de61f0af3))
+* **api:** sync country_code openapi additions into the source-of-truth file ([e069f9e](https://github.com/didi-rare/vigilafrica/commit/e069f9e4ed189d85218103af84e236ac1afc2e88))
+* **deps:** bump nested brace-expansion 5.0.5 → 5.0.6 ([ea76c8b](https://github.com/didi-rare/vigilafrica/commit/ea76c8bd5203606e4f66a3d8a6abeb6bdef831f9))
+* **staging-banner:** apply review-round-1 polish (O1 + O2) ([a3fc298](https://github.com/didi-rare/vigilafrica/commit/a3fc298b577228060622eb321bd7815654e371ea))
+* **staging:** scope VITE_ENV via Vercel dashboard + document the chain ([46f1a99](https://github.com/didi-rare/vigilafrica/commit/46f1a9916dc68e7331fd14381d8e2033ea2469e4))
+* **staging:** scope VITE_ENV via Vercel dashboard + document the chain ([b8c4444](https://github.com/didi-rare/vigilafrica/commit/b8c4444d5959ac2c0773cc0f0d3c0a7022eb1ed1))
+
 ## [1.1.1](https://github.com/didi-rare/vigilafrica/compare/v1.1.0...v1.1.1) (2026-05-14)
 
 
