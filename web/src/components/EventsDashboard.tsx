@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { fetchEvents, fetchContext, fetchHealth, fetchStates, getApiBaseUrl, eventKeys, stateKeys, healthKeys, contextKeys } from '../api/events'
-import type { HealthResponse, EventCategory } from '../api/events'
+import type { HealthResponse, EventCategory, VigilEvent } from '../api/events'
 
 import './EventsDashboard.css'
 
@@ -215,7 +215,7 @@ export function EventsDashboard() {
   // The type predicate narrows lat/lng to number, replacing the previous
   // `as number` cast (chore-post-v11-quality-sweep F7).
   const mapEvents = (eventsData?.data ?? [])
-    .filter((e): e is typeof e & { latitude: number; longitude: number } =>
+    .filter((e): e is VigilEvent & { latitude: number; longitude: number } =>
       e.latitude !== null && e.longitude !== null)
     .map(e => ({
       id: e.id,

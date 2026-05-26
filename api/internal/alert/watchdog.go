@@ -83,6 +83,14 @@ func StartStalenessWatchdog(ctx context.Context, repo database.Repository, clien
 					// Release the dedupe claim so the next tick can retry.
 					// Without this, a single Resend hiccup permanently blocks
 					// future alerts for the same reference time (B1).
+					//
+					// Residual gap (B1, single-replica-complete): if the
+					// process crashes between TryRecord above and the line
+					// below (before Release runs), the row is left claimed
+					// with no email sent and no retry. Acceptable today —
+					// this window is sub-second and we run single-replica.
+					// Multi-replica HA wants a sent_at-timestamp pattern
+					// (separate ADR, not covered by chore-post-v11-quality-sweep).
 					if hasRecorder {
 						if releaseErr := recorder.ReleaseStalenessAlertClaim(ctx, referenceTime); releaseErr != nil {
 							logger.Error("watchdog: failed to release staleness alert claim after send failure", "err", releaseErr)
@@ -104,11 +112,10 @@ func latestIngestionReference(ctx context.Context, repo database.Repository, log
 	}
 
 	if lastSuccessRun != nil {
-		referenceTime, ok := stalenessReferenceTime(lastSuccessRun, nil)
-		if !ok {
-			logger.Warn("watchdog: no ingestion runs found yet")
-		}
-		return referenceTime, ok
+		// stalenessReferenceTime(lastSuccessRun, nil) cannot return ok=false
+		// — it only returns false when both args are nil. No need to guard.
+		referenceTime, _ := stalenessReferenceTime(lastSuccessRun, nil)
+		return referenceTime, true
 	}
 
 	firstRun, err := repo.GetFirstIngestionRun(ctx)
