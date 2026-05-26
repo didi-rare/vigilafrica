@@ -1,6 +1,6 @@
 # Proposal: Secondary Data Oracle (feature-secondary-oracle)
 
-**Status:** Deferred to v1.1+ (Post-Launch)
+**Status:** Deferred — Post-Launch backlog (no target milestone)
 
 ## Why
 Currently, VigilAfrica relies entirely on NASA EONET. If EONET goes down, experiences an extended outage, or changes its API format, VigilAfrica will have no events to ingest. To ensure high availability of alerting data, a secondary oracle is needed.

@@ -1,6 +1,6 @@
 # Spec: Secondary Data Oracle (feature-secondary-oracle)
 
-**Status:** Deferred to v1.1+ (Post-Launch)
+**Status:** Deferred — Post-Launch backlog (no target milestone)
 
 ## Context
 EONET is highly reliable but represents a single point of failure. Adding a secondary oracle will require standardizing a single internal `models.Event` representation that can be mapped from multiple diverse upstream APIs.
