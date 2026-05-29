@@ -26,15 +26,15 @@ The timing also lines up with the active anchor-partnership outreach (NRCS conta
 1. Add `umami` service to `docker-compose.yml` using `ghcr.io/umami-software/umami:postgresql-latest`. No exposed ports — Caddy handles ingress.
 2. Add `analytics.vigilafrica.org` reverse-proxy block to the production Caddy config.
 3. Create a `umami` database and a dedicated `umami` Postgres role inside the existing Postgres instance (one-time SQL setup, run on the VPS).
-4. Add `UMAMI_DB_PASSWORD` and `UMAMI_APP_SECRET` to `.env.example` with placeholder values and clear comments. The real values live only in the VPS `.env`, which remains gitignored as it is today.
+4. Add `UMAMI_DB_PASSWORD` and `UMAMI_APP_SECRET` to `.env.example` with placeholder values and clear comments. The real values live only in the VPS `.env`, which remains gitignored as it is today. Also add `VITE_ANALYTICS_URL` (e.g. `https://analytics.vigilafrica.org`) and `VITE_ANALYTICS_WEBSITE_ID` to the frontend section of `.env.example` — the URL must not be hardcoded in source per [developers-react.md §15.4](../../docs/standards/developers-react.md), and routing the website-id through env lets staging and production use different Umami sites without code changes.
 5. Add a DNS A record for `analytics.vigilafrica.org` pointing at the existing VPS IP.
 
 ### Frontend (React / TypeScript)
 
-6. Add the Umami tracker script to `web/index.html` with `data-website-id` referencing the website registered in the Umami dashboard. The website-id is a public identifier, safe to commit.
+6. Add the Umami tracker script to `web/index.html` using Vite's HTML env-var substitution (`%VITE_ANALYTICS_URL%/script.js` for the URL and `%VITE_ANALYTICS_WEBSITE_ID%` for the data attribute). Both values are public identifiers, safe to commit as references; the actual URL and website-id come from the build-time `.env`. When `VITE_ANALYTICS_URL` is unset (local dev without a local Umami), the tracker simply fails to load — no runtime error.
 7. Add a thin `web/src/analytics.ts` helper exposing typed `track(eventName, data?)` calls. Tolerates the tracker being absent (e.g. blocked by an ad-blocker) — `window.umami?.track(...)` pattern.
 8. Wire six custom events (see "Events to track" below) at the existing event-handler call-sites in the React components.
-9. Add a `<FeedbackPrompt />` component on the event detail page (`/events/:id`) — a single inline row reading "Was this useful?" with Yes / No buttons. On click, fire a `feedback_submitted` event with `{ value, event_id }` and (optionally) an open-text reason. Component must use existing design tokens (no hardcoded colours / spacing).
+9. Add a `<FeedbackPrompt />` component on the event detail page (`/events/:id`) — a single inline row reading "Was this useful?" with Yes / No buttons. On click, fire a `feedback_submitted` event with `{ value, event_id }` and (optionally) an open-text reason. Component must use existing design tokens (no hardcoded colours / spacing per [developers-react.md §7.5](../../docs/standards/developers-react.md)) and satisfy the accessibility rules in [developers-react.md §9](../../docs/standards/developers-react.md): semantic `<button>` elements (§9.1), labelled inputs (§9.3), visible `:focus-visible` indicator (§9.6), confirmation state announced via `aria-live="polite"` (§9.7), and `aria-label` if any button becomes icon-only (§9.11).
 
 ### Documentation
 
@@ -105,6 +105,8 @@ If either secret is ever accidentally committed: rotate immediately in `.env` + 
 - [ ] The Umami tracker loads on https://vigilafrica.org and produces at least one pageview row in the dashboard within five minutes of a manual visit.
 - [ ] All six custom events listed above fire on the correct user actions, verified by triggering each one manually and confirming it appears in the Umami dashboard within ~30s.
 - [ ] The `<FeedbackPrompt />` component renders on `/events/:id`, uses existing design tokens (no hardcoded colours / spacing per §7.5), and fires `feedback_submitted` with the correct payload on Yes / No clicks.
+- [ ] `<FeedbackPrompt />` satisfies the §9 accessibility rules: semantic `<button>` elements (§9.1), labelled controls (§9.3), visible focus indicator (§9.6), `aria-live="polite"` confirmation state (§9.7), and `aria-label` if any control is icon-only (§9.11). Verified by a keyboard walkthrough and an `axe-core` browser-extension run on `/events/:id` before merge.
+- [ ] The Umami tracker URL and website-id are read from `VITE_ANALYTICS_URL` and `VITE_ANALYTICS_WEBSITE_ID` via Vite's `%VITE_*%` substitution in `web/index.html` — no literal `analytics.vigilafrica.org` URL appears anywhere under `web/src/` (verified by `git grep`).
 - [ ] `docs/operations/analytics.md` exists and documents deployment, events, dashboard interpretation, and secret rotation.
 - [ ] `README.md` carries a one-sentence privacy-posture statement referencing the self-hosted analytics.
 - [ ] `npm run build` (frontend) and `go test ./...` (backend) both pass.
@@ -125,7 +127,17 @@ If either secret is ever accidentally committed: rotate immediately in `.env` + 
 2. Staging: deploy via the existing `development → main` flow. DNS for `analytics.vigilafrica.org` points to the same VPS. Verify tracker loads from `staging.vigilafrica.org`.
 3. Custom-event smoke test: trigger each of the six events manually on staging, confirm each appears in the dashboard within 30s.
 4. Privacy verification: open the production site in a fresh incognito window, inspect network traffic, confirm no cookies set by Umami and no PII (no email / no precise location / no device fingerprint) leaves the browser.
-5. Secrets verification: `git grep -i "UMAMI_DB_PASSWORD\|UMAMI_APP_SECRET"` finds matches only in `docker-compose.yml` (as `${VAR}` references) and `.env.example` (as placeholders). No literal secret in any committed file.
+5. Secrets verification — run both checks; both must produce the expected output:
+
+   ```bash
+   # (a) Confirm no literal secret value is committed. Expected output: empty.
+   git grep -E "UMAMI_(DB_PASSWORD|APP_SECRET)=[A-Za-z0-9+/=]{16,}"
+
+   # (b) Confirm the env-var references exist where expected. Expected output:
+   #     hits in docker-compose.yml only.
+   git grep -E "\\\$\\{UMAMI_(DB_PASSWORD|APP_SECRET)\\}"
+   ```
+
 6. After 1 week of production data: confirm the dashboard shows a non-empty session count, a non-empty geographic distribution, and at least one `state_filter_selected` and `feedback_submitted` event.
 
 ## Origin
