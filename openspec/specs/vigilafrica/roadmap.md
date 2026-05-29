@@ -322,7 +322,7 @@ These are blockers that must be resolved before v0.1 development begins. They ar
 
 ## v1.3 — Category Expansion + Design-System Tokens
 
-**Goal**: Broaden hazard coverage with four new NASA EONET categories and close out the design-system token gap on the frontend. All six proposals below ship before the v1.3.0 tag.
+**Goal**: Broaden hazard coverage with four new NASA EONET categories, close out the design-system token gap on the frontend, and instrument the production deployment with privacy-respecting analytics so partnership and grant conversations can cite real data. All seven proposals below ship before the v1.3.0 tag.
 
 **Status**: Proposed (planning).
 
@@ -337,6 +337,7 @@ These are blockers that must be resolved before v0.1 development begins. They ar
 - **`chore-spacing-tokens`** ([proposals/chore-spacing-tokens.md](../../proposals/chore-spacing-tokens.md)) — extract hardcoded spacing values into design tokens.
 - **`chore-z-index-tokens`** ([proposals/chore-z-index-tokens.md](../../proposals/chore-z-index-tokens.md)) — extract hardcoded z-index values into design tokens.
 - **`chore-stylelint-suppressions-review`** ([proposals/chore-stylelint-suppressions-review.md](../../proposals/chore-stylelint-suppressions-review.md)) — periodic audit of stylelint rule suppressions; rides alongside the token chores since most suppressions trace back to the same drift.
+- **`chore-analytics-and-feedback`** ([proposals/chore-analytics-and-feedback.md](../../proposals/chore-analytics-and-feedback.md)) — self-hosted Umami analytics on the existing VPS plus a 1-click "Was this useful?" feedback widget. Closes the traction-data gap surfaced in the 2026-05-27 business / market review. Lands first within v1.3 because every downstream partnership / grant conversation benefits from having real numbers.
 
 **Acceptance criteria** (all must pass before v1.3 is tagged):
 
@@ -349,6 +350,8 @@ These are blockers that must be resolved before v0.1 development begins. They ar
 - [ ] API contract, architecture, and product/spec references reflect the v1.3 supported set.
 - [ ] All hardcoded typography, spacing, and z-index values in `web/src/` reference design tokens; stylelint rules enforce this going forward.
 - [ ] Stylelint suppression list audited; each remaining suppression has a documented reason.
+- [ ] Self-hosted Umami analytics live at `analytics.vigilafrica.org`, six custom events firing on production, no literal secrets committed to the repo (verified via `git grep`).
+- [ ] `<FeedbackPrompt />` component live on `/events/:id`; `feedback_submitted` event captured in the Umami dashboard.
 
 **What this milestone is not:**
 
@@ -357,6 +360,7 @@ These are blockers that must be resolved before v0.1 development begins. They ar
 - Not a dark-mode toggle (`feat-dark-mode-toggle` is a separate post-v1.3 proposal).
 - Not a Vercel SPA fallback fix (`fix-vercel-spa-fallback` is a separate proposal — sequence at maintainer discretion).
 - Not the deferred B6 eonet.go `Ingestor`-struct refactor (its own focused follow-up).
+- Not pre-commit secret scanning (e.g., `gitleaks` as a `pre-commit` hook). Surfaced as an adjacent concern during `chore-analytics-and-feedback` (which introduces new secrets), but tracked as a separate follow-up chore so the analytics work can ship without bundling tooling-discipline changes.
 
 ---
 
