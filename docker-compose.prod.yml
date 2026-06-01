@@ -92,6 +92,38 @@ services:
     security_opt:
       - no-new-privileges:true
 
+  # Self-hosted Umami analytics (chore-analytics-and-feedback).
+  # Shares the prod-db Postgres instance; requires `umami` database + role
+  # pre-created on the VPS (one-time setup — see docs/operations/analytics.md).
+  # No fallback defaults: UMAMI_DB_PASSWORD and UMAMI_APP_SECRET MUST be set
+  # in the VPS .env. Caddy reverse-proxies analytics.vigilafrica.org to
+  # 127.0.0.1:3000.
+  # TODO: pin to digest before first deploy.
+  prod-umami:
+    image: ghcr.io/umami-software/umami:postgresql-latest
+    container_name: vigilafrica-prod-umami
+    restart: unless-stopped
+    depends_on:
+      prod-db:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql://umami:${UMAMI_DB_PASSWORD}@prod-db:5432/umami
+      - DATABASE_TYPE=postgresql
+      - APP_SECRET=${UMAMI_APP_SECRET}
+    ports:
+      - "127.0.0.1:3000:3000"
+    networks:
+      - prod-internal
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/heartbeat || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
 volumes:
   vigil-prod-data:
   prod-maxmind-data:
