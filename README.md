@@ -73,6 +73,8 @@ Live endpoints:
 - Production: <https://vigilafrica.org> (frontend), <https://api.vigilafrica.org> (API)
 - Staging: <https://staging.vigilafrica.org> (frontend), <https://api.staging.vigilafrica.org> (API)
 
+**Privacy posture:** usage is measured with [self-hosted, cookieless analytics](docs/operations/analytics.md) — no cookies, no personal data, and no third-party trackers.
+
 Next milestone (**v1.3**): **Category expansion + design-system tokens** — add `landslides`, `tempExtremes`, `severeStorms`, and `drought` via two sequenced proposals ([`feature-impact-categories`](openspec/changes/feature-impact-categories/) lands first and introduces the category registry; [`feature-v13-risk-intelligence`](openspec/proposals/feature-v13-risk-intelligence.md) lands second). Parallel hygiene work extracts typography, spacing, and z-index values into design tokens.
 
 ---

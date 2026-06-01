@@ -1,0 +1,62 @@
+/* FeedbackPrompt — one-click "Was this useful?" row on the event detail page.
+   chore-analytics-and-feedback. Colours come from design tokens only (§7.5);
+   spacing uses rem literals to match the sibling detail-page components. */
+
+.feedback-prompt {
+  margin-top: 3rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+}
+
+.feedback-prompt__question {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.feedback-prompt__actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.feedback-prompt__button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 1.1rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  background: var(--bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s, background 0.2s;
+}
+
+.feedback-prompt__button:hover {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+  background: var(--bg-card-hover);
+}
+
+/* §9.6 — focus is always visible. */
+.feedback-prompt__button:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.feedback-prompt__confirmation {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--color-text-dim);
+}
+
+.feedback-prompt__confirmation:empty {
+  display: none;
+}
