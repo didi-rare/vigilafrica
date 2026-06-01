@@ -16,7 +16,7 @@
 // seventh event means adding a line here — and the compiler then forces every
 // call site to supply the right payload. See the proposal's "Events to track"
 // table; anything beyond these six is over-instrumentation for v1.
-export interface AnalyticsEventMap {
+export type AnalyticsEventMap = {
   state_filter_selected: { state: string }
   category_filter_selected: { category: string }
   context_resolve: { country: string; state: string }
@@ -29,7 +29,7 @@ export type AnalyticsEventName = keyof AnalyticsEventMap
 
 // Minimal shape of the Umami browser global we actually use. Umami's real
 // surface is larger, but the app only ever calls `track`.
-interface UmamiTracker {
+type UmamiTracker = {
   track: (eventName: string, eventData?: Record<string, unknown>) => void
 }
 

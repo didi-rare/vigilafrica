@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { track } from '../analytics'
 import './FeedbackPrompt.css'
 
-interface FeedbackPromptProps {
+type FeedbackPromptProps = {
   /** The event whose detail page this prompt sits on — sent as `event_id`. */
   eventId: string
 }
