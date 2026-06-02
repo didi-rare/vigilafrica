@@ -17,6 +17,12 @@ type EventFilters struct {
 	Country  string
 	State    string
 	Status   string
+	// DateFrom / DateTo bound event_date as a half-open interval
+	// [DateFrom, DateTo). Either may be nil (unbounded on that side). Added for
+	// the daily flood digest (feature-daily-flood-digest); all existing callers
+	// leave them nil and are unaffected.
+	DateFrom *time.Time
+	DateTo   *time.Time
 	Limit    int
 	Offset   int
 }
@@ -46,6 +52,14 @@ func buildEventFilterClause(filters EventFilters) (string, []interface{}, int) {
 
 	if filters.Status != "" {
 		conditions, args, argID = appendAllowedEventFilter(conditions, args, argID, "status", "=", filters.Status)
+	}
+
+	if filters.DateFrom != nil {
+		conditions, args, argID = appendAllowedEventFilter(conditions, args, argID, "event_date", ">=", *filters.DateFrom)
+	}
+
+	if filters.DateTo != nil {
+		conditions, args, argID = appendAllowedEventFilter(conditions, args, argID, "event_date", "<", *filters.DateTo)
 	}
 
 	if len(conditions) == 0 {

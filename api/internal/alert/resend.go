@@ -159,6 +159,24 @@ func (c *Client) SendStalenessAlert(ctx context.Context, lastSuccessAt time.Time
 	return nil
 }
 
+// Send dispatches a pre-rendered email through Resend using the client's
+// configured From/To recipients. It is the generic primitive behind the typed
+// alert helpers (SendIngestFailure, SendStalenessAlert); callers that build
+// their own subject + body — e.g. the daily flood digest, which runs on a
+// second client configured with DIGEST_TO — use it directly. A disabled client
+// (no API key or no recipients) is a logged no-op, mirroring the typed helpers,
+// so local/dev and CI never send mail.
+func (c *Client) Send(ctx context.Context, subject, htmlBody, textBody string) error {
+	if !c.Enabled() {
+		c.log.Warn("email disabled; skipping send", "subject", subject)
+		return nil
+	}
+	if err := c.sendEmail(ctx, subject, htmlBody, textBody); err != nil {
+		return fmt.Errorf("send email: %w", err)
+	}
+	return nil
+}
+
 func (c *Client) sendEmail(ctx context.Context, subject, htmlBody, textBody string) error {
 	payload := map[string]any{
 		"from":    c.cfg.FromEmail,

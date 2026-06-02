@@ -14,6 +14,7 @@ import (
 
 	"vigilafrica/api/internal/alert"
 	"vigilafrica/api/internal/database"
+	"vigilafrica/api/internal/digest"
 	"vigilafrica/api/internal/geoip"
 	"vigilafrica/api/internal/handlers"
 	"vigilafrica/api/internal/ingestor"
@@ -71,6 +72,13 @@ func main() {
 	ingestor.StartScheduler(ctx, repo, alertClient)
 	alert.StartStalenessWatchdog(ctx, repo, alertClient, loadWatchdogConfigFromEnv(), slog.Default().With("component", "watchdog"))
 
+	// ── Daily flood digest (feature-daily-flood-digest) ───────────────────────
+	// A second Resend client scoped to DIGEST_TO recipients so the digest and
+	// the operational alerts have independent recipient lists. No-op when
+	// DIGEST_TO is unset.
+	digestMailer := alert.NewClient(loadDigestConfigFromEnv(), slog.Default().With("component", "digest"))
+	digest.StartDigestScheduler(ctx, repo, digestMailer, loadDigestSchedulerConfigFromEnv(), slog.Default().With("component", "digest"))
+
 	// ── Middleware ────────────────────────────────────────────────────────────
 	cache := handlers.NewResponseCache()
 
@@ -78,6 +86,7 @@ func main() {
 	healthHandler := handlers.NewHealthHandler(version, repo)
 	eventHandler := handlers.NewEventHandler(repo)
 	enrichmentStatsHandler := handlers.NewEnrichmentStatsHandler(repo)
+	digestHandler := handlers.NewDigestHandler(repo)
 
 	// ── Router ────────────────────────────────────────────────────────────────
 	// v1 sub-mux: all /v1/* routes go through rate limiting.
@@ -90,6 +99,7 @@ func main() {
 	v1Mux.HandleFunc("GET /v1/context", handlers.GetContext(repo, geoReader))
 	v1Mux.Handle("GET /v1/enrichment-stats", enrichmentStatsHandler)
 	v1Mux.HandleFunc("GET /v1/states", handlers.StatesHandler(repo))
+	v1Mux.HandleFunc("GET /v1/digest/today.json", digestHandler.GetTodayDigest)
 
 	mux := http.NewServeMux()
 	mux.Handle("GET /live", handlers.LiveHandler(version))
@@ -146,6 +156,26 @@ func loadAlertConfigFromEnv() alert.Config {
 	}
 }
 
+// loadDigestConfigFromEnv builds the Resend config for the daily digest. It
+// reuses RESEND_API_KEY but has its own recipient list (DIGEST_TO) and From
+// address (DIGEST_FROM), so the digest and operational alerts stay independent.
+// Empty DIGEST_TO leaves the client disabled (no-op) — local/CI never send.
+func loadDigestConfigFromEnv() alert.Config {
+	return alert.Config{
+		ResendAPIKey: os.Getenv("RESEND_API_KEY"),
+		FromEmail:    envOrDefault("DIGEST_FROM", "VigilAfrica Digest <digest@vigilafrica.org>"),
+		ToEmails:     alert.ParseRecipients(os.Getenv("DIGEST_TO")),
+		Environment:  envOrDefaultTrimmed("APP_ENV", "unknown"),
+	}
+}
+
+func loadDigestSchedulerConfigFromEnv() digest.SchedulerConfig {
+	return digest.SchedulerConfig{
+		Hour:        envHourOfDay("DIGEST_SCHEDULE_HOUR", 6),
+		Environment: envOrDefaultTrimmed("APP_ENV", "unknown"),
+	}
+}
+
 func loadWatchdogConfigFromEnv() alert.WatchdogConfig {
 	return alert.WatchdogConfig{
 		CheckInterval:      time.Duration(envPositiveInt("ALERT_STALENESS_CHECK_INTERVAL_MIN", 15)) * time.Minute,
@@ -165,6 +195,21 @@ func envOrDefaultTrimmed(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+// envHourOfDay parses a UTC hour-of-day (0–23) env var, falling back on unset
+// or out-of-range values.
+func envHourOfDay(key string, fallback int) int {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed < 0 || parsed > 23 {
+		slog.Warn("invalid hour-of-day env var; using default", "key", key, "value", value, "default", fallback)
+		return fallback
+	}
+	return parsed
 }
 
 func envPositiveInt(key string, fallback int) int {
