@@ -11,11 +11,17 @@ describe('events API client', () => {
       json: async () => ({ data: [], meta: { total: 0, limit: 50, offset: 0 } }),
     })
     vi.stubGlobal('fetch', fetchMock)
+    // Pin the API base URL so the suite is hermetic: getApiBaseUrl() falls back
+    // to window.location.origin (the jsdom https://vigil.test) when this is
+    // empty. Without the stub, a developer's .env.local (e.g. VITE_API_BASE_URL
+    // pointing at staging) leaks in and these origin assertions fail locally.
+    vi.stubEnv('VITE_API_BASE_URL', '')
     window.history.pushState({}, '', '/dashboard')
   })
 
   afterEach(() => {
     vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
     fetchMock.mockReset()
   })
 

@@ -668,7 +668,13 @@ vi.mock("maplibre-gl", () => ({
 
 **§13.8 — Every component with user interaction has: a render test, an interaction test, and an error state test.**
 
-**§13.9 — Accessibility tested with `vitest-axe`. Run `expect(await axe(container)).toHaveNoViolations()` on every component.**
+**§13.9 — Accessibility tested with `vitest-axe`. Run axe over the rendered container on every component and assert zero violations.**
+```tsx
+const { container } = render(<FeedbackPrompt eventId="evt-1" />)
+const results = await axe(container)
+expect(results.violations).toHaveLength(0)
+```
+*Why this form:* the `toHaveNoViolations()` custom matcher requires `expect.extend` wiring in `setupTests.ts` (vitest-axe ships an empty `extend-expect` and a legacy `Vi`-namespace type augmentation that does not type-check cleanly under Vitest 4). Asserting on `results.violations` needs no matcher registration and is the project convention used across all component tests.
 
 **§13.10 — `userEvent` from `@testing-library/user-event` over `fireEvent` for simulating interactions.**
 
@@ -755,3 +761,4 @@ VITE_API_BASE_URL=http://localhost:8080
 | 11 | Added §4.9 `useEffect` cleanup mandatory (post-review) | Implicit | /frontend-developer flagged missing cleanup as a frequent memory leak source |
 | 12 | Added §12.13 `map.resize()` via `ResizeObserver` (post-review) | Not covered | /frontend-developer flagged stale canvas on container resize as a common MapLibre bug |
 | 13 | Fixed `isPending` over `isLoading` in §5.5 (post-review) | | TanStack Query v5 renamed the field; factual correction |
+| 14 | Fixed §13.9 axe example to `results.violations` assertion (post-review) | Wire `toHaveNoViolations()` matcher | The matcher example didn't run — vitest-axe's `extend-expect` is empty and its `Vi`-namespace types don't hold under Vitest 4; documented the matcher-free convention already used in every component test (chore-analytics-and-feedback review) |
