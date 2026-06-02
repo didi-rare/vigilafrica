@@ -98,9 +98,11 @@ services:
   # No fallback defaults: UMAMI_DB_PASSWORD and UMAMI_APP_SECRET MUST be set
   # in the VPS .env. Caddy reverse-proxies analytics.vigilafrica.org to
   # 127.0.0.1:3000.
-  # TODO: pin to digest before first deploy.
   prod-umami:
-    image: ghcr.io/umami-software/umami:postgresql-latest
+    # Pinned to the postgresql-latest multi-arch index digest (CI enforces
+    # immutable refs via scripts/check-image-pins.js). Re-pin by running
+    # `docker buildx imagetools inspect ghcr.io/umami-software/umami:postgresql-latest`.
+    image: ghcr.io/umami-software/umami:postgresql-latest@sha256:e3f80c0625aad7179b49da27d475357cabb1068b8cacd9a792cfd6966888b123
     container_name: vigilafrica-prod-umami
     restart: unless-stopped
     depends_on:
