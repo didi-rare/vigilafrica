@@ -378,7 +378,55 @@ Response time: **< 200ms** (p99). The GeoIP lookup is a local file read — no n
 
 ---
 
-## 6. HTTP Status Code Reference
+## 6. Endpoint: GET /v1/digest/today.json
+
+Returns the day's flood events grouped by country → state — the same content as
+the daily digest email (`feature-daily-flood-digest`).
+
+```
+GET /v1/digest/today.json
+```
+
+- **Scope:** `category = floods` whose `event_date` falls on the current **UTC**
+  calendar day (`[00:00, 24:00) UTC`). Events without an `event_date` are excluded.
+- **Grouping:** country → state, both sorted alphabetically; missing
+  country/state names group under `"Unknown"`.
+
+### Response (200)
+
+```json
+{
+  "date": "2026-06-02",
+  "generated_at": "2026-06-02T06:00:03Z",
+  "total": 1,
+  "by_country": [
+    {
+      "country_name": "Nigeria",
+      "states": [
+        {
+          "state_name": "Benue",
+          "events": [
+            {
+              "id": "f35c6f52-beeb-4b47-8133-99d27a2adb98",
+              "title": "Flooding in Makurdi",
+              "event_date": "2026-06-02T04:11:00Z",
+              "source_url": "https://eonet.gsfc.nasa.gov/..."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+> **Critical behaviour**: An empty day **always returns HTTP 200** with
+> `total: 0` and `"by_country": []` — never a 404 or 500. `by_country`
+> serializes as `[]`, not `null`.
+
+---
+
+## 7. HTTP Status Code Reference
 
 | Code | Meaning              | When Used                                               |
 |------|----------------------|---------------------------------------------------------|
@@ -400,7 +448,7 @@ Stack traces and internal details are **never** included in the 500 response.
 
 ---
 
-## 7. Environment Variables
+## 8. Environment Variables
 
 All configuration is via environment variables. No hardcoded values in source code.
 
