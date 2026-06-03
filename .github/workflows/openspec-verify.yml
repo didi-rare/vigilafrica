@@ -23,7 +23,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
-          go-version: '1.26'
+          go-version: '1.26.4'
 
       - name: Fetch Development Branch
         # --update-head-ok allows the fetch to update `development` even when
