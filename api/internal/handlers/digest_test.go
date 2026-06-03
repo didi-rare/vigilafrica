@@ -33,7 +33,7 @@ func TestGetTodayDigestReturnsGroupedJSON(t *testing.T) {
 		{ID: uuid.New(), Title: "Makurdi flood", Category: models.CategoryFloods,
 			CountryName: ptr("Nigeria"), StateName: ptr("Benue")},
 	}}
-	handler := NewDigestHandler(repo)
+	handler := NewDigestHandler(repo, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/digest/today.json", nil)
 	rec := httptest.NewRecorder()
@@ -71,7 +71,7 @@ func TestGetTodayDigestReturnsGroupedJSON(t *testing.T) {
 }
 
 func TestGetTodayDigestEmptyIsOK(t *testing.T) {
-	handler := NewDigestHandler(&digestTestRepo{events: nil})
+	handler := NewDigestHandler(&digestTestRepo{events: nil}, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/digest/today.json", nil)
 	rec := httptest.NewRecorder()

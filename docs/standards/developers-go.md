@@ -425,8 +425,16 @@ for _, tt := range tests {
 **§9.3 — Subtests use `t.Run(name, ...)` with a descriptive name. No `Test1`, `Test2`.**
 *Why:* Names appear in `go test -run` and failure output. Readable names = faster debugging.
 
-**§9.4 — Assertions use `testify/require` (fatal) for preconditions, `testify/assert` (non-fatal) for independent checks.**
-*Why:* `require` stops the test when continuing is pointless (nil pointer dereference incoming). `assert` lets multiple independent checks report together.
+**§9.4 — Assertions use the stdlib `testing` package (`t.Fatalf` for preconditions whose failure makes the rest of the test meaningless; `t.Errorf` for independent checks that should all report). `testify` is NOT a project dependency — adding it requires an ADR (§10.2/§10.4).**
+*Why:* Stdlib-first (§10.1). The whole suite already uses plain `testing`; pulling in `testify` for sugar would diverge every existing test and add a dependency for no material gain. `t.Fatalf` ≈ `require` (stop now), `t.Errorf` ≈ `assert` (keep going).
+```go
+if rec.Code != http.StatusOK {
+    t.Fatalf("status = %d, want 200", rec.Code) // precondition — stop
+}
+if got.Total != 1 {
+    t.Errorf("total = %d, want 1", got.Total)   // independent — report and continue
+}
+```
 
 **§9.5 — Mocks are hand-written or generated; never stub by modifying globals. Tests depend on the repository `interface`, not `pgRepo`.**
 *Why:* Modifying globals bleeds state across tests. Interface substitution is the project's mocking seam (§5.2).
@@ -558,3 +566,4 @@ Decisions made during the brainstorming session that produced this document.
 | 8 | Configuration & Secrets as its own section (not folded into §1) | Fold into Package Structure | Secret handling warrants dedicated visibility |
 | 9 | Order: Context before Error Handling; Concurrency after Handlers | Original 8-section order | Context is foundational; concurrency builds on ctx + handlers |
 | 10 | Added §10.11 — pin + sync the Go toolchain across CI and Dockerfile (post-review) | Floating `go-version: '1.26'`; suppress govulncheck findings | 2026-06-03 Go stdlib CVE batch failed govulncheck repo-wide; the Dockerfile had drifted to go1.26.2 behind CI's go1.26.3 (missing shipped `html/template` XSS fixes). Bumped both to go1.26.4 (PR #108) instead of allow-listing |
+| 11 | §9.4 corrected to stdlib `testing` (post-review) | Adopt `testify` as written | `testify` was never adopted — it is not in `go.mod` and every existing test uses plain `testing`. Documenting reality (and that adopting testify needs an ADR) beats either a permanently-violated rule or churning every test for an unjustified dependency. Surfaced in the feature-daily-flood-digest review |

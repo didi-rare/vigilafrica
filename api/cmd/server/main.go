@@ -86,7 +86,7 @@ func main() {
 	healthHandler := handlers.NewHealthHandler(version, repo)
 	eventHandler := handlers.NewEventHandler(repo)
 	enrichmentStatsHandler := handlers.NewEnrichmentStatsHandler(repo)
-	digestHandler := handlers.NewDigestHandler(repo)
+	digestHandler := handlers.NewDigestHandler(repo, slog.Default().With("component", "digest"))
 
 	// ── Router ────────────────────────────────────────────────────────────────
 	// v1 sub-mux: all /v1/* routes go through rate limiting.
