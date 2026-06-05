@@ -73,7 +73,9 @@ Live endpoints:
 - Production: <https://vigilafrica.org> (frontend), <https://api.vigilafrica.org> (API)
 - Staging: <https://staging.vigilafrica.org> (frontend), <https://api.staging.vigilafrica.org> (API)
 
-Next milestone: **Impact category expansion** — add `landslides` and `tempExtremes` to broaden coverage beyond floods + wildfires. Proposal: [`openspec/changes/feature-impact-categories/`](openspec/changes/feature-impact-categories/).
+**Privacy posture:** usage is measured with [self-hosted, cookieless analytics](docs/operations/analytics.md) — no cookies, no personal data, and no third-party trackers.
+
+Next milestone (**v1.3**): **Category expansion + design-system tokens** — add `landslides`, `tempExtremes`, `severeStorms`, and `drought` via two sequenced proposals ([`feature-impact-categories`](openspec/changes/feature-impact-categories/) lands first and introduces the category registry; [`feature-v13-risk-intelligence`](openspec/proposals/feature-v13-risk-intelligence.md) lands second). Parallel hygiene work extracts typography, spacing, and z-index values into design tokens.
 
 ---
 
@@ -173,19 +175,20 @@ docker-compose.yml  Local dev: PostgreSQL + PostGIS
 
 ## Roadmap
 
-| Milestone | Theme                        | Status          |
-|-----------|------------------------------|-----------------|
-| v0.1      | Foundation                   | ✅ Complete      |
-| v0.2      | First real data flow         | ✅ Complete      |
-| v0.3      | Localization engine          | ✅ Complete      |
-| v0.4      | Map + near-me experience     | ✅ Complete      |
-| v0.5      | Operational prototype        | ✅ Complete      |
-| v0.6      | Country expansion model      | ✅ Complete      |
-| v0.7      | Second country stable        | ✅ Complete      |
-| v0.8      | Pre-demo setup               | ✅ Complete      |
-| v1.0      | Credible public launch       | 🔄 Active       |
-| v1.1      | Impact category expansion    | Proposed        |
-| v1.2      | Risk intelligence expansion  | Deferred        |
+| Milestone | Theme | Status |
+| --- | --- | --- |
+| v0.1 | Foundation | ✅ Complete |
+| v0.2 | First real data flow | ✅ Complete |
+| v0.3 | Localization engine | ✅ Complete |
+| v0.4 | Map + near-me experience | ✅ Complete |
+| v0.5 | Operational prototype | ✅ Complete |
+| v0.6 | Country expansion model | ✅ Complete |
+| v0.7 | Second country stable | ✅ Complete |
+| v0.8 | Pre-demo setup | ✅ Complete |
+| v1.0 | Credible public launch | ✅ Complete |
+| v1.1 | Release automation activation | ✅ Complete |
+| v1.2 | Post-launch quality sweep | ✅ Complete |
+| v1.3 | Category expansion + design-system tokens | Proposed |
 
 Full roadmap with acceptance criteria: [`openspec/specs/vigilafrica/roadmap.md`](openspec/specs/vigilafrica/roadmap.md)
 

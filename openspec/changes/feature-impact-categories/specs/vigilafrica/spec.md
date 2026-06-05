@@ -4,10 +4,12 @@
 
 The system SHALL ingest natural event data from the NASA EONET API v3 on a
 scheduled interval and persist enriched events in a PostgreSQL/PostGIS database.
-The supported v1.1 event categories SHALL be `floods`, `wildfires`,
-`landslides`, and `tempExtremes`.
+After this proposal lands, the supported event categories SHALL include
+`floods`, `wildfires`, `landslides`, and `tempExtremes`. The companion
+`feature-v13-risk-intelligence` proposal extends this set with `severeStorms`
+and `drought` later in the same v1.3 cycle.
 
-#### Scenario: Scheduled event polling includes v1.1 categories
+#### Scenario: Scheduled event polling includes the impact-category set
 
 - **WHEN** the ingestor worker runs on its configured interval
 - **THEN** it SHALL fetch open and closed events from EONET filtered to each supported country bounding box
@@ -16,7 +18,7 @@ The supported v1.1 event categories SHALL be `floods`, `wildfires`,
 
 #### Scenario: Unsupported EONET category is not silently reclassified
 
-- **WHEN** an EONET payload contains a category outside the supported v1.1 category set
+- **WHEN** an EONET payload contains a category outside the supported category set
 - **THEN** the system SHALL skip or reject that event deliberately
 - **AND** it SHALL NOT default the event category to `floods` or `wildfires`
 - **AND** the behavior SHALL be covered by automated tests
@@ -24,8 +26,10 @@ The supported v1.1 event categories SHALL be `floods`, `wildfires`,
 ### Requirement: Public Event API
 
 The system SHALL expose a paginated, filterable REST API for accessing enriched
-natural event data. Category filters SHALL accept only the supported v1.1
-category set: `floods`, `wildfires`, `landslides`, and `tempExtremes`.
+natural event data. Category filters SHALL accept only the supported category
+set. After this proposal lands, that set SHALL include `floods`, `wildfires`,
+`landslides`, and `tempExtremes` — the companion `feature-v13-risk-intelligence`
+proposal additively extends this set.
 
 #### Scenario: Listing landslide events by category
 
@@ -48,9 +52,9 @@ category set: `floods`, `wildfires`, `landslides`, and `tempExtremes`.
 ### Requirement: Frontend Event Map
 
 The system SHALL provide an interactive frontend map that displays localized
-event markers and category filters for all supported v1.1 event categories.
+event markers and category filters for all supported event categories.
 
-#### Scenario: Category filter renders all v1.1 categories
+#### Scenario: Category filter renders the impact categories
 
 - **WHEN** a user loads the VigilAfrica frontend
 - **THEN** the category filter SHALL include Floods, Wildfires, Landslides, and Temperature Extremes
@@ -58,6 +62,6 @@ event markers and category filters for all supported v1.1 event categories.
 
 #### Scenario: Markers and badges are category-specific
 
-- **WHEN** the frontend renders events across the v1.1 supported category set
+- **WHEN** the frontend renders events across the supported category set
 - **THEN** event cards, detail views, and map markers SHALL use category-specific labels and visual variants
 - **AND** landslide and temperature extreme events SHALL NOT render as wildfire fallback styling

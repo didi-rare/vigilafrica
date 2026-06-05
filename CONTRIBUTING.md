@@ -292,7 +292,7 @@ Format: `<type>(<optional-scope>): <description>`
 
 **Why this matters**: PRs to `development` get squash-merged, so the PR title becomes the commit message that release-please reads on `release`. A PR title typo (`fx:` vs `fix:`) silently downgrades to "no release."
 
-**Promotion PRs are exempt**: PRs targeting `main` (i.e. `development → main`) are not checked — they become merge commits release-please ignores by default. Use a free-form title like `release: promote v1.2 to staging` if you prefer.
+**Promotion PRs are exempt**: PRs targeting `main` (i.e. `development → main`) are not checked — they become merge commits release-please ignores by default. Use a free-form title like `release: promote v1.3 to staging` if you prefer.
 
 See [docs/deployment/release-process.md](docs/deployment/release-process.md) for the full release flow this convention feeds into.
 

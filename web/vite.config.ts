@@ -5,14 +5,38 @@ import react from '@vitejs/plugin-react'
 // a non-local deploy. The motivating bug: a Vercel project that forgot
 // VITE_API_BASE_URL silently fell back to window.location.origin and shipped
 // a broken bundle. chore-post-v11-quality-sweep F3.
+//
+// chore-analytics-and-feedback extends the same guard to the Umami tracker:
+// VITE_ANALYTICS_URL + VITE_ANALYTICS_WEBSITE_ID are substituted into
+// index.html at build time, so a staging/production build that forgets them
+// would ship a tracker pointing at the literal `%VITE_ANALYTICS_URL%` string.
+// Analytics stays optional in local dev (VITE_ENV=local), where the tracker
+// simply fails to load.
+const REQUIRED_DEPLOY_ENV_VARS: ReadonlyArray<{ name: string; reason: string }> = [
+  {
+    name: 'VITE_API_BASE_URL',
+    reason: 'the frontend cannot infer the API host for this deploy',
+  },
+  {
+    name: 'VITE_ANALYTICS_URL',
+    reason: 'the Umami tracker script src is built from it (analytics.vigilafrica.org)',
+  },
+  {
+    name: 'VITE_ANALYTICS_WEBSITE_ID',
+    reason: 'the Umami tracker needs the website-id to attribute pageviews',
+  },
+]
+
 function assertDeploymentEnvVars(): void {
   const env = process.env.VITE_ENV
-  if (env === 'staging' || env === 'production') {
-    if (!process.env.VITE_API_BASE_URL || process.env.VITE_API_BASE_URL.trim() === '') {
+  if (env !== 'staging' && env !== 'production') return
+
+  for (const { name, reason } of REQUIRED_DEPLOY_ENV_VARS) {
+    const value = process.env[name]
+    if (!value || value.trim() === '') {
       throw new Error(
-        `vite: VITE_API_BASE_URL must be set when VITE_ENV=${env}. ` +
-          `The frontend cannot infer the API host for ${env} deploys — ` +
-          `set it in the Vercel project's environment variables.`,
+        `vite: ${name} must be set when VITE_ENV=${env} — ${reason}. ` +
+          `Set it in the Vercel project's environment variables.`,
       )
     }
   }

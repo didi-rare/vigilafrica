@@ -3,6 +3,9 @@ import { act, render, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { Map } from './Map'
+import { track } from '../analytics'
+
+vi.mock('../analytics', () => ({ track: vi.fn() }))
 
 type LayerConfig = {
   id: string
@@ -128,12 +131,23 @@ const maplibreMock = vi.hoisted(() => {
       this.content = content
       return this
     })
+    readonly handlers = new globalThis.Map<string, Set<Handler>>()
+    readonly on = vi.fn((event: string, handler: Handler) => {
+      if (!this.handlers.has(event)) this.handlers.set(event, new Set())
+      this.handlers.get(event)?.add(handler)
+      return this
+    })
     readonly options: unknown
     content: HTMLElement | null = null
 
     constructor(options: unknown) {
       this.options = options
       maplibreMock.instances.popups.push(this)
+    }
+
+    trigger(event: string, ...payload: unknown[]) {
+      const handlers = Array.from(this.handlers.get(event) ?? [])
+      handlers.forEach((handler) => handler(...payload))
     }
   }
 
@@ -306,6 +320,33 @@ describe('Map', () => {
     expect(lagosMarker.addTo).toHaveBeenCalledWith(map)
     expect(accraMarker.options.element).toHaveAccessibleName('Accra Wildfire (wildfires)')
     expect(accraMarker.lngLat).toEqual([-0.187, 5.6037])
+  })
+
+  it('fires map_marker_clicked when a marker popup opens', async () => {
+    render(<Map events={events} />)
+
+    const map = maplibreMock.instances.maps[0]
+    map.sourceFeatures = events.map(unclusteredFeature)
+
+    await act(async () => {
+      map.trigger('load')
+    })
+
+    await waitFor(() => {
+      expect(maplibreMock.instances.popups).toHaveLength(2)
+    })
+
+    // Opening each marker popup is the engagement signal — one event per open.
+    maplibreMock.instances.popups.forEach((popup) => popup.trigger('open'))
+
+    expect(track).toHaveBeenCalledWith('map_marker_clicked', {
+      event_id: 'lagos-flood',
+      category: 'floods',
+    })
+    expect(track).toHaveBeenCalledWith('map_marker_clicked', {
+      event_id: 'accra-fire',
+      category: 'wildfires',
+    })
   })
 
   it('does not inject event data into marker HTML', async () => {

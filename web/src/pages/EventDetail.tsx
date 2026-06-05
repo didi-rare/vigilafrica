@@ -1,7 +1,9 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { fetchEventById, eventKeys } from '../api/events'
+import { track } from '../analytics'
+import { FeedbackPrompt } from '../components/FeedbackPrompt'
 
 import './EventDetail.css'
 
@@ -17,6 +19,20 @@ export function EventDetail() {
     queryFn: () => fetchEventById(id!), // enabled only when id is defined (enabled: !!id below)
     enabled: !!id,
   })
+
+  // Fire `event_detail_opened` once per distinct event the detail page shows —
+  // a Tier-1 funnel conversion. Deduped by event id so a refetch or StrictMode
+  // double-mount doesn't double-count.
+  const reportedEventRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!event || reportedEventRef.current === event.id) return
+    reportedEventRef.current = event.id
+    track('event_detail_opened', {
+      event_id: event.id,
+      category: event.category,
+      state: event.state_name ?? '',
+    })
+  }, [event])
 
   if (isPending) return <div className="container section">Loading event telemetry...</div>
   if (error || !event) return <div className="container section">Event not found in Command Center.</div>
@@ -103,6 +119,8 @@ export function EventDetail() {
             )}
           </div>
         </div>
+
+        <FeedbackPrompt eventId={event.id} />
       </div>
     </div>
   )

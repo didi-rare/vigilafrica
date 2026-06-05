@@ -425,8 +425,16 @@ for _, tt := range tests {
 **§9.3 — Subtests use `t.Run(name, ...)` with a descriptive name. No `Test1`, `Test2`.**
 *Why:* Names appear in `go test -run` and failure output. Readable names = faster debugging.
 
-**§9.4 — Assertions use `testify/require` (fatal) for preconditions, `testify/assert` (non-fatal) for independent checks.**
-*Why:* `require` stops the test when continuing is pointless (nil pointer dereference incoming). `assert` lets multiple independent checks report together.
+**§9.4 — Assertions use the stdlib `testing` package (`t.Fatalf` for preconditions whose failure makes the rest of the test meaningless; `t.Errorf` for independent checks that should all report). `testify` is NOT a project dependency — adding it requires an ADR (§10.2/§10.4).**
+*Why:* Stdlib-first (§10.1). The whole suite already uses plain `testing`; pulling in `testify` for sugar would diverge every existing test and add a dependency for no material gain. `t.Fatalf` ≈ `require` (stop now), `t.Errorf` ≈ `assert` (keep going).
+```go
+if rec.Code != http.StatusOK {
+    t.Fatalf("status = %d, want 200", rec.Code) // precondition — stop
+}
+if got.Total != 1 {
+    t.Errorf("total = %d, want 1", got.Total)   // independent — report and continue
+}
+```
 
 **§9.5 — Mocks are hand-written or generated; never stub by modifying globals. Tests depend on the repository `interface`, not `pgRepo`.**
 *Why:* Modifying globals bleeds state across tests. Interface substitution is the project's mocking seam (§5.2).
@@ -492,6 +500,11 @@ Note: Resend email alerts use stdlib `net/http` against the Resend REST API dire
 **§10.10 — `go.mod`'s `go` directive matches the project's declared Go version (currently `1.26`). Bumping it is a separate PR.**
 *Why:* Language version changes are semantic; they deserve their own review and change record.
 
+**§10.11 — Pin the Go toolchain to an exact patch and keep it consistent everywhere: `actions/setup-go` `go-version` in every workflow and `api/Dockerfile`'s `GO_IMAGE` digest must resolve to the same `go1.X.Y`.**
+*Why:* If they drift, CI tests one stdlib while the production image ships another — and the build can silently miss already-released security fixes. They drifted once (Dockerfile `go1.26.2` vs CI `go1.26.3`), leaving four shipped stdlib CVE fixes out of the production build, including two `html/template` XSS issues the digest and alert emails render with.
+When `govulncheck` (the CI "Run Go Vulnerability Check") flags a *standard-library* advisory, bump the toolchain in **both** places to the patched release — do **not** suppress or allow-list the finding. Confirm the patch is actually published via **go.dev/dl** (authoritative), not a single registry tag probe, which can be mid-rollout.
+✅ `go-version: '1.26.4'` (CI) + `GO_IMAGE=golang:1.26-alpine@sha256:…` resolving to `go1.26.4` (Dockerfile).
+
 ---
 
 ## 11. Migrations & SQL
@@ -552,3 +565,5 @@ Decisions made during the brainstorming session that produced this document.
 | 7 | Added Context Propagation and Concurrency as dedicated sections | Fold into Handlers/Repository | /golang-pro review flagged these as foundational for a repo with schedulers and goroutines |
 | 8 | Configuration & Secrets as its own section (not folded into §1) | Fold into Package Structure | Secret handling warrants dedicated visibility |
 | 9 | Order: Context before Error Handling; Concurrency after Handlers | Original 8-section order | Context is foundational; concurrency builds on ctx + handlers |
+| 10 | Added §10.11 — pin + sync the Go toolchain across CI and Dockerfile (post-review) | Floating `go-version: '1.26'`; suppress govulncheck findings | 2026-06-03 Go stdlib CVE batch failed govulncheck repo-wide; the Dockerfile had drifted to go1.26.2 behind CI's go1.26.3 (missing shipped `html/template` XSS fixes). Bumped both to go1.26.4 (PR #108) instead of allow-listing |
+| 11 | §9.4 corrected to stdlib `testing` (post-review) | Adopt `testify` as written | `testify` was never adopted — it is not in `go.mod` and every existing test uses plain `testing`. Documenting reality (and that adopting testify needs an ADR) beats either a permanently-violated rule or churning every test for an unjustified dependency. Surfaced in the feature-daily-flood-digest review |
