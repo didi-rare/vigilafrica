@@ -22,10 +22,10 @@ import {
   ShieldAlert,
 } from 'lucide-react'
 
+import { getApiBaseUrl } from '../api/events'
 import './ForPartners.css'
 
 const GITHUB_URL = 'https://github.com/didi-rare/vigilafrica'
-const API_BASE_URL = 'https://api.vigilafrica.org'
 const OPENAPI_URL = `${GITHUB_URL}/blob/main/openspec/specs/vigilafrica/openapi.yaml`
 const NEW_ISSUE_URL = `${GITHUB_URL}/issues/new`
 const DISCUSSIONS_URL = `${GITHUB_URL}/discussions`
@@ -105,6 +105,11 @@ const AUDIENCES: Audience[] = [
 ]
 
 export function ForPartners() {
+  // The public API origin for whatever environment this page is served from
+  // (prod → api.vigilafrica.org, staging → api.staging…). Sourced from
+  // VITE_API_BASE_URL via the api layer — never hard-coded (React §15.4, §5.4).
+  const apiBaseUrl = getApiBaseUrl()
+
   // Per-page title (the site has no react-helmet; index.html title is static).
   // Restore the previous title on unmount so SPA navigation stays correct.
   useEffect(() => {
@@ -179,7 +184,7 @@ export function ForPartners() {
           <h2 id="partners-integrate-heading" className="section-title">A small, stable REST API</h2>
           <p className="section-subtitle">
             JSON over HTTPS, no key required to read. Base URL{' '}
-            <code className="partners-inline-code">{API_BASE_URL}</code>.
+            <code className="partners-inline-code">{apiBaseUrl}</code>.
           </p>
           <dl className="partners-endpoints">
             {ENDPOINTS.map((ep) => (
@@ -197,7 +202,7 @@ export function ForPartners() {
               Full OpenAPI specification
             </a>
             <span aria-hidden="true"> · </span>
-            <a href={`${API_BASE_URL}/v1/events`} target="_blank" rel="noopener noreferrer">
+            <a href={`${apiBaseUrl}/v1/events`} target="_blank" rel="noopener noreferrer">
               Try a live request
             </a>
           </div>
