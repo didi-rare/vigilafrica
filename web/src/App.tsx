@@ -19,7 +19,7 @@ import {
   AlertTriangle,
 } from 'lucide-react'
 
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom'
 import { ErrorBoundary, type FallbackProps } from 'react-error-boundary'
 import './App.css'
 import MILESTONES from './data/milestones.json'
@@ -67,6 +67,11 @@ const EventsDashboard = lazy(async () => {
 const EventDetail = lazy(async () => {
   const module = await import('./pages/EventDetail')
   return { default: module.EventDetail }
+})
+
+const ForPartners = lazy(async () => {
+  const module = await import('./pages/ForPartners')
+  return { default: module.ForPartners }
 })
 const STEPS = [
   {
@@ -129,17 +134,22 @@ function App() {
           <span className="logo-icon" aria-hidden="true">◉</span>
           <span className="logo-text">VigilAfrica</span>
         </div>
-        <a
-          id="nav-github-link"
-          href={GITHUB_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="btn btn-outline"
-          aria-label="View VigilAfrica on GitHub"
-        >
-          <GithubIcon />
-          <span>View on GitHub</span>
-        </a>
+        <div className="nav-actions">
+          <Link id="nav-partners-link" to="/for-partners" className="nav-link">
+            For partners
+          </Link>
+          <a
+            id="nav-github-link"
+            href={GITHUB_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn btn-outline"
+            aria-label="View VigilAfrica on GitHub"
+          >
+            <GithubIcon />
+            <span>View on GitHub</span>
+          </a>
+        </div>
       </nav>
 
       <main id="main">
@@ -303,6 +313,14 @@ function App() {
             element={
               <Suspense fallback={<div className="container section">Loading event telemetry...</div>}>
                 <EventDetail />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/for-partners"
+            element={
+              <Suspense fallback={<div className="container section">Loading...</div>}>
+                <ForPartners />
               </Suspense>
             }
           />

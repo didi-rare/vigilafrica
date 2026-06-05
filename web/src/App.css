@@ -236,6 +236,31 @@ h2[id],
   background-clip: text;
 }
 
+.nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.nav-link {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color 0.2s ease;
+}
+
+.nav-link:hover {
+  color: var(--text-primary);
+}
+
+.nav-link:focus-visible {
+  outline: 2px solid var(--accent-amber);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
 /* ─────────────────────────────────────
    Hero Section
 ───────────────────────────────────── */
@@ -696,6 +721,11 @@ h2[id],
 @media (max-width: 480px) {
   .hero-title { font-size: 2.25rem; }
   .steps { flex-direction: column; }
+
+  /* Keep the nav on one line: tighten the action group and drop the GitHub
+     button's text label (icon + aria-label remain). */
+  .nav-actions { gap: 14px; }
+  #nav-github-link span { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
