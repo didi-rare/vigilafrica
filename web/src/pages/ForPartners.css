@@ -1,0 +1,256 @@
+/* ForPartners page (sprint Day 5).
+   All colours come from design tokens (tokens.css) — stylelint rejects literals
+   on color/background/border-color/fill/stroke. Spacing/radii use rem/px.
+   Reuses global classes from App.css: .container, .section-label,
+   .section-title, .section-subtitle, .hero-title, .hero-desc, .hero-cta,
+   .hero-cta-note, .btn(.btn-primary/.btn-outline), .glass-effect,
+   .audience-grid, .audience-card, .audience-icon. */
+
+.for-partners-page {
+  padding-bottom: 96px;
+}
+
+/* ── Hero ── */
+.partners-hero {
+  padding: 88px 0 56px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.partners-hero .hero-title {
+  max-width: 16ch;
+}
+
+.partners-hero .hero-desc {
+  max-width: 60ch;
+}
+
+/* ── Generic section rhythm ── */
+.partners-section {
+  padding: 64px 0;
+}
+
+/* ── Capability cards ── */
+.partners-card-grid {
+  list-style: none;
+  margin: 32px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 20px;
+}
+
+.partners-card {
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-card);
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+}
+
+.partners-card:hover {
+  border-color: var(--border-amber-soft);
+  background: var(--bg-card-hover);
+  transform: translateY(-2px);
+}
+
+.partners-card__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  margin-bottom: 16px;
+  color: var(--accent-amber);
+  background: var(--surface-amber-soft);
+  border: 1px solid var(--border-amber-soft);
+}
+
+.partners-card__title {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 8px;
+}
+
+.partners-card__desc {
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* ── Integrate: endpoint list ── */
+.partners-inline-code,
+.partners-endpoint__path {
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  color: var(--text-primary);
+}
+
+.partners-inline-code {
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: var(--surface-white-soft);
+  border: 1px solid var(--border-subtle);
+  white-space: nowrap;
+}
+
+.partners-endpoints {
+  margin: 28px 0 0;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--bg-card);
+}
+
+.partners-endpoint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 16px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.partners-endpoint:first-child {
+  border-top: none;
+}
+
+.partners-endpoint__sig {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 18rem;
+  margin: 0;
+}
+
+.partners-endpoint__method {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 3px 8px;
+  border-radius: 6px;
+  color: var(--accent-green);
+  background: var(--surface-green-soft);
+  border: 1px solid var(--border-green-medium);
+}
+
+.partners-endpoint__desc {
+  flex: 1 1 16rem;
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+.partners-links {
+  margin-top: 20px;
+  font-size: 0.9375rem;
+  color: var(--text-muted);
+}
+
+.partners-links a {
+  color: var(--accent-amber);
+  text-decoration: none;
+}
+
+.partners-links a:hover {
+  text-decoration: underline;
+}
+
+/* ── Responsible-use callout ── */
+.partners-callout {
+  display: flex;
+  gap: 18px;
+  padding: 28px;
+  border-radius: 16px;
+}
+
+.partners-callout__icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  color: var(--accent-amber);
+  background: var(--surface-amber-soft);
+  border: 1px solid var(--border-amber-soft);
+}
+
+.partners-callout__title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 2px 0 10px;
+}
+
+.partners-callout__body {
+  font-size: 0.9875rem;
+  line-height: 1.7;
+  color: var(--text-secondary);
+  margin: 0;
+  max-width: 68ch;
+}
+
+/* ── Contact card ── */
+.partners-contact-card {
+  padding: 36px;
+  border-radius: 18px;
+  text-align: center;
+}
+
+.partners-contact-card p {
+  max-width: 60ch;
+  margin: 12px auto 0;
+  font-size: 1rem;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.partners-contact-card a {
+  color: var(--accent-amber);
+}
+
+.partners-contact-card .hero-cta {
+  justify-content: center;
+  margin-top: 28px;
+}
+
+.partners-back {
+  margin-top: 24px;
+  font-size: 0.9375rem;
+}
+
+.partners-back a {
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.partners-back a:hover {
+  color: var(--text-primary);
+  text-decoration: underline;
+}
+
+@media (max-width: 640px) {
+  .partners-hero {
+    padding: 56px 0 40px;
+  }
+
+  .partners-section {
+    padding: 48px 0;
+  }
+
+  .partners-callout {
+    flex-direction: column;
+    gap: 14px;
+    padding: 22px;
+  }
+
+  .partners-contact-card {
+    padding: 26px 20px;
+  }
+}
