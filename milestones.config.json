@@ -8,6 +8,9 @@
     { "version": "v0.6", "label": "v0.6 · Country expansion model" },
     { "version": "v0.7", "label": "v0.7 · Second country stable" },
     { "version": "v0.8", "label": "v0.8 · Pre-demo setup" },
-    { "version": "v1.0", "label": "v1.0 · Credible public launch" }
+    { "version": "v1.0", "label": "v1.0 · Credible public launch" },
+    { "version": "v1.1", "label": "v1.1 · Release automation activation" },
+    { "version": "v1.2", "label": "v1.2 · Post-launch quality sweep" },
+    { "version": "v1.3", "label": "v1.3 · Category expansion + design-system tokens" }
   ]
 }

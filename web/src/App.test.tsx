@@ -90,10 +90,15 @@ describe('App', () => {
     expect(screen.getByText(/v0.7 · Second country stable/i)).toHaveTextContent(
       'v0.7 · Second country stable ✅ Complete',
     )
-    for (const icon of screen.getAllByText('✅')) {
+    // Every milestone status icon (complete ✅ / in-progress 🔄) is decorative
+    // and must be aria-hidden. There may be zero in-progress icons when no
+    // milestone is currently active (e.g. between milestones), so query both
+    // kinds rather than assuming exactly one of each renders.
+    const statusIcons = [...screen.queryAllByText('✅'), ...screen.queryAllByText('🔄')]
+    expect(statusIcons.length).toBeGreaterThan(0)
+    for (const icon of statusIcons) {
       expect(icon).toHaveAttribute('aria-hidden', 'true')
     }
-    expect(screen.getByText('🔄')).toHaveAttribute('aria-hidden', 'true')
   })
 
   it('uses valid list semantics for the process steps', () => {
