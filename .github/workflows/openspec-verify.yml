@@ -49,18 +49,22 @@ jobs:
       - name: OpenSpec Validate
         run: npx openspec validate --specs
 
-      # Sentinel Audit: static analysis + compile check.
-      # go run cmd/server/main.go is intentionally NOT used here — the server
-      # requires DATABASE_URL and would os.Exit(1) immediately in a DB-less CI
-      # environment. These two steps provide the same governance signal without
-      # any runtime infrastructure. When governance-sentinel (cmd/sentinel/) is
-      # complete this block will be upgraded to a dedicated audit binary.
+      # Sentinel governance gate (ADR-010). The auditor (api/cmd/sentinel) fails
+      # the build when a change to a critical path (api/internal/, api/cmd/,
+      # web/src/) lacks an OpenSpec record (openspec/proposals/ or
+      # openspec/changes/) and is not tagged [trivial]. Static analysis runs
+      # first as a cheap compile/vet check over the api module.
       - name: Sentinel Audit — Static Analysis
         working-directory: api
         run: go vet ./...
 
-      - name: Sentinel Audit — Binary Smoke Test
+      - name: Sentinel Audit — Governance Gate
         working-directory: api
-        # Mirrors the go build pattern in ci-cd.yml (ADR-007 entry point)
-        run: go build -o /dev/null ./cmd/server/
+        # The auditor diffs HEAD against origin/development. The earlier
+        # "Fetch Development Branch" step updates the local `development` ref;
+        # this refspec ensures the remote-tracking ref the auditor actually
+        # compares against (origin/development) is present in the CI checkout.
+        run: |
+          git fetch origin development:refs/remotes/origin/development
+          go run ./cmd/sentinel
 
