@@ -295,7 +295,7 @@ Implement an automated governance gate ("The Sentinel") that prevents code chang
 ### Enforcement Rules
 
 1. **Critical Packages**: Any change to `api/internal/*`, `api/cmd/*`, or `web/src/*` triggers an audit.
-2. **Governance Link**: The audit passes IF at least one file is added or modified in `openspec/changes/`.
+2. **Governance Link**: The audit passes IF at least one file is added or modified in an active OpenSpec record location — `openspec/proposals/` (the flat proposal layout) **or** `openspec/changes/` (the per-change layout). Archived records (any path under `/archive/`) do not count.
 3. **Exemptions**: 
    - **Trivial Fixes**: Commits containing `[trivial]` in the message skip the audit (for typos, linting, etc.).
    - **Maintenance**: Changes to `api/db/migrations/`, `docs/`, or root configuration files are exempt.
@@ -303,8 +303,23 @@ Implement an automated governance gate ("The Sentinel") that prevents code chang
 ### Consequences
 
 - **CI Failure**: Pull Requests that violate these rules will fail the `openspec-verify` workflow.
-- **Workflow Dependency**: Developers must run `/opsx-propose` before starting implementation on a new feature.
-- **Improved Scannability**: The `openspec/changes/archive` becomes a reliable history of *why* every part of the codebase exists.
+- **Workflow Dependency**: Developers must register an OpenSpec record before starting implementation on a new feature.
+- **Improved Scannability**: The OpenSpec record tree becomes a reliable history of *why* every part of the codebase exists.
+
+### Amendment (2026-06-08)
+
+The auditor binary (`api/cmd/sentinel`) was built with this decision, but the
+`openspec-verify` workflow ran only placeholder static-analysis steps — the gate
+was never actually enforced (a `web/src/` feature could, and did, merge without a
+record). Two changes make the decision real:
+
+1. **Wired into CI.** `openspec-verify` now runs `go run ./cmd/sentinel` as a
+   hard-fail step, so the enforcement promised above is live.
+2. **Both record layouts accepted.** Rule 2's Governance Link now passes on a
+   record in either `openspec/proposals/` or `openspec/changes/`. The original
+   text named only `openspec/changes/`, but the project's active workflow uses
+   the flat `openspec/proposals/` layout; accepting both reconciles the gate with
+   real practice instead of forcing a layout migration.
 
 ---
 
