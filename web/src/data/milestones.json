@@ -45,8 +45,18 @@
     "complete": true
   },
   {
-    "label": "v1.1 · Quality + observability",
-    "active": true,
+    "label": "v1.1 · Release automation activation",
+    "active": false,
+    "complete": true
+  },
+  {
+    "label": "v1.2 · Post-launch quality sweep",
+    "active": false,
+    "complete": true
+  },
+  {
+    "label": "v1.3 · Category expansion + design-system tokens",
+    "active": false,
     "complete": false
   }
 ]
