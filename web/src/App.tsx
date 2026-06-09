@@ -20,6 +20,8 @@ import {
   Droplet,
   Flame,
   ArrowRight,
+  Check,
+  Loader,
 } from 'lucide-react'
 
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom'
@@ -335,7 +337,7 @@ function App() {
                               <>
                                 {' '}
                                 <span className="milestone-tag milestone-tag--complete">
-                                  <span aria-hidden="true">✅</span> Complete
+                                  <Check size={12} aria-hidden="true" /> Complete
                                 </span>
                               </>
                             )}
@@ -343,7 +345,7 @@ function App() {
                               <>
                                 {' '}
                                 <span className="milestone-tag">
-                                  <span aria-hidden="true">🔄</span> In progress
+                                  <Loader size={12} aria-hidden="true" /> In progress
                                 </span>
                               </>
                             )}
