@@ -36,7 +36,7 @@ The following issues were discovered during execution and resolved on `fix/stagi
 | Secret | Value |
 |---|---|
 | `VPS_SSH_KEY` | Private key for the `deploy` user |
-| `VPS_HOST` | `178.104.104.122` |
+| `VPS_HOST` | `<VPS_HOST>` |
 | `VPS_USER` | `deploy` |
 
 ---
@@ -79,8 +79,8 @@ ALERT_STALENESS_CHECK_INTERVAL_MIN=15
 
 | Host | Value |
 |---|---|
-| `api` | `178.104.104.122` |
-| `api.staging` | `178.104.104.122` |
+| `api` | `<VPS_HOST>` |
+| `api.staging` | `<VPS_HOST>` |
 
 ---
 

@@ -113,8 +113,8 @@ This is operator action — values to be entered in the Namecheap DNS dashboard.
 
 ### Already created (Phase 2 of chore-vps-v1-launch)
 
-- [x] `api` — `A` — `178.104.104.122` — VPS production API
-- [x] `api.staging` — `A` — `178.104.104.122` — VPS staging API
+- [x] `api` — `A` — `<VPS_HOST>` — VPS production API
+- [x] `api.staging` — `A` — `<VPS_HOST>` — VPS staging API
 
 ### To create under this change
 
