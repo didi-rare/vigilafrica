@@ -11,10 +11,13 @@ export function useReveal<T extends HTMLElement = HTMLElement>() {
   // Start "revealed" when motion is reduced or IntersectionObserver is missing,
   // so the effect never has to set state synchronously (no cascading render).
   const [revealed, setRevealed] = useState(() => {
-    if (typeof window === 'undefined') return true
+    // Reveal immediately (no transition) when there's no DOM, no
+    // IntersectionObserver, or no matchMedia (e.g. jsdom) — never crash, and
+    // never leave content stuck hidden where the observer can't fire.
+    if (typeof window === 'undefined' || !('IntersectionObserver' in window)) return true
     return (
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches ||
-      !('IntersectionObserver' in window)
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
     )
   })
 

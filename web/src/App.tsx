@@ -25,6 +25,7 @@ import {
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom'
 import { ErrorBoundary, type FallbackProps } from 'react-error-boundary'
 import { BrandMark } from './components/BrandMark'
+import { useReveal } from './hooks/useReveal'
 import './App.css'
 import MILESTONES from './data/milestones.json'
 
@@ -118,13 +119,18 @@ function StagingBanner() {
 }
 
 function App() {
+  // Scroll-reveal refs for the landing content sections (fade-up on enter,
+  // reduced-motion-safe via the hook). Hooks are called unconditionally here;
+  // refs stay null on routes where these sections aren't rendered.
+  const { ref: stepsRef, revealed: stepsShown } = useReveal<HTMLElement>()
+  const { ref: audienceRef, revealed: audienceShown } = useReveal<HTMLElement>()
+  const { ref: statusRef, revealed: statusShown } = useReveal<HTMLElement>()
   return (
     <Router>
       <ErrorBoundary
         FallbackComponent={PageError}
         onError={(err) => {
           // Keep render-time errors visible in the console for local debugging.
-          // eslint-disable-next-line no-console
           console.error('[app] caught render error:', err)
         }}
       >
@@ -240,7 +246,12 @@ function App() {
                 <EventsDashboard />
               </Suspense>
 
-              <section id="how-it-works" className="how-it-works" aria-labelledby="how-heading">
+              <section
+                ref={stepsRef}
+                id="how-it-works"
+                className={`how-it-works reveal${stepsShown ? ' is-revealed' : ''}`}
+                aria-labelledby="how-heading"
+              >
                 <div className="container">
                   <span className="section-label">Architecture</span>
                   <h2 id="how-heading" className="section-title">How it works</h2>
@@ -261,7 +272,12 @@ function App() {
                 </div>
               </section>
 
-              <section id="built-for" className="built-for" aria-labelledby="built-heading">
+              <section
+                ref={audienceRef}
+                id="built-for"
+                className={`built-for reveal${audienceShown ? ' is-revealed' : ''}`}
+                aria-labelledby="built-heading"
+              >
                 <div className="container">
                   <span className="section-label">Use cases</span>
                   <h2 id="built-heading" className="section-title">Built for people on the ground</h2>
@@ -281,7 +297,12 @@ function App() {
                 </div>
               </section>
 
-              <section id="roadmap" className="status" aria-labelledby="status-heading">
+              <section
+                ref={statusRef}
+                id="roadmap"
+                className={`status reveal${statusShown ? ' is-revealed' : ''}`}
+                aria-labelledby="status-heading"
+              >
                 <div className="container">
                   <div className="status-card glass-effect">
                     <div className="status-header">
