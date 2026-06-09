@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { fetchEvents, fetchContext, fetchHealth, fetchStates, getApiBaseUrl, eventKeys, stateKeys, healthKeys, contextKeys } from '../api/events'
 import type { HealthResponse, EventCategory, VigilEvent } from '../api/events'
 import { track } from '../analytics'
+import { Droplet, Flame, MapPin, CircleCheck, Clock, AlertTriangle } from 'lucide-react'
 
 import './EventsDashboard.css'
 
@@ -108,7 +109,7 @@ function FreshnessIndicator() {
         role="status"
         aria-live="polite"
       >
-        <span className="freshness-icon" aria-hidden="true">🟢</span>
+        <span className="freshness-icon" aria-hidden="true"><CircleCheck size={14} /></span>
         Data freshness unknown — no ingestion history available.
       </div>
     )
@@ -120,7 +121,7 @@ function FreshnessIndicator() {
       ? 'freshness-banner--warn'
       : 'freshness-banner--ok'
 
-  const icon = resolved.kind === 'error' ? '⚠️' : resolved.kind === 'warn' ? '🕐' : '🟢'
+  const FreshnessIcon = resolved.kind === 'error' ? AlertTriangle : resolved.kind === 'warn' ? Clock : CircleCheck
   const ariaRole = resolved.kind === 'ok' ? 'status' : 'alert'
 
   return (
@@ -129,7 +130,7 @@ function FreshnessIndicator() {
       role={ariaRole}
       aria-live="polite"
     >
-      <span className="freshness-icon" aria-hidden="true">{icon}</span>
+      <span className="freshness-icon" aria-hidden="true"><FreshnessIcon size={14} /></span>
       {resolved.message}
     </div>
   )
@@ -296,8 +297,8 @@ export function EventsDashboard() {
               aria-label="Filter by category"
             >
               <option value="">All Categories</option>
-              <option value="floods">🌊 Floods</option>
-              <option value="wildfires">🔥 Wildfires</option>
+              <option value="floods">Floods</option>
+              <option value="wildfires">Wildfires</option>
             </select>
           </div>
 
@@ -330,7 +331,7 @@ export function EventsDashboard() {
 
             {eventsError && (
               <div className="dashboard-state error" role="alert">
-                <span role="img" aria-label="alert">⚠️</span>
+                <AlertTriangle size={18} aria-hidden="true" />
                 <p>Failed to connect to VigilAfrica Command Center</p>
                 {import.meta.env.VITE_SHOW_ERROR_DETAIL === 'true' && (
                   <>
@@ -372,7 +373,11 @@ export function EventsDashboard() {
                       <article className={`event-card event-card--${categoryClass}`}>
                         <div className="event-header">
                           <span className={`badge badge--${categoryClass}`}>
-                            {event.category === 'floods' ? '🌊 Floods' : '🔥 Wildfires'}
+                            {event.category === 'floods' ? (
+                              <><Droplet size={13} aria-hidden="true" /> Floods</>
+                            ) : (
+                              <><Flame size={13} aria-hidden="true" /> Wildfires</>
+                            )}
                           </span>
                           <span className="event-date">
                             {/* F8: explicit en-GB locale so the same event renders the same date everywhere. */}
@@ -384,7 +389,7 @@ export function EventsDashboard() {
                         </h3>
 
                         <div className="event-location glass-effect">
-                          <span className="location-pin" aria-hidden="true">📍</span>
+                          <span className="location-pin" aria-hidden="true"><MapPin size={13} /></span>
                           {event.state_name ? (
                             <span className="location-text">
                               <strong>{event.state_name}</strong>, {event.country_name}

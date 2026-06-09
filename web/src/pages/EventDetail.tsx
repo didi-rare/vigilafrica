@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { fetchEventById, eventKeys } from '../api/events'
 import { track } from '../analytics'
 import { FeedbackPrompt } from '../components/FeedbackPrompt'
+import { Droplet, Flame } from 'lucide-react'
 
 import './EventDetail.css'
 
@@ -50,7 +51,11 @@ export function EventDetail() {
         <header className="event-detail-header">
           <div className="header-main">
             <span className={`badge badge--${categoryClass}`}>
-              {event.category === 'floods' ? '🌊 Floods' : '🔥 Wildfires'}
+              {event.category === 'floods' ? (
+                <><Droplet size={14} aria-hidden="true" /> Floods</>
+              ) : (
+                <><Flame size={14} aria-hidden="true" /> Wildfires</>
+              )}
             </span>
             <h1>{event.title}</h1>
             <p className="event-detail-disclaimer" role="note">

@@ -373,6 +373,11 @@ navigate({ pathname: "/events", search: params.toString() });
 :root { --z-modal: 300; --z-nav: 200; --z-map-controls: 100; }
 ```
 
+**§7.11 — Font families come from the type tokens in `tokens.css` — `--font-display` (Space Grotesk), `--font-body` (IBM Plex Sans), `--font-mono` (IBM Plex Mono). Never hardcode a font name in component CSS (ADR-015 "Ground Truth").**
+*Why:* The three-family system is the brand voice; routing through tokens keeps it swappable in one place and prevents a stray `font-family: Inter` regressing the identity. Fonts are self-hosted via `@fontsource` (no runtime CDN call) — see §15.
+❌ `font-family: 'Space Grotesk', sans-serif;`
+✅ `font-family: var(--font-display);`
+
 ---
 
 ## 8. Performance

@@ -120,7 +120,12 @@ Approved 2026-06-08: direction **Ground Truth**, ambition **full rebrand**, scop
 - **R1 — Scope creep across four surfaces.** Mitigation: ship per-surface in
   verified increments (landing first, already proven), each its own PR.
 - **R2 — New fonts regress bundle size / first paint.** Mitigation: self-hosted
-  woff2, only the weights used are imported; check before/after in the PR.
+  woff2, only the 7 weights used are imported (Space Grotesk 500/700, Plex Sans
+  400/500/600, Plex Mono 400/500). **Measured:** 34 subset woff2 files, ~405 KB
+  on disk total — but the browser fetches only the subsets a page actually needs
+  (latin ≈ ~18 KB/weight), fonts are separate cached assets **not** in the JS
+  bundle (JS output unchanged vs `development`), and `font-display: swap`
+  (fontsource default) keeps them off the first-paint critical path.
 - **R3 — Motion harms accessibility or feels gratuitous.** Mitigation: sparse +
   purposeful, `prefers-reduced-motion` gating is an acceptance criterion.
 - **R4 — Colour-only data encoding (flood cyan / fire amber).** Mitigation: tags
