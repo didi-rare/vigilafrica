@@ -17,10 +17,14 @@ import {
   Truck,
   ShieldAlert,
   AlertTriangle,
+  Droplet,
+  Flame,
+  ArrowRight,
 } from 'lucide-react'
 
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom'
 import { ErrorBoundary, type FallbackProps } from 'react-error-boundary'
+import { BrandMark } from './components/BrandMark'
 import './App.css'
 import MILESTONES from './data/milestones.json'
 
@@ -130,10 +134,11 @@ function App() {
 
       {/* ── Navigation ── */}
       <nav className="nav" aria-label="Main navigation">
-        <div className="nav-logo">
-          <span className="logo-icon" aria-hidden="true">◉</span>
+        <a className="nav-logo" href="/" aria-label="VigilAfrica home">
+          <BrandMark size={30} className="brand-mark" />
           <span className="logo-text">VigilAfrica</span>
-        </div>
+          <span className="nav-station" aria-hidden="true">NG·GH</span>
+        </a>
         <div className="nav-actions">
           <Link id="nav-partners-link" to="/for-partners" className="nav-link">
             For partners
@@ -157,46 +162,77 @@ function App() {
           <Route path="/" element={
             <>
               <section id="hero" className="hero" aria-labelledby="hero-heading">
-                <div className="hero-glow hero-glow--blue" aria-hidden="true" />
-                <div className="hero-glow hero-glow--orange" aria-hidden="true" />
+                <div className="hero__graticule" aria-hidden="true" />
 
-                <div className="container">
-                  <div className="event-badges" aria-label="Supported event types">
-                    <span className="badge badge--flood">🌊 Floods</span>
-                    <span className="badge badge--fire">🔥 Wildfires</span>
+                <div className="container hero__inner">
+                  <div className="hero__lead">
+                    <p className="hero__readout">
+                      <span className="signal-dot" aria-hidden="true" />
+                      <span className="hero__readout-key">LIVE&nbsp;FEED</span>
+                      <span className="hero__readout-sep" aria-hidden="true">/</span>
+                      <span className="hero__readout-coord">09°04′N&nbsp;07°29′E</span>
+                      <span className="hero__readout-sep" aria-hidden="true">/</span>
+                      <span>NASA&nbsp;EONET</span>
+                    </p>
+
+                    <h1 id="hero-heading" className="hero-title">
+                      What is happening<span className="hero-title__accent"> near you?</span>
+                    </h1>
+
+                    <p className="hero-desc">
+                      VigilAfrica translates raw NASA satellite event data into local African
+                      context — floods and wildfires by country and state, not just coordinates.
+                      Open-source. Nigeria and Ghana live.
+                    </p>
+
+                    <div className="hero-cta">
+                      <a id="hero-explore-cta" href="#dashboard" className="btn btn-primary">
+                        Explore latest events
+                        <ArrowRight size={18} aria-hidden="true" className="btn__arrow" />
+                      </a>
+                      <a
+                        id="hero-github-cta"
+                        href={GITHUB_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn btn-outline"
+                      >
+                        Contribute on GitHub
+                      </a>
+                    </div>
                   </div>
 
-                  <h1 id="hero-heading" className="hero-title">
-                    What is happening<span className="hero-title--accent"> near you?</span>
-                  </h1>
-
-                  <p className="hero-desc">
-                    VigilAfrica translates raw NASA satellite event data into local African context &mdash;
-                    showing floods and wildfires by country and state, not just coordinates.
-                    Open-source. Nigeria and Ghana live.
-                  </p>
-
-                  <div className="hero-cta">
-                    <a
-                      id="hero-explore-cta"
-                      href="#dashboard"
-                      className="btn btn-primary"
-                    >
-                      Explore latest events →
-                    </a>
-                    <a
-                      id="hero-github-cta"
-                      href={GITHUB_URL}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="btn btn-outline"
-                    >
-                      Contribute on GitHub
-                    </a>
+                  <div className="hero__panel">
+                    <div className="hero__panel-head">
+                      <span className="mono-label">FEED&nbsp;PARAMETERS</span>
+                      <span className="signal-dot signal-dot--sm" aria-hidden="true" />
+                    </div>
+                    <dl className="hero__telemetry">
+                      <div className="hero__telemetry-row">
+                        <dt>Source</dt>
+                        <dd>NASA EONET</dd>
+                      </div>
+                      <div className="hero__telemetry-row">
+                        <dt>Region</dt>
+                        <dd>Nigeria · Ghana</dd>
+                      </div>
+                      <div className="hero__telemetry-row">
+                        <dt>Tracking</dt>
+                        <dd className="hero__tracking">
+                          <span className="tag tag--flood">
+                            <Droplet size={13} aria-hidden="true" /> Floods
+                          </span>
+                          <span className="tag tag--fire">
+                            <Flame size={13} aria-hidden="true" /> Wildfires
+                          </span>
+                        </dd>
+                      </div>
+                      <div className="hero__telemetry-row">
+                        <dt>License</dt>
+                        <dd>Apache-2.0</dd>
+                      </div>
+                    </dl>
                   </div>
-                  <p className="hero-cta-note">
-                    Open source · Nigeria and Ghana live · Apache 2.0
-                  </p>
                 </div>
               </section>
 

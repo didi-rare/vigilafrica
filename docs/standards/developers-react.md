@@ -689,7 +689,7 @@ expect(results.violations).toHaveLength(0)
 
 **§14.2 — New dependencies require a line in an OpenSpec change record: problem solved, alternatives considered, why native isn't sufficient.**
 
-**§14.3 — Current approved production dependencies: `react`, `react-dom`, `react-router-dom`, `@tanstack/react-query`, `maplibre-gl`, `lucide-react`. Adding requires §14.2.**
+**§14.3 — Current approved production dependencies: `react`, `react-dom`, `react-router-dom`, `@tanstack/react-query`, `maplibre-gl`, `lucide-react`, and the self-hosted type families `@fontsource/space-grotesk`, `@fontsource/ibm-plex-sans`, `@fontsource/ibm-plex-mono` (Ground Truth visual identity, ADR-015). Adding requires §14.2.**
 
 **§14.4 — Bundle impact checked with `rollup-plugin-visualizer` before merging a new dep. Before/after size in the change record.**
 

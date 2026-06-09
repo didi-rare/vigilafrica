@@ -7,8 +7,9 @@
    (colour tokens: see styles/tokens.css)
 ───────────────────────────────────── */
 :root {
-  /* Typography */
-  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  /* Typography — Ground Truth type system lives in tokens.css (ADR-015).
+     --font-sans kept as a body alias for legacy component references. */
+  --font-sans: var(--font-body);
 
   /* Spacing */
   --container-max: 1160px;
@@ -66,11 +67,13 @@ a {
 }
 
 .section-title {
+  font-family: var(--font-display);
   font-size: clamp(1.75rem, 4vw, 2.5rem);
   font-weight: 700;
   color: var(--text-primary);
   margin-bottom: 16px;
-  line-height: 1.2;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
 }
 
 .section-subtitle {
@@ -214,11 +217,27 @@ h2[id],
   display: flex;
   align-items: center;
   gap: 10px;
+  text-decoration: none;
 }
 
-.logo-icon {
-  font-size: 1.25rem;
-  color: var(--accent-amber);
+.brand-mark {
+  flex-shrink: 0;
+}
+
+.brand-mark__ring {
+  stroke: var(--border-strong);
+}
+
+.brand-mark__graticule {
+  stroke: var(--graticule-tick);
+}
+
+.brand-mark__ticks {
+  stroke: var(--accent-amber);
+}
+
+.brand-mark__point {
+  fill: var(--accent-amber);
   animation: pulse 3s ease-in-out infinite;
 }
 
@@ -228,12 +247,23 @@ h2[id],
 }
 
 .logo-text {
+  font-family: var(--font-display);
   font-size: 1.0625rem;
   font-weight: 700;
-  background: linear-gradient(135deg, var(--accent-amber), var(--accent-blue));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+.nav-station {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  color: var(--coordinate-text);
+  padding: 2px 6px;
+  border: 1px solid var(--border-amber-soft);
+  border-radius: 4px;
+  margin-left: 2px;
 }
 
 .nav-actions {
@@ -266,58 +296,247 @@ h2[id],
 ───────────────────────────────────── */
 .hero {
   position: relative;
-  padding: 112px 0 120px;
+  padding: 88px 0 96px;
   overflow: hidden;
+  border-bottom: 1px solid var(--border);
 }
 
-/* Radial glow orbs */
-.hero-glow {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(80px);
-  pointer-events: none;
-  z-index: 0;
-}
-
-.hero-glow--blue {
-  width: 600px;
-  height: 600px;
-  background: radial-gradient(circle, var(--glow-cyan) 0%, transparent 70%);
-  top: -80px;
-  right: -100px;
-  animation: float 8s ease-in-out infinite;
-}
-
-.hero-glow--orange {
-  width: 500px;
-  height: 500px;
-  background: radial-gradient(circle, var(--glow-orange) 0%, transparent 70%);
-  bottom: -60px;
-  left: -80px;
-  animation: float 10s ease-in-out infinite reverse;
-}
-
-/* Dot grid background */
-.hero::before {
-  content: '';
+/* Cartographic graticule — faint lat/long grid with one emphasised amber
+   meridian. The Ground Truth signature; replaces the generic glow orbs + dots. */
+.hero__graticule {
   position: absolute;
   inset: 0;
-  background-image: radial-gradient(var(--surface-white-subtle) 1px, transparent 1px);
-  background-size: 32px 32px;
   z-index: 0;
-  mask-image: radial-gradient(ellipse 80% 60% at 50% 50%, black 40%, transparent 100%);
-  -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 50%, black 40%, transparent 100%);
+  pointer-events: none;
+  background-image:
+    linear-gradient(var(--graticule-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--graticule-line) 1px, transparent 1px);
+  background-size: 100% 56px, 56px 100%;
+  mask-image: radial-gradient(ellipse 110% 85% at 58% 28%, black 32%, transparent 96%);
+  -webkit-mask-image: radial-gradient(ellipse 110% 85% at 58% 28%, black 32%, transparent 96%);
+  animation: graticule-in 1.4s ease-out 0.1s both;
 }
 
-@keyframes float {
-  0%, 100% { transform: translateY(0px); }
-  50%       { transform: translateY(-20px); }
+.hero__graticule::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 67%;
+  width: 1px;
+  background: var(--graticule-line-strong);
 }
 
-.hero .container {
+.hero__inner {
   position: relative;
-  z-index: 10;
-  max-width: 800px;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.9fr);
+  gap: 56px;
+  align-items: center;
+}
+
+.hero__lead {
+  min-width: 0;
+}
+
+/* Live-feed readout — station-style mono coordinate strip */
+.hero__readout {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  padding: 7px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--surface-white-faint);
+  margin-bottom: 28px;
+}
+
+.hero__readout-key { color: var(--text-primary); }
+.hero__readout-coord { color: var(--coordinate-text); }
+.hero__readout-sep { color: var(--text-muted); }
+
+.signal-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--signal-live);
+  box-shadow: 0 0 0 0 var(--signal-live-glow);
+  animation: signal-ping 2.4s ease-out infinite;
+  flex-shrink: 0;
+}
+
+.signal-dot--sm {
+  width: 6px;
+  height: 6px;
+}
+
+@keyframes signal-ping {
+  0%   { box-shadow: 0 0 0 0 var(--signal-live-glow); }
+  70%  { box-shadow: 0 0 0 7px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+/* Telemetry panel — instrument readout that breaks the centred single column */
+.hero__panel {
+  border: 1px solid var(--border-medium);
+  border-radius: 14px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  animation: reveal-up 0.7s cubic-bezier(0.4, 0, 0.2, 1) 0.38s both;
+}
+
+.hero__panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-white-faint);
+}
+
+.mono-label {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  color: var(--text-secondary);
+}
+
+.hero__telemetry {
+  margin: 0;
+}
+
+.hero__telemetry-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+}
+
+.hero__telemetry-row + .hero__telemetry-row {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.hero__telemetry-row dt {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.hero__telemetry-row dd {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  text-align: right;
+}
+
+.hero__tracking {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 6px;
+}
+
+.tag svg { display: block; }
+
+.tag--flood {
+  background: var(--surface-cyan-medium);
+  border: 1px solid var(--border-cyan-medium);
+  color: var(--accent-blue);
+}
+
+.tag--fire {
+  background: var(--surface-amber-soft);
+  border: 1px solid var(--border-amber-medium);
+  color: var(--accent-amber);
+}
+
+@media (max-width: 860px) {
+  .hero__inner {
+    grid-template-columns: 1fr;
+    gap: 36px;
+  }
+
+  .hero__panel { max-width: 440px; }
+}
+
+/* Hero entrance — instrument "acquiring" sequence: the graticule fades in,
+   then the readout → headline → copy → CTAs → telemetry panel stagger up. */
+@keyframes reveal-up {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes graticule-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Lead column staggers up (graticule + panel entrances live on their own rules
+   above, to avoid duplicate selectors). */
+.hero__lead > * {
+  animation: reveal-up 0.6s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+.hero__lead > *:nth-child(1) { animation-delay: 0.05s; }
+.hero__lead > *:nth-child(2) { animation-delay: 0.12s; }
+.hero__lead > *:nth-child(3) { animation-delay: 0.22s; }
+.hero__lead > *:nth-child(4) { animation-delay: 0.30s; }
+
+/* Scroll-reveal utility (paired with useReveal) — below-fold sections fade up
+   once when they enter the viewport. Initial state hidden; .is-revealed shows. */
+.reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition:
+    opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.reveal.is-revealed {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .signal-dot,
+  .brand-mark__point,
+  .hero__graticule,
+  .hero__lead > *,
+  .hero__panel {
+    animation: none;
+  }
+
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
 }
 
 /* Glass Card Utility */
@@ -360,40 +579,40 @@ h2[id],
 }
 
 .hero-title {
-  font-size: clamp(2.5rem, 6vw, 4rem);
-  font-weight: 800;
-  line-height: 1.1;
-  letter-spacing: -0.02em;
+  font-family: var(--font-display);
+  font-size: clamp(2.6rem, 5.6vw, 4.1rem);
+  font-weight: 700;
+  line-height: 1.04;
+  letter-spacing: -0.025em;
   margin-bottom: 24px;
   color: var(--text-primary);
 }
 
-.hero-title--accent {
-  background: linear-gradient(135deg, var(--accent-amber) 0%, var(--accent-blue) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+.hero-title__accent {
+  color: var(--accent-amber);
 }
 
 .hero-desc {
   font-size: 1.125rem;
   color: var(--text-secondary);
-  max-width: 580px;
-  line-height: 1.75;
-  margin-bottom: 40px;
+  max-width: 540px;
+  line-height: 1.7;
+  margin-bottom: 36px;
 }
 
 .hero-cta {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 16px;
   flex-wrap: wrap;
 }
 
-.hero-cta-note {
-  font-size: 0.875rem;
-  color: var(--text-muted);
-  margin: 16px 0 0;
+.btn__arrow {
+  transition: transform 0.2s ease;
+}
+
+.btn-primary:hover .btn__arrow {
+  transform: translateX(3px);
 }
 
 /* ─────────────────────────────────────
