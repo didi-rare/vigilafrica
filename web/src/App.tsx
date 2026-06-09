@@ -260,9 +260,9 @@ function App() {
                     <p>
                       VigilAfrica is being built milestone by milestone. v1.0 (Credible Public Launch)
                       shipped — Nigeria and Ghana run end-to-end in production — followed by v1.1 and
-                      v1.2, which hardened release automation, observability, and the country boundary
-                      data behind the enrichment pipeline. v1.3 (category expansion + design-system
-                      tokens) is the next milestone. Staging and production both deploy continuously.
+                      v1.2, which hardened release automation and the country boundary data behind the
+                      enrichment pipeline. v1.3 (category expansion + design-system tokens) is the next
+                      milestone. Staging and production both deploy continuously.
                     </p>
 
                     <nav aria-label="Milestone progress">
