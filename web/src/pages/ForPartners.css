@@ -211,11 +211,18 @@
   color: var(--text-secondary);
 }
 
-.partners-contact-card a {
+/* Amber only for inline text links — never for .btn links, whose own
+   on-accent / outline colours must win (the bare `a` selector otherwise
+   out-specifies .btn-primary and washes the CTA text out amber-on-amber). */
+.partners-contact-card a:not(.btn) {
   color: var(--accent-amber);
 }
 
 .partners-contact-card .hero-cta {
+  /* This CTA stacks (column) inside the centred card; horizontal centring of
+     column items is align-items, not justify-content (which is the vertical
+     axis here). Both set so it stays centred in row mode too. */
+  align-items: center;
   justify-content: center;
   margin-top: 28px;
 }
