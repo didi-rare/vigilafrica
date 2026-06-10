@@ -263,9 +263,14 @@ function App() {
                   </p>
 
                   <ul className="steps" role="list">
-                    {STEPS.map((step) => (
+                    {STEPS.map((step, i) => (
                         <li key={step.title} className="step">
-                          <div className="step-icon" aria-hidden="true">{step.icon}</div>
+                          <div className="step-head">
+                            <div className="step-icon" aria-hidden="true">{step.icon}</div>
+                            <span className="step-index" aria-hidden="true">
+                              {String(i + 1).padStart(2, '0')}
+                            </span>
+                          </div>
                           <h3>{step.title}</h3>
                           <p>{step.desc}</p>
                         </li>

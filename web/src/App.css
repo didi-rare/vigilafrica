@@ -56,14 +56,27 @@ a {
   padding: 0 24px;
 }
 
+/* Cartographic section index — mono label preceded by a measured amber rule
+   tick (Ground Truth motif). Shared by every section header + /for-partners. */
 .section-label {
-  display: inline-block;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.12em;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: var(--accent-amber);
-  margin-bottom: 16px;
+  color: var(--coordinate-text);
+  margin-bottom: 18px;
+}
+
+.section-label::before {
+  content: "";
+  width: 20px;
+  height: 1px;
+  background: var(--accent-amber);
+  flex-shrink: 0;
 }
 
 .section-title {
@@ -657,6 +670,22 @@ h2[id],
   box-shadow: var(--shadow-step-hover);
 }
 
+/* Step header — icon left, cartographic index right (Ground Truth). */
+.step-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.step-index {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  color: var(--text-muted);
+}
+
 .step-icon {
   width: 48px;
   height: 48px;
@@ -665,7 +694,6 @@ h2[id],
   justify-content: center;
   background: var(--surface-white-faint);
   border-radius: 12px;
-  margin-bottom: 24px;
   color: var(--accent-blue);
   transition: color 0.3s;
 }
