@@ -80,13 +80,6 @@ const ForPartners = lazy(async () => {
   const module = await import('./pages/ForPartners')
   return { default: module.ForPartners }
 })
-
-// Dev-only Phase-A concepts page (feat-ground-truth-identity); lazy so the
-// candidates never enter the production bundle.
-const ConceptsPage = lazy(async () => {
-  const module = await import('./components/brand-concepts/ConceptsPage')
-  return { default: module.ConceptsPage }
-})
 const STEPS = [
   {
     icon: <Satellite size={20} />,
@@ -396,18 +389,6 @@ function App() {
               </Suspense>
             }
           />
-          {/* Phase-A brand-mark review (feat-ground-truth-identity) — dev-only,
-              removed with web/src/components/brand-concepts/ after selection. */}
-          {import.meta.env.DEV && (
-            <Route
-              path="/brand-concepts"
-              element={
-                <Suspense fallback={<div className="container section">Loading...</div>}>
-                  <ConceptsPage />
-                </Suspense>
-              }
-            />
-          )}
         </Routes>
       </main>
 
