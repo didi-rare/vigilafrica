@@ -96,12 +96,27 @@
   white-space: nowrap;
 }
 
-.partners-endpoints {
+/* Instrument panel around the endpoint list — mirrors the landing hero's
+   FEED PARAMETERS panel (mono head label + live signal dot). Ground Truth. */
+.partners-endpoints-panel {
   margin: 28px 0 0;
   border: 1px solid var(--border);
   border-radius: 14px;
   overflow: hidden;
   background: var(--bg-card);
+}
+
+.partners-endpoints-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-white-faint);
+}
+
+.partners-endpoints {
+  margin: 0;
 }
 
 .partners-endpoint {

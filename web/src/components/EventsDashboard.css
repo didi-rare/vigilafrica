@@ -239,7 +239,9 @@
 }
 
 .event-date {
-  font-size: 0.8rem;
+  /* Dates are telemetry — render in the mono data voice (Ground Truth). */
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
   font-weight: 500;
   color: var(--text-muted);
   letter-spacing: 0.02em;
@@ -262,7 +264,7 @@
   font-size: 0.875rem;
   color: var(--text-muted);
   font-weight: 400;
-  font-family: monospace;
+  font-family: var(--font-mono); /* §7.11 — type tokens, not raw font names */
 }
 
 .event-location {
@@ -296,7 +298,7 @@
 }
 
 .location-text.coords {
-  font-family: monospace;
+  font-family: var(--font-mono); /* §7.11 — type tokens, not raw font names */
   letter-spacing: -0.01em;
 }
 
@@ -384,8 +386,11 @@
   gap: 10px;
   padding: 12px 16px;
   border-radius: 10px;
-  font-size: 0.875rem;
+  /* The freshness line is a station status readout — mono data voice. */
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
   font-weight: 500;
+  letter-spacing: 0.01em;
   margin-bottom: 8px;
   border: 1px solid;
 }
