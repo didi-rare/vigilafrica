@@ -19,8 +19,14 @@ function formatCoordinates(lat: number, lng: number): string {
   const dms = (value: number, positive: string, negative: string) => {
     const dir = value >= 0 ? positive : negative
     const abs = Math.abs(value)
-    const deg = Math.floor(abs)
-    const min = Math.round((abs - deg) * 60)
+    let deg = Math.floor(abs)
+    let min = Math.round((abs - deg) * 60)
+    if (min === 60) {
+      // Rounding can push minutes to 60 (e.g. 9.9959° → 59.75′ → 60′);
+      // carry into degrees so we never render an invalid coordinate.
+      deg += 1
+      min = 0
+    }
     return `${String(deg).padStart(2, '0')}°${String(min).padStart(2, '0')}′${dir}`
   }
   return `${dms(lat, 'N', 'S')} ${dms(lng, 'E', 'W')}`
