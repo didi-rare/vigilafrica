@@ -96,12 +96,27 @@
   white-space: nowrap;
 }
 
-.partners-endpoints {
+/* Instrument panel around the endpoint list — mirrors the landing hero's
+   FEED PARAMETERS panel (mono head label + live signal dot). Ground Truth. */
+.partners-endpoints-panel {
   margin: 28px 0 0;
   border: 1px solid var(--border);
   border-radius: 14px;
   overflow: hidden;
   background: var(--bg-card);
+}
+
+.partners-endpoints-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-white-faint);
+}
+
+.partners-endpoints {
+  margin: 0;
 }
 
 .partners-endpoint {
@@ -211,11 +226,18 @@
   color: var(--text-secondary);
 }
 
-.partners-contact-card a {
+/* Amber only for inline text links — never for .btn links, whose own
+   on-accent / outline colours must win (the bare `a` selector otherwise
+   out-specifies .btn-primary and washes the CTA text out amber-on-amber). */
+.partners-contact-card a:not(.btn) {
   color: var(--accent-amber);
 }
 
 .partners-contact-card .hero-cta {
+  /* This CTA stacks (column) inside the centred card; horizontal centring of
+     column items is align-items, not justify-content (which is the vertical
+     axis here). Both set so it stays centred in row mode too. */
+  align-items: center;
   justify-content: center;
   margin-top: 28px;
 }

@@ -85,20 +85,19 @@ describe('App', () => {
   })
 
   it('renders milestone accessibility labels', () => {
-    render(<App />)
+    const { container } = render(<App />)
 
     expect(screen.getByText(/v0.7 · Second country stable/i)).toHaveTextContent(
-      'v0.7 · Second country stable ✅ Complete',
+      /v0\.7 · Second country stable\s+Complete/,
     )
-    // Every milestone status icon (complete ✅ / in-progress 🔄) is decorative
-    // and must be aria-hidden. There may be zero in-progress icons when no
-    // milestone is currently active (e.g. between milestones), so query both
-    // kinds rather than assuming exactly one of each renders.
-    const statusIcons = [...screen.queryAllByText('✅'), ...screen.queryAllByText('🔄')]
+    // Milestone status icons (complete / in-progress) are now SVGs and must be
+    // decorative (aria-hidden) — the text label carries the meaning. There may be
+    // zero in-progress icons when no milestone is active, so assert ≥1 and all hidden.
+    const statusIcons = container.querySelectorAll('.milestone-tag svg')
     expect(statusIcons.length).toBeGreaterThan(0)
-    for (const icon of statusIcons) {
+    statusIcons.forEach((icon) => {
       expect(icon).toHaveAttribute('aria-hidden', 'true')
-    }
+    })
   })
 
   it('uses valid list semantics for the process steps', () => {

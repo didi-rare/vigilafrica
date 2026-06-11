@@ -26,6 +26,7 @@
 | ADR-012 | Frontend Server State: TanStack Query     | ACCEPTED | 2026-04-18 |
 | ADR-013 | Frontend Styling: Plain CSS over CSS-in-JS | ACCEPTED | 2026-04-18 |
 | ADR-014 | Single-VPS Two-Stack Deployment Model     | ACCEPTED | 2026-04-24 |
+| ADR-015 | Visual Identity & Type System: Ground Truth | ACCEPTED | 2026-06-08 |
 
 ---
 
@@ -480,3 +481,49 @@ Run staging and production on one VPS as two isolated Docker Compose stacks behi
 - Staging and production must use separate `.env` files, Docker networks, and volumes.
 - `/health.version` is stamped at build time with a commit SHA for staging and a SemVer tag for production.
 - Rollback is performed by redeploying a prior tag through the production workflow.
+
+---
+
+## ADR-015 — Visual Identity & Type System: Ground Truth
+
+**Date**: 2026-06-08
+**Status**: ACCEPTED
+
+### Decision
+
+Adopt **"Ground Truth"** as the frontend visual identity: an instrument-grade
+cartographic design language for all `web/src/` surfaces. Establish a three-family
+type system — **Space Grotesk** (display), **IBM Plex Sans** (body/UI), **IBM Plex
+Mono** (coordinates & data) — self-hosted via `@fontsource`, replacing the prior
+Inter-only stack.
+
+### Rationale
+
+- **Look like the instrument it is.** VigilAfrica is a geospatial situational-
+  awareness tool; a cartographic language (lat/long graticules, coordinate
+  readouts, live-signal station aesthetic) is both distinctive and credible for a
+  humanitarian / grant audience, where a generic SaaS template undersells the work.
+- **Colour as meaning, not decoration.** Amber is the single brand accent; cyan
+  and lime are reserved for data semantics (flood = cyan, fire = amber/lime).
+- **Self-hosted type.** No Google-Fonts CDN request at runtime — better privacy
+  (matches the no-tracking analytics posture) and first-paint performance; Vite
+  bundles the woff2. The IBM Plex superfamily's "humans ↔ machines" thesis fits a
+  human-readable satellite-data instrument.
+
+### Enforcement Rules
+
+1. **No emoji as UI icons.** Use SVG (`lucide-react` or hand-authored marks).
+2. **Type tokens.** Components reference `--font-display` / `--font-body` /
+   `--font-mono` (in `tokens.css`), never raw font names.
+3. **Plain CSS only.** This ADR **complements ADR-013** (no Tailwind / CSS-in-JS);
+   the token system and stylelint colour-literal rule remain in force.
+4. **Motion is gated.** Every animation must be disabled under
+   `prefers-reduced-motion: reduce`.
+
+### Consequences
+
+- Adds three `@fontsource/*` packages to the approved frontend dependencies
+  (`developers-react.md` §14.3), exact-pinned per §14.5.
+- The brand mark is an SVG component (`components/BrandMark.tsx`) themed via tokens.
+- Rollout is incremental per surface (landing → /for-partners → EventDetail →
+  dashboard/map chrome); see `feat-ground-truth-redesign`.

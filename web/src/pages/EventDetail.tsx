@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { fetchEventById, eventKeys } from '../api/events'
 import { track } from '../analytics'
 import { FeedbackPrompt } from '../components/FeedbackPrompt'
+import { Droplet, Flame, MapPin } from 'lucide-react'
 
 import './EventDetail.css'
 
@@ -11,6 +12,25 @@ const Map = lazy(async () => {
   const module = await import('../components/Map')
   return { default: module.Map }
 })
+
+// Format decimal lat/lng into a cartographic DMS-style readout, matching the
+// landing hero's coordinate motif (e.g. 09°04′N 07°29′E). Ground Truth.
+function formatCoordinates(lat: number, lng: number): string {
+  const dms = (value: number, positive: string, negative: string) => {
+    const dir = value >= 0 ? positive : negative
+    const abs = Math.abs(value)
+    let deg = Math.floor(abs)
+    let min = Math.round((abs - deg) * 60)
+    if (min === 60) {
+      // Rounding can push minutes to 60 (e.g. 9.9959° → 59.75′ → 60′);
+      // carry into degrees so we never render an invalid coordinate.
+      deg += 1
+      min = 0
+    }
+    return `${String(deg).padStart(2, '0')}°${String(min).padStart(2, '0')}′${dir}`
+  }
+  return `${dms(lat, 'N', 'S')} ${dms(lng, 'E', 'W')}`
+}
 
 export function EventDetail() {
   const { id } = useParams<{ id: string }>()
@@ -50,7 +70,11 @@ export function EventDetail() {
         <header className="event-detail-header">
           <div className="header-main">
             <span className={`badge badge--${categoryClass}`}>
-              {event.category === 'floods' ? '🌊 Floods' : '🔥 Wildfires'}
+              {event.category === 'floods' ? (
+                <><Droplet size={14} aria-hidden="true" /> Floods</>
+              ) : (
+                <><Flame size={14} aria-hidden="true" /> Wildfires</>
+              )}
             </span>
             <h1>{event.title}</h1>
             <p className="event-detail-disclaimer" role="note">
@@ -61,6 +85,12 @@ export function EventDetail() {
              <span className="status-indicator">
                 <span className={`status-dot ${event.status}`} /> {event.status}
              </span>
+             {coordinates && (
+               <span className="detail-coord">
+                 <MapPin size={13} aria-hidden="true" />
+                 {formatCoordinates(coordinates.lat, coordinates.lng)}
+               </span>
+             )}
              <span className="event-date">
                 Detected: {event.event_date ? new Date(event.event_date).toLocaleString() : 'Active'}
              </span>

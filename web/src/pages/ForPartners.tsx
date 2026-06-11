@@ -186,17 +186,23 @@ export function ForPartners() {
             JSON over HTTPS, no key required to read. Base URL{' '}
             <code className="partners-inline-code">{apiBaseUrl}</code>.
           </p>
-          <dl className="partners-endpoints">
-            {ENDPOINTS.map((ep) => (
-              <div key={ep.path} className="partners-endpoint">
-                <dt className="partners-endpoint__sig">
-                  <span className="partners-endpoint__method">{ep.method}</span>
-                  <code className="partners-endpoint__path">{ep.path}</code>
-                </dt>
-                <dd className="partners-endpoint__desc">{ep.desc}</dd>
-              </div>
-            ))}
-          </dl>
+          <div className="partners-endpoints-panel">
+            <div className="partners-endpoints-head">
+              <span className="mono-label">API&nbsp;REFERENCE</span>
+              <span className="signal-dot signal-dot--sm" aria-hidden="true" />
+            </div>
+            <dl className="partners-endpoints">
+              {ENDPOINTS.map((ep) => (
+                <div key={ep.path} className="partners-endpoint">
+                  <dt className="partners-endpoint__sig">
+                    <span className="partners-endpoint__method">{ep.method}</span>
+                    <code className="partners-endpoint__path">{ep.path}</code>
+                  </dt>
+                  <dd className="partners-endpoint__desc">{ep.desc}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
           <div className="partners-links">
             <a href={OPENAPI_URL} target="_blank" rel="noopener noreferrer">
               Full OpenAPI specification

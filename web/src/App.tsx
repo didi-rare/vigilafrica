@@ -17,10 +17,17 @@ import {
   Truck,
   ShieldAlert,
   AlertTriangle,
+  Droplet,
+  Flame,
+  ArrowRight,
+  Check,
+  Loader,
 } from 'lucide-react'
 
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom'
 import { ErrorBoundary, type FallbackProps } from 'react-error-boundary'
+import { BrandMark } from './components/BrandMark'
+import { useReveal } from './hooks/useReveal'
 import './App.css'
 import MILESTONES from './data/milestones.json'
 
@@ -114,13 +121,18 @@ function StagingBanner() {
 }
 
 function App() {
+  // Scroll-reveal refs for the landing content sections (fade-up on enter,
+  // reduced-motion-safe via the hook). Hooks are called unconditionally here;
+  // refs stay null on routes where these sections aren't rendered.
+  const { ref: stepsRef, revealed: stepsShown } = useReveal<HTMLElement>()
+  const { ref: audienceRef, revealed: audienceShown } = useReveal<HTMLElement>()
+  const { ref: statusRef, revealed: statusShown } = useReveal<HTMLElement>()
   return (
     <Router>
       <ErrorBoundary
         FallbackComponent={PageError}
         onError={(err) => {
           // Keep render-time errors visible in the console for local debugging.
-          // eslint-disable-next-line no-console
           console.error('[app] caught render error:', err)
         }}
       >
@@ -130,10 +142,11 @@ function App() {
 
       {/* ── Navigation ── */}
       <nav className="nav" aria-label="Main navigation">
-        <div className="nav-logo">
-          <span className="logo-icon" aria-hidden="true">◉</span>
+        <a className="nav-logo" href="/" aria-label="VigilAfrica home">
+          <BrandMark size={30} className="brand-mark" />
           <span className="logo-text">VigilAfrica</span>
-        </div>
+          <span className="nav-station" aria-hidden="true">NG·GH</span>
+        </a>
         <div className="nav-actions">
           <Link id="nav-partners-link" to="/for-partners" className="nav-link">
             For partners
@@ -157,46 +170,77 @@ function App() {
           <Route path="/" element={
             <>
               <section id="hero" className="hero" aria-labelledby="hero-heading">
-                <div className="hero-glow hero-glow--blue" aria-hidden="true" />
-                <div className="hero-glow hero-glow--orange" aria-hidden="true" />
+                <div className="hero__graticule" aria-hidden="true" />
 
-                <div className="container">
-                  <div className="event-badges" aria-label="Supported event types">
-                    <span className="badge badge--flood">🌊 Floods</span>
-                    <span className="badge badge--fire">🔥 Wildfires</span>
+                <div className="container hero__inner">
+                  <div className="hero__lead">
+                    <p className="hero__readout">
+                      <span className="signal-dot" aria-hidden="true" />
+                      <span className="hero__readout-key">LIVE&nbsp;FEED</span>
+                      <span className="hero__readout-sep" aria-hidden="true">/</span>
+                      <span className="hero__readout-coord">09°04′N&nbsp;07°29′E</span>
+                      <span className="hero__readout-sep" aria-hidden="true">/</span>
+                      <span>NASA&nbsp;EONET</span>
+                    </p>
+
+                    <h1 id="hero-heading" className="hero-title">
+                      What is happening<span className="hero-title__accent"> near you?</span>
+                    </h1>
+
+                    <p className="hero-desc">
+                      VigilAfrica translates raw NASA satellite event data into local African
+                      context — floods and wildfires by country and state, not just coordinates.
+                      Open-source. Nigeria and Ghana live.
+                    </p>
+
+                    <div className="hero-cta">
+                      <a id="hero-explore-cta" href="#dashboard" className="btn btn-primary">
+                        Explore latest events
+                        <ArrowRight size={18} aria-hidden="true" className="btn__arrow" />
+                      </a>
+                      <a
+                        id="hero-github-cta"
+                        href={GITHUB_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn btn-outline"
+                      >
+                        Contribute on GitHub
+                      </a>
+                    </div>
                   </div>
 
-                  <h1 id="hero-heading" className="hero-title">
-                    What is happening<span className="hero-title--accent"> near you?</span>
-                  </h1>
-
-                  <p className="hero-desc">
-                    VigilAfrica translates raw NASA satellite event data into local African context &mdash;
-                    showing floods and wildfires by country and state, not just coordinates.
-                    Open-source. Nigeria and Ghana live.
-                  </p>
-
-                  <div className="hero-cta">
-                    <a
-                      id="hero-explore-cta"
-                      href="#dashboard"
-                      className="btn btn-primary"
-                    >
-                      Explore latest events →
-                    </a>
-                    <a
-                      id="hero-github-cta"
-                      href={GITHUB_URL}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="btn btn-outline"
-                    >
-                      Contribute on GitHub
-                    </a>
+                  <div className="hero__panel">
+                    <div className="hero__panel-head">
+                      <span className="mono-label">FEED&nbsp;PARAMETERS</span>
+                      <span className="signal-dot signal-dot--sm" aria-hidden="true" />
+                    </div>
+                    <dl className="hero__telemetry">
+                      <div className="hero__telemetry-row">
+                        <dt>Source</dt>
+                        <dd>NASA EONET</dd>
+                      </div>
+                      <div className="hero__telemetry-row">
+                        <dt>Region</dt>
+                        <dd>Nigeria · Ghana</dd>
+                      </div>
+                      <div className="hero__telemetry-row">
+                        <dt>Tracking</dt>
+                        <dd className="hero__tracking">
+                          <span className="tag tag--flood">
+                            <Droplet size={13} aria-hidden="true" /> Floods
+                          </span>
+                          <span className="tag tag--fire">
+                            <Flame size={13} aria-hidden="true" /> Wildfires
+                          </span>
+                        </dd>
+                      </div>
+                      <div className="hero__telemetry-row">
+                        <dt>License</dt>
+                        <dd>Apache-2.0</dd>
+                      </div>
+                    </dl>
                   </div>
-                  <p className="hero-cta-note">
-                    Open source · Nigeria and Ghana live · Apache 2.0
-                  </p>
                 </div>
               </section>
 
@@ -204,7 +248,12 @@ function App() {
                 <EventsDashboard />
               </Suspense>
 
-              <section id="how-it-works" className="how-it-works" aria-labelledby="how-heading">
+              <section
+                ref={stepsRef}
+                id="how-it-works"
+                className={`how-it-works reveal${stepsShown ? ' is-revealed' : ''}`}
+                aria-labelledby="how-heading"
+              >
                 <div className="container">
                   <span className="section-label">Architecture</span>
                   <h2 id="how-heading" className="section-title">How it works</h2>
@@ -214,9 +263,14 @@ function App() {
                   </p>
 
                   <ul className="steps" role="list">
-                    {STEPS.map((step) => (
+                    {STEPS.map((step, i) => (
                         <li key={step.title} className="step">
-                          <div className="step-icon" aria-hidden="true">{step.icon}</div>
+                          <div className="step-head">
+                            <div className="step-icon" aria-hidden="true">{step.icon}</div>
+                            <span className="step-index" aria-hidden="true">
+                              {String(i + 1).padStart(2, '0')}
+                            </span>
+                          </div>
                           <h3>{step.title}</h3>
                           <p>{step.desc}</p>
                         </li>
@@ -225,7 +279,12 @@ function App() {
                 </div>
               </section>
 
-              <section id="built-for" className="built-for" aria-labelledby="built-heading">
+              <section
+                ref={audienceRef}
+                id="built-for"
+                className={`built-for reveal${audienceShown ? ' is-revealed' : ''}`}
+                aria-labelledby="built-heading"
+              >
                 <div className="container">
                   <span className="section-label">Use cases</span>
                   <h2 id="built-heading" className="section-title">Built for people on the ground</h2>
@@ -245,7 +304,12 @@ function App() {
                 </div>
               </section>
 
-              <section id="roadmap" className="status" aria-labelledby="status-heading">
+              <section
+                ref={statusRef}
+                id="roadmap"
+                className={`status reveal${statusShown ? ' is-revealed' : ''}`}
+                aria-labelledby="status-heading"
+              >
                 <div className="container">
                   <div className="status-card glass-effect">
                     <div className="status-header">
@@ -278,7 +342,7 @@ function App() {
                               <>
                                 {' '}
                                 <span className="milestone-tag milestone-tag--complete">
-                                  <span aria-hidden="true">✅</span> Complete
+                                  <Check size={12} aria-hidden="true" /> Complete
                                 </span>
                               </>
                             )}
@@ -286,7 +350,7 @@ function App() {
                               <>
                                 {' '}
                                 <span className="milestone-tag">
-                                  <span aria-hidden="true">🔄</span> In progress
+                                  <Loader size={12} aria-hidden="true" /> In progress
                                 </span>
                               </>
                             )}

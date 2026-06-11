@@ -46,6 +46,17 @@
   gap: 0.5rem;
 }
 
+/* Cartographic coordinate readout for the event's position (Ground Truth). */
+.detail-coord {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  letter-spacing: 0.04em;
+  color: var(--coordinate-text);
+}
+
 .detail-layout {
   display: grid;
   grid-template-columns: 1fr 1fr;
