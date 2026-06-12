@@ -4,7 +4,7 @@
 }
 
 .back-link {
-  color: var(--color-text-dim);
+  color: var(--text-secondary);
   text-decoration: none;
   font-family: var(--font-mono);
   font-size: 0.8rem;
@@ -13,6 +13,22 @@
 
 .back-link:hover {
   color: var(--color-primary);
+}
+
+/* Loading / error / not-found shell — the same dashed state-card pattern as
+   .dashboard-state (EventsDashboard.css), scoped to the detail page. */
+.event-detail-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 5rem 2rem;
+  background: var(--bg-card);
+  border-radius: var(--radius-xl);
+  border: 1px dashed var(--border);
+  margin-top: 1.5rem;
+  color: var(--text-secondary);
+  text-align: center;
 }
 
 .event-detail-header {
