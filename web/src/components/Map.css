@@ -82,13 +82,25 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
+  /* Circular badge + inner contour ring: the marker reads as the brand mark's
+     concentric epicentre contours (ADR-016). Size, category glyph, and the
+     cyan/lime data colours are unchanged. */
+  border-radius: 50%;
   border: 2px solid var(--surface-white-popup-border);
   background: linear-gradient(180deg, var(--marker-bg-top), var(--marker-bg-bottom));
   box-shadow:
     var(--shadow-marker-base),
     0 0 18px color-mix(in srgb, var(--marker-glow) 55%, transparent);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.map-marker__badge::after {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in srgb, var(--navy-950) 30%, transparent);
+  pointer-events: none;
 }
 
 .map-marker:hover .map-marker__badge {
