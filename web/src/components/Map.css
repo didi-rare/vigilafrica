@@ -67,7 +67,9 @@
   top: 3px;
   width: 38px;
   height: 38px;
-  border-radius: 14px;
+  /* Circular glow to match the circular badge/mark (ADR-016) — was a 14px
+     rounded-square radius left over from the old square marker. */
+  border-radius: 50%;
   background: color-mix(in srgb, var(--marker-glow) 28%, transparent);
   filter: blur(12px);
   opacity: 0.9;
