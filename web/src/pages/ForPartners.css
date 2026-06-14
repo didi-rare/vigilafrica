@@ -266,19 +266,11 @@
   margin-top: 28px;
 }
 
-.partners-back {
-  margin-top: 24px;
-  font-size: 0.9375rem;
-}
-
-.partners-back a {
-  color: var(--text-muted);
-  text-decoration: none;
-}
-
-.partners-back a:hover {
-  color: var(--text-primary);
-  text-decoration: underline;
+/* Top-of-hero "back to dashboard" breadcrumb. Uses the shared .back-link
+   (App.css); this only supplies the gap below it before the hero title. */
+.partners-hero__back {
+  display: inline-block;
+  margin-bottom: 24px;
 }
 
 @media (max-width: 640px) {

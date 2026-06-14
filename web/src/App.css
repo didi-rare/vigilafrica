@@ -326,6 +326,22 @@ h2[id],
   border-radius: 4px;
 }
 
+/* Shared "back to the dashboard" affordance — rendered at the top of every
+   sub-page (event detail, /for-partners) for a single, consistent way home.
+   Mono, secondary text; promoted here from EventDetail.css so both pages share
+   one rule. */
+.back-link {
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  transition: color 0.2s;
+}
+
+.back-link:hover {
+  color: var(--color-primary);
+}
+
 /* ─────────────────────────────────────
    Hero Section
 ───────────────────────────────────── */

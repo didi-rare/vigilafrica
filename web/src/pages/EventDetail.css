@@ -3,17 +3,7 @@
   min-height: 100vh;
 }
 
-.back-link {
-  color: var(--text-secondary);
-  text-decoration: none;
-  font-family: var(--font-mono);
-  font-size: 0.8rem;
-  transition: color 0.2s;
-}
-
-.back-link:hover {
-  color: var(--color-primary);
-}
+/* .back-link is shared across sub-pages and now lives in App.css. */
 
 /* Loading / error / not-found shell — the same dashed state-card pattern as
    .dashboard-state (EventsDashboard.css), scoped to the detail page. */
