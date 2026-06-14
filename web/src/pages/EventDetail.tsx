@@ -54,8 +54,26 @@ export function EventDetail() {
     })
   }, [event])
 
-  if (isPending) return <div className="container section">Loading event telemetry...</div>
-  if (error || !event) return <div className="container section">Event not found in Command Center.</div>
+  if (isPending) {
+    return (
+      <div className="event-detail-page">
+        <div className="container section">
+          <Link to="/" className="back-link">← Back to Sentinel Dashboard</Link>
+          <div className="event-detail-state">Loading event telemetry...</div>
+        </div>
+      </div>
+    )
+  }
+  if (error || !event) {
+    return (
+      <div className="event-detail-page">
+        <div className="container section">
+          <Link to="/" className="back-link">← Back to Sentinel Dashboard</Link>
+          <div className="event-detail-state">Event not found in Command Center.</div>
+        </div>
+      </div>
+    )
+  }
 
   const categoryClass = event.category === 'floods' ? 'flood' : 'fire'
   const coordinates = event.latitude !== null && event.longitude !== null

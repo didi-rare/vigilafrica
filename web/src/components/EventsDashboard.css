@@ -26,10 +26,10 @@
   justify-content: center;
   padding: 5rem;
   background: var(--bg-card);
-  border-radius: 20px;
+  border-radius: var(--radius-xl);
   border: 1px dashed var(--border);
   margin-top: 2rem;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   text-align: center;
 }
 
@@ -46,7 +46,7 @@
 }
 
 .dashboard-state-label {
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .dashboard-state-detail--muted {
@@ -57,13 +57,19 @@
 .dashboard-retry-button {
   margin-top: 1.25rem;
   padding: 0.55rem 1.4rem;
-  background: var(--accent-blue);
-  color: var(--white);
+  background: linear-gradient(135deg, var(--accent-amber), var(--amber-600));
+  color: var(--text-on-accent);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   font-weight: 600;
   font-size: 0.9rem;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.dashboard-retry-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-amber-glow);
 }
 
 .dashboard-retry-button:disabled {
@@ -75,7 +81,7 @@
   width: 32px;
   height: 32px;
   border: 2px solid var(--border);
-  border-top-color: var(--accent-blue);
+  border-top-color: var(--accent-amber);
   border-radius: 50%;
   animation: spin 0.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
   margin-bottom: 1.5rem;
@@ -118,13 +124,12 @@
   font-size: 0.875rem;
   padding: 0.5rem 0.75rem;
   cursor: pointer;
-  outline: none;
   transition: border-color 0.15s;
 }
 
 .dashboard-filter-select:hover,
 .dashboard-filter-select:focus {
-  border-color: var(--accent-blue);
+  border-color: var(--accent-amber);
 }
 
 .dashboard-filter-select:disabled {
@@ -156,7 +161,7 @@
   background: var(--surface-white-soft);
 }
 .dashboard-sidebar::-webkit-scrollbar-thumb {
-  background: var(--accent-blue);
+  background: var(--accent-amber);
   border-radius: 10px;
 }
 
@@ -179,8 +184,7 @@
 }
 
 .event-card-link:focus-visible {
-  outline: 2px solid var(--accent-blue);
-  outline-offset: 4px;
+  /* Outline colour comes from the shared amber focus rule in App.css (F5). */
   border-radius: 16px;
 }
 
@@ -190,7 +194,11 @@
   border-radius: 16px;
   padding: 24px;
   width: 100%;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    background 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   flex-direction: column;
   gap: 18px;

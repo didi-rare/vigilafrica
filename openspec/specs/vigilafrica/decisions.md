@@ -27,6 +27,7 @@
 | ADR-013 | Frontend Styling: Plain CSS over CSS-in-JS | ACCEPTED | 2026-04-18 |
 | ADR-014 | Single-VPS Two-Stack Deployment Model     | ACCEPTED | 2026-04-24 |
 | ADR-015 | Visual Identity & Type System: Ground Truth | ACCEPTED | 2026-06-08 |
+| ADR-016 | Brand Mark: Epicenter Contours            | ACCEPTED | 2026-06-11 |
 
 ---
 
@@ -527,3 +528,46 @@ Inter-only stack.
 - The brand mark is an SVG component (`components/BrandMark.tsx`) themed via tokens.
 - Rollout is incremental per surface (landing → /for-partners → EventDetail →
   dashboard/map chrome); see `feat-ground-truth-redesign`.
+
+---
+
+## ADR-016 — Brand Mark: Epicenter Contours
+
+**Date**: 2026-06-11
+**Status**: ACCEPTED
+
+### Decision
+
+Adopt **Epicenter Contours** as the VigilAfrica brand mark: an event epicentre
+rendered as concentric topographic contour rings — a dashed outer contour, a
+neutral mid ring, an amber accent ring, and the amber live point at the core.
+It replaces the first-pass "vigil reticle" in `components/BrandMark.tsx`; all
+identity assets (favicon set, OG share card, README banner, map markers) derive
+from it.
+
+### Context
+
+The reticle shipped with ADR-015 as a single unexplored concept. Per
+`feat-ground-truth-identity`, five hand-authored candidates (reticle refined,
+sentinel pin, meridian V, epicenter contours, radar sweep) were rendered
+side-by-side at 16/32/120px with nav-context lockups and DFII scores.
+
+### Rationale
+
+- **Best small-size legibility of the five** — the concentric rings survive
+  16px (favicon, the hardest test) without muddying; verified in-browser.
+- **Most honest thesis**: events as phenomena on mapped terrain — exactly what
+  the product shows. Calm and data-first rather than military or maps-app
+  generic.
+- **Scales structurally**: pure circles rasterise cleanly at any size and
+  simplify naturally (drop the dashed ring below 24px if ever needed).
+
+### Consequences
+
+- `BrandMark.tsx` carries the new geometry under the existing class API
+  (`brand-mark__*`), so nav, tests, and the reduced-motion gating are unchanged.
+- The Phase-A `brand-concepts/` folder and dev route are deleted (selection
+  done).
+- Favicon, OG image, README banner, and map-marker geometry must derive from
+  this mark (Phase C of `feat-ground-truth-identity`).
+- Revisiting the mark requires a superseding ADR.

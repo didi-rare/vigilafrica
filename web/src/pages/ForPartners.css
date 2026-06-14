@@ -29,6 +29,30 @@
   padding: 64px 0;
 }
 
+/* Bare section h2s get the cartographic amber tick — the same 20px rule that
+   opens .section-label (App.css) — so every section carries the Ground Truth
+   kicker motif. CSS-only; no copy. */
+.partners-section .section-title::before,
+.partners-section .partners-callout__title::before {
+  content: "";
+  display: block;
+  width: 20px;
+  height: 1px;
+  background: var(--accent-amber);
+  margin-bottom: 14px;
+}
+
+/* Sections already introduced by a .section-label kicker keep a single tick. */
+.partners-section .section-label ~ .section-title::before {
+  content: none;
+}
+
+/* Centred contact card — centre the tick under the centred heading. */
+.partners-contact-card .section-title::before {
+  margin-left: auto;
+  margin-right: auto;
+}
+
 /* ── Capability cards ── */
 .partners-card-grid {
   list-style: none;
@@ -42,7 +66,7 @@
 .partners-card {
   padding: 24px;
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   background: var(--bg-card);
   transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
 }
@@ -180,7 +204,7 @@
   display: flex;
   gap: 18px;
   padding: 28px;
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
 }
 
 .partners-callout__icon {
@@ -204,7 +228,7 @@
 }
 
 .partners-callout__body {
-  font-size: 0.9875rem;
+  font-size: 0.9375rem;
   line-height: 1.7;
   color: var(--text-secondary);
   margin: 0;
@@ -214,7 +238,7 @@
 /* ── Contact card ── */
 .partners-contact-card {
   padding: 36px;
-  border-radius: 18px;
+  border-radius: var(--radius-xl);
   text-align: center;
 }
 
@@ -242,19 +266,11 @@
   margin-top: 28px;
 }
 
-.partners-back {
-  margin-top: 24px;
-  font-size: 0.9375rem;
-}
-
-.partners-back a {
-  color: var(--text-muted);
-  text-decoration: none;
-}
-
-.partners-back a:hover {
-  color: var(--text-primary);
-  text-decoration: underline;
+/* Top-of-hero "back to dashboard" breadcrumb. Uses the shared .back-link
+   (App.css); this only supplies the gap below it before the hero title. */
+.partners-hero__back {
+  display: inline-block;
+  margin-bottom: 24px;
 }
 
 @media (max-width: 640px) {

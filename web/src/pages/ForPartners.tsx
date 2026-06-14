@@ -125,6 +125,7 @@ export function ForPartners() {
       {/* ── Hero ── */}
       <section id="partners-hero" className="partners-hero" aria-labelledby="partners-hero-heading">
         <div className="container">
+          <Link to="/" className="back-link partners-hero__back">← Back to Sentinel Dashboard</Link>
           <span className="section-label">For partners</span>
           <h1 id="partners-hero-heading" className="hero-title">
             An open event-data layer for African flood &amp; wildfire response
@@ -287,9 +288,6 @@ export function ForPartners() {
                 Start a discussion
               </a>
             </div>
-            <p className="partners-back">
-              <Link to="/">← Back to the dashboard</Link>
-            </p>
           </div>
         </div>
       </section>
