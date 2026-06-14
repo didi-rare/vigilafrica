@@ -267,9 +267,13 @@
 }
 
 /* Top-of-hero "back to dashboard" breadcrumb. Uses the shared .back-link
-   (App.css); this only supplies the gap below it before the hero title. */
+   (App.css). Block-level (with a content-tight hit area) so the "For partners"
+   eyebrow drops to its own line below — mirroring the event-detail page, where
+   the back-link sits on its own line above the label/title. 24px gap matches
+   .event-detail-header's margin-top. */
 .partners-hero__back {
-  display: inline-block;
+  display: block;
+  width: fit-content;
   margin-bottom: 24px;
 }
 
