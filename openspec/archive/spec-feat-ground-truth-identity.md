@@ -1,7 +1,7 @@
 # Spec: Brand Identity Suite + Premium Polish Pass (feat-ground-truth-identity)
 
-**Status:** Proposed — PR #120 (`feat-ground-truth-redesign`) is merged; implementation may begin.
-**Companion:** [`openspec/proposals/feat-ground-truth-identity.md`](../proposals/feat-ground-truth-identity.md) (rationale, risks, scope boundaries).
+**Status:** Archived — implemented and merged via PR #121 (follow-up #122); archived 2026-06-14.
+**Companion:** [`openspec/archive/proposal-feat-ground-truth-identity.md`](./proposal-feat-ground-truth-identity.md) (rationale, risks, scope boundaries).
 
 ## Context
 

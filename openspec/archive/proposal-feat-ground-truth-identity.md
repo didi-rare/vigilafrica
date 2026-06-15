@@ -1,7 +1,9 @@
 ---
 id: feat-ground-truth-identity
-status: proposed
+status: archived
 branch: feat/ground-truth-identity
+merged_pr: https://github.com/didi-rare/vigilafrica/pull/121
+archived_on: 2026-06-14
 ---
 
 # Proposal: Brand Identity Suite + Premium Polish Pass (feat-ground-truth-identity)
@@ -96,24 +98,24 @@ refactor — same discipline as the rebrand itself.
 
 ## Acceptance Criteria
 
-- [ ] Five SVG logo concepts delivered with rationale + scores; maintainer
+- [x] Five SVG logo concepts delivered with rationale + scores; maintainer
       decision recorded as a dated ADR in `decisions.md`.
-- [ ] Chosen mark integrated: `BrandMark.tsx` reflects the winner; nav renders
+- [x] Chosen mark integrated: `BrandMark.tsx` reflects the winner; nav renders
       it; existing tests updated and green.
-- [ ] `web/public/` contains `favicon.svg`, `favicon.ico`,
+- [x] `web/public/` contains `favicon.svg`, `favicon.ico`,
       `apple-touch-icon.png` derived from the chosen mark; `index.html` links
       them; the old favicon is removed.
-- [ ] `index.html` carries OG + Twitter meta (title, description, image, url)
+- [x] `index.html` carries OG + Twitter meta (title, description, image, url)
       pointing at a committed 1200×630 share image; staging keeps
       `noindex` behaviour unchanged.
-- [ ] `README.md` opens with the banner asset; image renders on GitHub.
-- [ ] Map flood/fire markers redrawn consistent with the mark; data-semantic
+- [x] `README.md` opens with the banner asset; image renders on GitHub.
+- [x] Map flood/fire markers redrawn consistent with the mark; data-semantic
       colours and `--marker-*` tokens preserved; Map tests green.
-- [ ] Polish-pass findings list reviewed by maintainer before implementation;
+- [x] Polish-pass findings list reviewed by maintainer before implementation;
       implemented items each verified in browser.
-- [ ] All gates green: `tsc` build, eslint 0, stylelint clean, full vitest
+- [x] All gates green: `tsc` build, eslint 0, stylelint clean, full vitest
       (incl. axe), no emoji-as-icons, reduced-motion unaffected.
-- [ ] No colour literals outside `tokens.css` in any new SVG-in-JSX/CSS
+- [x] No colour literals outside `tokens.css` in any new SVG-in-JSX/CSS
       (static assets like the OG PNG excepted).
 
 ## Risks
