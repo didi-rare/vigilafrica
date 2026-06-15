@@ -17,6 +17,7 @@
 
   /* z-index */
   --z-nav: 100;
+  --z-dropdown: 200;
   --z-skip-link: 1000;
 }
 
