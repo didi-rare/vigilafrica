@@ -47,6 +47,10 @@ export function Select({ id, value, onChange, options, disabled = false, label }
   const optionId = (i: number) => `${uid}-opt-${i}`
 
   const selected = options[selectedIndex]
+  // Guard against `options` shrinking while the list is open (e.g. a states
+  // refetch returns fewer rows): keep the highlight — and the
+  // aria-activedescendant ref — within range.
+  const activeOption = options.length > 0 ? Math.min(activeIndex, options.length - 1) : 0
 
   const close = useCallback((refocus = true) => {
     setOpen(false)
@@ -69,7 +73,7 @@ export function Select({ id, value, onChange, options, disabled = false, label }
   // (the state list can overflow the panel's max-height).
   useEffect(() => {
     if (!open) return
-    const activeEl = listRef.current?.querySelector<HTMLElement>(`#${CSS.escape(optionId(activeIndex))}`)
+    const activeEl = listRef.current?.querySelector<HTMLElement>(`#${CSS.escape(optionId(activeOption))}`)
     // scrollIntoView is absent in jsdom and unsupported on very old engines —
     // optional-call so the keyboard-scroll niceness degrades silently.
     activeEl?.scrollIntoView?.({ block: 'nearest' })
@@ -102,12 +106,15 @@ export function Select({ id, value, onChange, options, disabled = false, label }
   function onKeyDown(e: React.KeyboardEvent) {
     if (disabled) return
     const { key } = e
+    // A printable single char with no modifier held drives type-ahead. Excluding
+    // Ctrl/Cmd/Alt chords keeps browser shortcuts (Ctrl+C, Cmd+A, …) working
+    // while the combobox has focus.
+    const isTypeahead = key.length === 1 && /\S/.test(key) && !e.ctrlKey && !e.metaKey && !e.altKey
     if (!open) {
-      if (key === 'ArrowDown' || key === 'Enter' || key === ' ') { e.preventDefault(); openList(selectedIndex) }
-      else if (key === 'ArrowUp') { e.preventDefault(); openList(selectedIndex) }
+      if (key === 'ArrowDown' || key === 'ArrowUp' || key === 'Enter' || key === ' ') { e.preventDefault(); openList(selectedIndex) }
       else if (key === 'Home') { e.preventDefault(); openList(0) }
       else if (key === 'End') { e.preventDefault(); openList(options.length - 1) }
-      else if (key.length === 1 && /\S/.test(key)) { e.preventDefault(); runTypeahead(key) }
+      else if (isTypeahead) { e.preventDefault(); runTypeahead(key) }
       return
     }
     switch (key) {
@@ -120,7 +127,7 @@ export function Select({ id, value, onChange, options, disabled = false, label }
       case 'Escape': e.preventDefault(); close(); break
       case 'Tab': close(false); break
       default:
-        if (key.length === 1 && /\S/.test(key)) { e.preventDefault(); runTypeahead(key) }
+        if (isTypeahead) { e.preventDefault(); runTypeahead(key) }
     }
   }
 
@@ -138,7 +145,7 @@ export function Select({ id, value, onChange, options, disabled = false, label }
         aria-expanded={open}
         aria-haspopup="listbox"
         aria-labelledby={`${labelId} ${valueId}`}
-        aria-activedescendant={open ? optionId(activeIndex) : undefined}
+        aria-activedescendant={open ? optionId(activeOption) : undefined}
         aria-disabled={disabled || undefined}
         className="select__trigger"
         onClick={() => (open ? close() : openList(selectedIndex))}
@@ -164,7 +171,7 @@ export function Select({ id, value, onChange, options, disabled = false, label }
               aria-selected={opt.value === value}
               className={
                 'select__option' +
-                (i === activeIndex ? ' is-active' : '') +
+                (i === activeOption ? ' is-active' : '') +
                 (opt.value === value ? ' is-selected' : '')
               }
               // Keep focus on the combobox so blur/activedescendant stay correct.

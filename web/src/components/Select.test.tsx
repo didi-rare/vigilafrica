@@ -76,6 +76,21 @@ describe('Select', () => {
     expect(onChange).toHaveBeenCalledWith('Ghana')
   })
 
+  it('type-ahead opens from closed, but modifier chords are left alone', async () => {
+    const user = userEvent.setup()
+    const { combobox } = setup()
+    combobox.focus()
+
+    // Ctrl+G must not be hijacked into type-ahead — the shortcut stays free.
+    await user.keyboard('{Control>}g{/Control}')
+    expect(combobox).toHaveAttribute('aria-expanded', 'false')
+
+    // A plain "g" opens the list and highlights "Ghana".
+    await user.keyboard('g')
+    expect(combobox).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByRole('option', { name: 'Ghana' })).toHaveClass('is-active')
+  })
+
   it('closes on Escape and restores focus to the trigger', async () => {
     const user = userEvent.setup()
     const { combobox } = setup()
