@@ -65,7 +65,7 @@ that PR deliberately, as it is a functional component change, not brand work).
 
 ### 3. Tests
 
-- `web/src/components/Select.test.tsx` (vitest + testing-library + jest-axe):
+- `web/src/components/Select.test.tsx` (vitest + testing-library + vitest-axe):
   renders options, opens/closes via mouse + keyboard, selects via Enter and
   click, fires `onChange` with the option value, respects `disabled`, closes on
   Esc/outside-click, and has **zero axe violations** open and closed.
@@ -101,7 +101,7 @@ that PR deliberately, as it is a functional component change, not brand work).
 - [ ] Keyboard fully operable: open, arrow-navigate, select, Esc-close (focus
       returns to trigger), Home/End, type-ahead, Tab-closes.
 - [ ] ARIA: `listbox`/`option`/`aria-selected`/`aria-expanded`/
-      `aria-activedescendant`; jest-axe reports **0 violations** open and closed.
+      `aria-activedescendant`; vitest-axe reports **0 violations** open and closed.
 - [ ] Themed popup: amber hover/selected states, reduced-motion-gated
       transition; matches the Ground Truth dark surface at 1440/768/390.
 - [ ] Closes on outside-click and blur; opening one closes any other.
@@ -112,7 +112,7 @@ that PR deliberately, as it is a functional component change, not brand work).
 
 - **R1 — A11y regression vs native.** Custom listboxes are easy to get subtly
   wrong (focus, SR semantics). Mitigation: follow the WAI-ARIA listbox pattern
-  exactly; jest-axe + explicit keyboard tests; manual SR spot-check.
+  exactly; vitest-axe + explicit keyboard tests; manual SR spot-check.
 - **R2 — Mobile/touch UX.** Native `<select>` gives OS pickers on touch.
   Mitigation: the custom listbox is touch-operable (tap trigger → tap option);
   verified at 390px. (Acceptable trade for cross-browser on-brand consistency.)

@@ -6,6 +6,7 @@ import type { HealthResponse, EventCategory, VigilEvent } from '../api/events'
 import { track } from '../analytics'
 import { Droplet, Flame, MapPin, CircleCheck, Clock, AlertTriangle } from 'lucide-react'
 
+import { Select, type SelectOption } from './Select'
 import './EventsDashboard.css'
 
 const STALENESS_THRESHOLD_HOURS = 2
@@ -23,6 +24,13 @@ const COUNTRY_CENTERS: Record<SupportedCountry, [number, number]> = {
   Nigeria: [8.6753, 9.082],
   Ghana:   [-1.0232, 7.9465],
 }
+
+// Static option set for the category filter (empty value = "all").
+const CATEGORY_OPTIONS: SelectOption[] = [
+  { value: '', label: 'All Categories' },
+  { value: 'floods', label: 'Floods' },
+  { value: 'wildfires', label: 'Wildfires' },
+]
 
 function formatLastUpdated(minutesAgo: number): string {
   if (minutesAgo < 1) return 'Last updated just now'
@@ -257,6 +265,15 @@ export function EventsDashboard() {
 
   const availableStates = statesData ?? []
 
+  const countryOptions: SelectOption[] = [
+    { value: '', label: 'All Countries' },
+    ...SUPPORTED_COUNTRIES.map((c) => ({ value: c, label: c })),
+  ]
+  const stateOptions: SelectOption[] = [
+    { value: '', label: 'All States' },
+    ...availableStates.map((s) => ({ value: s, label: s })),
+  ]
+
   return (
     <section id="dashboard" className="dashboard section" aria-labelledby="dashboard-heading">
       <div className="container">
@@ -269,55 +286,30 @@ export function EventsDashboard() {
         <DashboardDisclaimer />
         <FreshnessIndicator />
 
-        {/* ── Filters ── §9.3: visible labels via sr-only + htmlFor */}
+        {/* ── Filters ── each <Select> carries its own sr-only label (a11y tree) */}
         <div className="dashboard-filters" role="group" aria-label="Event filters">
-          <div className="dashboard-filter-group">
-            <label htmlFor="filter-country" className="sr-only">Country</label>
-            <select
-              id="filter-country"
-              className="dashboard-filter-select"
-              value={selectedCountry}
-              onChange={e => handleCountryChange(e.target.value)}
-              aria-label="Filter by country"
-            >
-              <option value="">All Countries</option>
-              {SUPPORTED_COUNTRIES.map(c => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="dashboard-filter-group">
-            <label htmlFor="filter-category" className="sr-only">Category</label>
-            <select
-              id="filter-category"
-              className="dashboard-filter-select"
-              value={selectedCategory}
-              onChange={e => handleCategoryChange(e.target.value)}
-              aria-label="Filter by category"
-            >
-              <option value="">All Categories</option>
-              <option value="floods">Floods</option>
-              <option value="wildfires">Wildfires</option>
-            </select>
-          </div>
-
-          <div className="dashboard-filter-group">
-            <label htmlFor="filter-state" className="sr-only">State / Region</label>
-            <select
-              id="filter-state"
-              className="dashboard-filter-select"
-              value={selectedState}
-              onChange={e => handleStateChange(e.target.value)}
-              disabled={availableStates.length === 0}
-              aria-label="Filter by state"
-            >
-              <option value="">All States</option>
-              {availableStates.map(s => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-          </div>
+          <Select
+            id="filter-country"
+            label="Filter by country"
+            value={selectedCountry}
+            onChange={handleCountryChange}
+            options={countryOptions}
+          />
+          <Select
+            id="filter-category"
+            label="Filter by category"
+            value={selectedCategory}
+            onChange={handleCategoryChange}
+            options={CATEGORY_OPTIONS}
+          />
+          <Select
+            id="filter-state"
+            label="Filter by state or region"
+            value={selectedState}
+            onChange={handleStateChange}
+            options={stateOptions}
+            disabled={availableStates.length === 0}
+          />
         </div>
 
         <div className="dashboard-layout">
