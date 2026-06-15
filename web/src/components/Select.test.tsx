@@ -85,10 +85,13 @@ describe('Select', () => {
     await user.keyboard('{Control>}g{/Control}')
     expect(combobox).toHaveAttribute('aria-expanded', 'false')
 
-    // A plain "g" opens the list and highlights "Ghana".
+    // A plain "g" opens the list and highlights "Ghana" (via aria-activedescendant).
     await user.keyboard('g')
     expect(combobox).toHaveAttribute('aria-expanded', 'true')
-    expect(screen.getByRole('option', { name: 'Ghana' })).toHaveClass('is-active')
+    expect(combobox).toHaveAttribute(
+      'aria-activedescendant',
+      screen.getByRole('option', { name: 'Ghana' }).id,
+    )
   })
 
   it('closes on Escape and restores focus to the trigger', async () => {

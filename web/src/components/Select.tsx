@@ -14,7 +14,7 @@ import './Select.css'
 
 export type SelectOption = { value: string; label: string }
 
-interface SelectProps {
+type SelectProps = {
   /** Stable id for the combobox element (used to wire the listbox + a11y ids). */
   id: string
   /** Currently-selected option value (matched against options[].value). */
@@ -103,7 +103,7 @@ export function Select({ id, value, onChange, options, disabled = false, label }
     }
   }
 
-  function onKeyDown(e: React.KeyboardEvent) {
+  function handleKeyDown(e: React.KeyboardEvent) {
     if (disabled) return
     const { key } = e
     // A printable single char with no modifier held drives type-ahead. Excluding
@@ -149,7 +149,7 @@ export function Select({ id, value, onChange, options, disabled = false, label }
         aria-disabled={disabled || undefined}
         className="select__trigger"
         onClick={() => (open ? close() : openList(selectedIndex))}
-        onKeyDown={onKeyDown}
+        onKeyDown={handleKeyDown}
       >
         <span id={valueId} className="select__value">{selected?.label ?? ''}</span>
         <ChevronDown size={16} className="select__chevron" aria-hidden="true" />
