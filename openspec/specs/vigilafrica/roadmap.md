@@ -380,4 +380,5 @@ The following items are explicitly deferred. They must not be built before v1.0 
 | Fundraising / sustainability UI   | Deferred (ADR-005) — post v1.0 launch                         |
 | Multi-language support            | Post-v1.0                                                      |
 | Mobile native app                 | Post-v1.0                                                      |
+| AI digest narrative (`feature-ai-digest-narrative`) | Standalone proposal + spec, crystallized 2026-06-18; builds on the daily flood digest. Sits here until the flood-digest pilot is live. First LLM integration (Anthropic via stdlib `net/http`) — promoting it into a milestone needs the usual ADR per the governance rule. |
 
