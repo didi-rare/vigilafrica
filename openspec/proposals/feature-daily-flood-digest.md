@@ -86,6 +86,7 @@ No new secret class is introduced — the digest reuses the alerting Resend key.
 - **SMS / push / WhatsApp** — email only.
 - **Historical digests / an archive of past days** — only `today` is exposed. A `?date=` parameter is a possible follow-up, not part of the prototype.
 - **Modifying the LOCKED roadmap milestone scope** — see *Open question* below; this proposal does not edit `roadmap.md`.
+- **AI-generated narrative summary** — recorded as a future enhancement at the end of this doc (`feature-ai-digest-narrative`); not built here.
 
 ## Capabilities
 
@@ -136,3 +137,61 @@ No new secret class is introduced — the digest reuses the alerting Resend key.
 ## Origin
 
 Day 3–4 deliverable of the partnership-readiness sprint (`sprint-2026-05-29-partnership-readiness`), the NRCS pilot artefact promised ahead of the 2026-06-04 follow-up. Builds directly on the v0.5 Resend alerting + scheduler infrastructure (ADR-011) and the v0.3 events repository.
+
+---
+
+## Future enhancement (backlog): AI digest narrative
+
+> **Status:** backlog idea, captured 2026-06-18 — *not* part of this proposal's scope. Recorded here so the design isn't lost. Promote to its own `/openspec-explore` change (Change ID `feature-ai-digest-narrative`) once the flood-digest pilot is live and the open decisions below are settled. It builds directly on the `Digest` struct this proposal introduces.
+
+**One line.** A server-side step that turns the already-computed `Digest` (the `Date / GeneratedAt / Total / countries → States[] → Events[]` hierarchy in `api/internal/digest/digest.go`) into a short, plain-language brief — "headline + lede + per-state lines" — grounded strictly in that data, served as a new `narrative` field on `GET /v1/digest/today.json`.
+
+**Data flow (reuses what exists):**
+
+```text
+daily ingestion → digest.Build() produces Digest{date,total,countries→states→events}
+                                    │  [NEW]
+              narrative.Generate(digest) → 1 Claude call
+                                    │
+        validate + wrap with fixed disclaimer + provenance → persist
+                                    │
+   /v1/digest/today.json gains a "narrative" object (the text partners read)
+```
+
+The model never *fetches* anything — the whole `Digest` is small, so it is passed in the prompt as the only source of truth. That is the single most important design choice: **no tool-use, no retrieval → the model can only summarize, never invent.**
+
+**When it runs.** Once, right after the daily digest is built (not per request), then persisted — so ~1 call/day per country (NG + GH → ~2/day), served from storage thereafter. Lazy-on-first-request + cache-by-date is the fallback if touching the ingestion job is undesirable.
+
+**The Claude call.**
+
+- **Model:** latest Opus (the design conversation referenced `claude-opus-4-6`; use the current default at build time) by default; Haiku (`claude-haiku-4-5`) is a legitimate downgrade at this volume/simplicity — cost is pennies/day either way.
+- **Effort:** `output_config: {effort: "low"}` — well-specified summarization, no deep reasoning needed.
+- **Structured output** (`output_config: {format: {...}}` + `messages.parse()`): returns exactly `{ headline, lede, region_lines: [{state, summary}] }` — it physically can't ramble.
+- **No streaming** (short output, async job), **no prompt caching** (once/day → the 5-min cache TTL never hits), **no batch** for v1 (Batches@50% only pays off at volume, e.g. many languages later).
+- **System prompt rules:** "You summarize a pre-computed flood-awareness digest. Use ONLY the events/states/counts/dates in the data. Never invent a location, count, or event. If `total == 0`, say there were no new flood events today. Give no safety or evacuation advice."
+- **User content:** the `Digest` JSON + date + country.
+
+**Guardrails (this is what protects the "supplementary, never sole source" posture):**
+
+- **Hallucination cross-check (Go, deterministic):** after generation, assert every state/country name in the output appears in the source `Digest`. A name not in today's data → reject → fall back to a template narrative. Cheap, decisive.
+- **Disclaimer is NOT model-generated** — Go appends the fixed "VigilAfrica is supplementary; confirm with NiMet / NEMA / NADMO / Ghana Met" string. The model literally cannot drop or reword it.
+- **Graceful degradation:** API down / rate-limited / validation fails → serve a deterministic template ("N flood events across M states today: …"). The digest never blocks on the AI.
+- **Provenance stored** with each narrative: model ID + timestamp + a hash of the source digest → auditable, and lets you regenerate only when the data changed.
+
+**Where the AI is *not*:** data (pipeline), disclaimer (hardcoded), validation (deterministic), empty-day message (deterministic). AI touches only the prose — keeping the trust surface tiny.
+
+**Multilingual (deferred to a v1.1 of this feature):** same `Digest` → one extra call per language (Hausa/Yoruba/Twi…), labeled "machine-translated." This is where Batches@50% starts to matter (5 langs × 2 countries = 10/day). Start English-only to prove the pipeline + guardrails first.
+
+**New dependency:** none in `go.mod` — the Anthropic call uses stdlib `net/http` (mirroring the Resend integration, §10.1/§10.4). The one real new moving part is an `ANTHROPIC_API_KEY` secret in the **Go API only** (never the frontend). Same secrets discipline as `RESEND_API_KEY` / `DIGEST_TO`: VPS `.env` (gitignored), placeholder only in `.env.example`.
+
+> **Now crystallized** (2026-06-18) into [`feature-ai-digest-narrative`](feature-ai-digest-narrative.md) (proposal) + [`openspec/specs/feature-ai-digest-narrative.md`](../specs/feature-ai-digest-narrative.md) (spec). This appendix is the originating sketch; the dedicated records are authoritative.
+
+**Open decisions (settle before promoting to a full change):**
+
+1. Generate at ingestion (persist) vs on-demand (cache)? — lean *at ingestion*; one call/day, keeps the request path fast.
+2. Surface as a field on `/v1/digest/today.json` vs a separate `/v1/digest/today/narrative`? — lean *field on the existing endpoint* (one fetch for partners).
+3. English-only v1, multilingual later? — lean *yes* (de-risk).
+4. Opus vs Haiku? — cost/quality call; both fine at this volume.
+5. New `ANTHROPIC_API_KEY` secret in the Go API only — confirm the secrets path before build.
+
+**Origin:** design conversation on 2026-06-18 exploring an AI summary layer on top of this digest; parked as a backlog item rather than crystallized into a proposal so the flood-digest pilot ships first.
