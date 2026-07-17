@@ -12,7 +12,7 @@ After PR #84 (`chore-alert-env-label`) cleared two rounds of `/openspec-review`,
 
 The spec is **planning-only** at proposed status — no implementation is included. The phased task list below is intended to be ticked off by a follow-up PR.
 
-Companion: [openspec/proposals/chore-post-v11-quality-sweep.md](openspec/proposals/chore-post-v11-quality-sweep.md).
+Companion: [proposal-chore-post-v11-quality-sweep.md](proposal-chore-post-v11-quality-sweep.md).
 
 ## Decision Log
 

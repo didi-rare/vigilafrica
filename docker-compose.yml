@@ -59,6 +59,37 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
+  # Self-hosted Umami analytics. Defined by chore-analytics-and-feedback.
+  # First-time local setup requires creating the `umami` database + role inside
+  # the running `postgres` container (one-time SQL — see docs/operations/analytics.md
+  # once that lands in the Day 2 PR). Local defaults are intentionally weak
+  # because the port only binds to 127.0.0.1; override in `.env` for any real
+  # environment via UMAMI_DB_PASSWORD + UMAMI_APP_SECRET.
+  umami:
+    # Pinned to the postgresql-latest multi-arch index digest (CI enforces
+    # immutable refs via scripts/check-image-pins.js). Re-pin by running
+    # `docker buildx imagetools inspect ghcr.io/umami-software/umami:postgresql-latest`.
+    image: ghcr.io/umami-software/umami:postgresql-latest@sha256:e3f80c0625aad7179b49da27d475357cabb1068b8cacd9a792cfd6966888b123
+    container_name: vigilafrica-umami
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql://umami:${UMAMI_DB_PASSWORD:-umami_local_dev_only_not_for_prod}@postgres:5432/umami
+      - DATABASE_TYPE=postgresql
+      - APP_SECRET=${UMAMI_APP_SECRET:-umami_local_dev_only_app_secret_not_for_prod}
+    ports:
+      - "127.0.0.1:3000:3000"
+    restart: unless-stopped
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/heartbeat || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres_data:

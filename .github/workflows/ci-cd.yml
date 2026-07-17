@@ -15,7 +15,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
-          go-version: '1.26'          # Must match api/go.mod — see ADR-008
+          go-version: '1.26.5'        # Satisfies api/go.mod (go 1.26); pinned to the patch that fixes GO-2026-5856 (crypto/tls, 2026-07) — see ADR-008
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020

@@ -36,6 +36,22 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+    <!--
+      Self-hosted Umami analytics tracker (chore-analytics-and-feedback).
+      Both values are PUBLIC identifiers, substituted at build time from the
+      environment via Vite's %VITE_*% replacement (§15.4 — URLs never hardcoded
+      in source). When VITE_ANALYTICS_URL is empty (local dev with no local
+      Umami) the src resolves to "/script.js", 404s, and the tracker silently
+      fails to load — analytics.ts tolerates window.umami being absent.
+      Privacy posture: no cookies, no PII; data-do-not-track honours browser DNT.
+    -->
+    <script
+      defer
+      src="%VITE_ANALYTICS_URL%/script.js"
+      data-website-id="%VITE_ANALYTICS_WEBSITE_ID%"
+      data-do-not-track="true"
+    ></script>
   </head>
   <body>
     <div id="root"></div>

@@ -10,19 +10,20 @@
 
 ## Milestone Index
 
-| Milestone | Theme                        | Features                              | Status    |
-|-----------|------------------------------|---------------------------------------|-----------|
-| v0.1      | Something real exists        | F-001, F-009                          | ✅ Complete |
-| v0.2      | First real data flow         | F-002, F-003, F-004                   | ✅ Complete |
-| v0.3      | Localization engine          | F-005, F-006, F-007, F-010, F-016    | ✅ Complete |
-| v0.4      | Useful prototype             | F-008, F-011, F-014, F-015, F-017    | ✅ Complete |
-| v0.5      | Operational prototype        | F-012, F-013 + operational hygiene   | ✅ Complete |
-| v0.6      | Country expansion model      | Process template (no new F-IDs)       | ✅ Complete |
-| v0.7      | Second country stable        | Enrichment quality validation         | ✅ Complete |
-| v0.8      | Pre-demo setup               | Demo environment + curated seed data  | ✅ Complete |
-| v1.0      | Credible public launch       | Quality gate (no new F-IDs)           | 🔄 Active |
-| v1.1      | Impact category expansion    | Landslides + temperature extremes     | Proposed |
-| v1.2      | Risk intelligence expansion   | Severe storms + drought               | Deferred |
+| Milestone | Theme | Features | Status |
+| --- | --- | --- | --- |
+| v0.1 | Something real exists | F-001, F-009 | ✅ Complete |
+| v0.2 | First real data flow | F-002, F-003, F-004 | ✅ Complete |
+| v0.3 | Localization engine | F-005, F-006, F-007, F-010, F-016 | ✅ Complete |
+| v0.4 | Useful prototype | F-008, F-011, F-014, F-015, F-017 | ✅ Complete |
+| v0.5 | Operational prototype | F-012, F-013 + operational hygiene | ✅ Complete |
+| v0.6 | Country expansion model | Process template (no new F-IDs) | ✅ Complete |
+| v0.7 | Second country stable | Enrichment quality validation | ✅ Complete |
+| v0.8 | Pre-demo setup | Demo environment + curated seed data | ✅ Complete |
+| v1.0 | Credible public launch | Quality gate (no new F-IDs) | ✅ Complete |
+| v1.1 | Release automation activation | Release-please CI infrastructure (no new F-IDs) | ✅ Complete |
+| v1.2 | Post-launch quality sweep | HDX boundaries + chore-post-v11-quality-sweep roll-up | ✅ Complete |
+| v1.3 | Category expansion + design-system tokens | Impact categories, risk intelligence, type/spacing/z-index tokens, stylelint suppression audit | Proposed |
 
 
 > **Release-state note**: The milestone index above is the authoritative release-state source for milestone tracking. Historical checklist boxes below are preserved as delivery records and are not retroactively rewritten when a milestone is marked release-complete.
@@ -286,48 +287,80 @@ These are blockers that must be resolved before v0.1 development begins. They ar
 
 ---
 
-## v1.1 — Impact Category Expansion
+## v1.1 — Release Automation Activation
 
-**Goal**: Increase production usefulness after v1.0 by adding two high-impact NASA EONET categories that still fit the current event-map model.
+**Goal**: First release-please-managed cut of VigilAfrica. No functional changes; this milestone exists to prove the automated release pipeline before v1.2's larger functional roll-up.
 
-**Scope proposal**: `openspec/changes/feature-impact-categories`
+**Status**: ✅ Shipped 2026-04-26.
 
-**Planned categories**:
-- `landslides`
-- `tempExtremes`
+**What shipped**:
 
-**Acceptance criteria** (all must pass before v1.1 is tagged):
-- [ ] EONET ingestion requests `floods`, `wildfires`, `landslides`, and `tempExtremes`
-- [ ] Normalization maps each supported category explicitly; unsupported categories do not silently default to floods
-- [ ] Database category constraint accepts the v1.1 category set through a reversible migration path
-- [ ] `GET /v1/events?category=landslides` returns only landslide events
-- [ ] `GET /v1/events?category=tempExtremes` returns only temperature extreme events
-- [ ] Frontend category filter, event cards, detail views, and map markers render all four categories distinctly
-- [ ] Nigeria and Ghana seed/demo data include representative `landslides` and `tempExtremes` events
-- [ ] API contract, architecture, and product/spec references are updated from two-category language to the v1.1 supported set
-
-**What this milestone is not:**
-- Not part of v1.0 production closeout
-- Not adding all NASA EONET categories
-- Not adding `severeStorms` or `drought`
-- Not adding a secondary data oracle
+- Release-please workflow on the `release` branch with `target-branch` correctly wired as an action input (not just config) — see `chore-automate-release-tagging`.
+- First automated SemVer tag (`v1.1.0`) and changelog entry.
 
 ---
 
-## v1.2 — Risk Intelligence Expansion
+## v1.2 — Post-Launch Quality Sweep
 
-**Goal**: Continue category expansion after v1.1 with hazards that broaden VigilAfrica from acute event awareness into stronger risk intelligence.
+**Goal**: Roll up two weeks of post-v1.0 audit followups and country-onboarding work into a single functional release.
 
-**Scope proposal**: `openspec/proposals/feature-v12-risk-intelligence.md`
+**Status**: ✅ Shipped 2026-05-26.
 
-**Planned categories**:
-- `severeStorms`
-- `drought`
+**What shipped** (across PRs #84 → #98):
 
-**Notes**:
-- `severeStorms` likely fits the existing event-map model with modest UI expansion.
-- `drought` is slower-moving and may need different UX language, freshness expectations, and contextual framing.
-- v1.2 should reuse the category registry introduced by v1.1 rather than adding new one-off category branches.
+- HDX COD ADM1 polygon enrichment replacing v0.6 rectangles (100% / 100% success for Nigeria + Ghana).
+- Alert subject env labelling (`[VigilAfrica:<env>]`) driven by `APP_ENV`.
+- Staging frontend `noindex, nofollow` + visible banner upgrade.
+- EONET transient-error retry (network + 5xx non-503).
+- Country filter API now accepts ISO `country_code` with 400 on unknown.
+- Watchdog dedupe-vs-send order fix — Resend hiccups no longer permanently drop alerts.
+- React error boundary restored via `react-error-boundary`.
+- "Project Status" landing-page copy refresh + footer link fix.
+- ~10 other smaller cleanups from `chore-post-v11-quality-sweep` (B6 eonet.go Ingestor-struct refactor deferred to a focused follow-up).
+
+---
+
+## v1.3 — Category Expansion + Design-System Tokens
+
+**Goal**: Broaden hazard coverage with four new NASA EONET categories, close out the design-system token gap on the frontend, and instrument the production deployment with privacy-respecting analytics so partnership and grant conversations can cite real data. All seven proposals below ship before the v1.3.0 tag.
+
+**Status**: Proposed (planning).
+
+**Feature scope** (sequenced — feature-impact-categories lands first, feature-v13-risk-intelligence lands second on top of it):
+
+- **`feature-impact-categories`** ([changes/feature-impact-categories](../../changes/feature-impact-categories/proposal.md)) — introduces the shared category registry and adds `landslides` + `tempExtremes`.
+- **`feature-v13-risk-intelligence`** ([proposals/feature-v13-risk-intelligence.md](../../proposals/feature-v13-risk-intelligence.md)) — extends the registry with `severeStorms` + `drought`.
+
+**Hygiene scope** (parallel design-system tokens — order between these is flexible, can ship before or after the feature pair):
+
+- **`chore-type-tokens`** ([proposals/chore-type-tokens.md](../../proposals/chore-type-tokens.md)) — extract hardcoded typography values into design tokens.
+- **`chore-spacing-tokens`** ([proposals/chore-spacing-tokens.md](../../proposals/chore-spacing-tokens.md)) — extract hardcoded spacing values into design tokens.
+- **`chore-z-index-tokens`** ([proposals/chore-z-index-tokens.md](../../proposals/chore-z-index-tokens.md)) — extract hardcoded z-index values into design tokens.
+- **`chore-stylelint-suppressions-review`** ([proposals/chore-stylelint-suppressions-review.md](../../proposals/chore-stylelint-suppressions-review.md)) — periodic audit of stylelint rule suppressions; rides alongside the token chores since most suppressions trace back to the same drift.
+- **`chore-analytics-and-feedback`** ([proposals/chore-analytics-and-feedback.md](../../proposals/chore-analytics-and-feedback.md)) — self-hosted Umami analytics on the existing VPS plus a 1-click "Was this useful?" feedback widget. Closes the traction-data gap surfaced in the 2026-05-27 business / market review. Lands first within v1.3 because every downstream partnership / grant conversation benefits from having real numbers.
+
+**Acceptance criteria** (all must pass before v1.3 is tagged):
+
+- [ ] EONET ingestion requests `floods`, `wildfires`, `landslides`, `tempExtremes`, `severeStorms`, and `drought`.
+- [ ] Normalization maps each supported category explicitly; unsupported categories do not silently default to floods.
+- [ ] Database category constraint accepts the full v1.3 category set through a reversible migration path.
+- [ ] `GET /v1/events?category=<id>` returns only matching events for every category in the v1.3 set; rejects unknown values with 400.
+- [ ] Frontend category filter, event cards, detail views, and map markers render all six categories distinctly.
+- [ ] Nigeria and Ghana seed/demo data include representative events for all four newly-added categories.
+- [ ] API contract, architecture, and product/spec references reflect the v1.3 supported set.
+- [ ] All hardcoded typography, spacing, and z-index values in `web/src/` reference design tokens; stylelint rules enforce this going forward.
+- [ ] Stylelint suppression list audited; each remaining suppression has a documented reason.
+- [ ] Self-hosted Umami analytics live at `analytics.vigilafrica.org`, six custom events firing on production, no literal secrets committed to the repo (verified via `git grep`).
+- [ ] `<FeedbackPrompt />` component live on `/events/:id`; `feedback_submitted` event captured in the Umami dashboard.
+
+**What this milestone is not:**
+
+- Not adding all NASA EONET categories — only the four listed.
+- Not a secondary data oracle.
+- Not a dark-mode toggle (`feat-dark-mode-toggle` is a separate post-v1.3 proposal).
+- Not a Vercel SPA fallback fix (`fix-vercel-spa-fallback` is a separate proposal — sequence at maintainer discretion).
+- Not the deferred B6 eonet.go `Ingestor`-struct refactor (its own focused follow-up).
+- Not pre-commit secret scanning (e.g., `gitleaks` as a `pre-commit` hook). Surfaced as an adjacent concern during `chore-analytics-and-feedback` (which introduces new secrets), but tracked as a separate follow-up chore so the analytics work can ship without bundling tooling-discipline changes.
 
 ---
 

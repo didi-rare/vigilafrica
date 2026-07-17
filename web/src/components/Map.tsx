@@ -3,6 +3,7 @@ import maplibregl from 'maplibre-gl/dist/maplibre-gl-csp'
 import { setWorkerUrl } from 'maplibre-gl/dist/maplibre-gl-csp'
 import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-csp-worker.js?url'
 import 'maplibre-gl/dist/maplibre-gl.css'
+import { track } from '../analytics'
 import './Map.css'
 
 setWorkerUrl(maplibreWorkerUrl)
@@ -323,9 +324,17 @@ export function Map({ events, center = [8.6753, 9.082], zoom = 5 }: MapProps) {
         title.textContent = event.title
         popupContent.appendChild(title)
 
+        const popup = new maplibregl.Popup({ offset: 20 }).setDOMContent(popupContent)
+        // Engagement-depth signal: fire when the marker popup actually opens
+        // (proposal event `map_marker_clicked`). Using the popup 'open' event
+        // rather than a raw marker click means we count opens, not toggles.
+        popup.on('open', () => {
+          track('map_marker_clicked', { event_id: event.id, category: event.category })
+        })
+
         const marker = new maplibregl.Marker({ element: el, anchor: 'bottom' })
           .setLngLat([event.lng, event.lat])
-          .setPopup(new maplibregl.Popup({ offset: 20 }).setDOMContent(popupContent))
+          .setPopup(popup)
           .addTo(map)
         markers.current.set(id, { marker, event })
       }

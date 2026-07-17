@@ -92,6 +92,39 @@ services:
     security_opt:
       - no-new-privileges:true
 
+  # Self-hosted Umami analytics (chore-analytics-and-feedback) — staging env.
+  # Shares staging-db Postgres; requires `umami` database + role pre-created on
+  # the VPS (one-time setup). UMAMI_DB_PASSWORD and UMAMI_APP_SECRET MUST be
+  # set in the VPS .env; staging may use different values from production.
+  # Caddy reverse-proxies analytics.staging.vigilafrica.org to 127.0.0.1:3001.
+  staging-umami:
+    # Pinned to the postgresql-latest multi-arch index digest (CI enforces
+    # immutable refs via scripts/check-image-pins.js). Re-pin by running
+    # `docker buildx imagetools inspect ghcr.io/umami-software/umami:postgresql-latest`.
+    image: ghcr.io/umami-software/umami:postgresql-latest@sha256:e3f80c0625aad7179b49da27d475357cabb1068b8cacd9a792cfd6966888b123
+    container_name: vigilafrica-staging-umami
+    restart: unless-stopped
+    depends_on:
+      staging-db:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql://umami:${UMAMI_DB_PASSWORD}@staging-db:5432/umami
+      - DATABASE_TYPE=postgresql
+      - APP_SECRET=${UMAMI_APP_SECRET}
+    ports:
+      - "127.0.0.1:3001:3000"
+    networks:
+      - staging-internal
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/heartbeat || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
 volumes:
   vigil-staging-data:
   staging-maxmind-data:

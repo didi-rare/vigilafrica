@@ -1,8 +1,9 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { fetchEvents, fetchContext, fetchHealth, fetchStates, getApiBaseUrl, eventKeys, stateKeys, healthKeys, contextKeys } from '../api/events'
 import type { HealthResponse, EventCategory, VigilEvent } from '../api/events'
+import { track } from '../analytics'
 
 import './EventsDashboard.css'
 
@@ -168,6 +169,9 @@ export function EventsDashboard() {
   }
 
   function handleCategoryChange(category: string) {
+    // Track only an actual category selection, not a reset to "All Categories"
+    // (empty value) — the KPI is value-moment selections, not deselects.
+    if (category) track('category_filter_selected', { category })
     setSearchParams(prev => {
       const next = new URLSearchParams(prev)
       if (category) next.set('category', category); else next.delete('category')
@@ -176,6 +180,8 @@ export function EventsDashboard() {
   }
 
   function handleStateChange(state: string) {
+    // Track only an actual state selection, not a reset to "All States".
+    if (state) track('state_filter_selected', { state })
     setSearchParams(prev => {
       const next = new URLSearchParams(prev)
       if (state) next.set('state', state); else next.delete('state')
@@ -210,6 +216,19 @@ export function EventsDashboard() {
     queryKey: contextKeys.all,
     queryFn: () => fetchContext(),
   })
+
+  // Fire `context_resolve` once when /v1/context returns a non-null location —
+  // the "what's near me?" answer landed. Deduped by the resolved country+state
+  // so a TanStack refetch or StrictMode double-mount doesn't double-count.
+  const reportedContextRef = useRef<string | null>(null)
+  useEffect(() => {
+    const location = contextData?.location
+    if (!location) return
+    const key = `${location.country}|${location.state}`
+    if (reportedContextRef.current === key) return
+    reportedContextRef.current = key
+    track('context_resolve', { country: location.country, state: location.state })
+  }, [contextData])
 
   // Filter out events without coordinates to prevent MapLibre from crashing.
   // The type predicate narrows lat/lng to number, replacing the previous
