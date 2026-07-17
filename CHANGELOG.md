@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.3.0](https://github.com/didi-rare/vigilafrica/compare/v1.2.0...v1.3.0) (2026-07-17)
+
+
+### Features
+
+* **analytics:** add self-hosted Umami infra for dev/staging/prod (Day 1) ([64180f7](https://github.com/didi-rare/vigilafrica/commit/64180f77964625a9b1c322db5ffba5cef056b851))
+* **analytics:** self-hosted Umami + 1-click feedback widget (chore-analytics-and-feedback) ([79ffb03](https://github.com/didi-rare/vigilafrica/commit/79ffb03a4108727d071c54578b0a5094213a7ba2))
+* **analytics:** wire frontend tracker, custom events, and feedback widget (Day 2) ([e007596](https://github.com/didi-rare/vigilafrica/commit/e0075961360839b777b7688321475599f42f2218))
+* **digest:** daily flood digest endpoint + scheduled email ([6374b55](https://github.com/didi-rare/vigilafrica/commit/6374b55a7499527e8f0583c9f7a2b6a0cfc7de24))
+* **digest:** daily flood digest endpoint + scheduled email (feature-daily-flood-digest) ([93d7d8c](https://github.com/didi-rare/vigilafrica/commit/93d7d8c00bd58108820c9b12251bd22748485cab))
+
+
+### Bug Fixes
+
+* **analytics:** pin Umami image to digest to satisfy CI image-pin gate ([763ef37](https://github.com/didi-rare/vigilafrica/commit/763ef37cbb7fdf069a05e48532112bf8bfc27c72))
+* **ci:** bump Go toolchain to 1.26.4 (June 2026 stdlib CVE batch) ([c40c249](https://github.com/didi-rare/vigilafrica/commit/c40c2496e603b13acab2e5936f4c8222fb5f83b5))
+* **ci:** bump Go toolchain to 1.26.4 (stdlib CVE batch) ([00474a0](https://github.com/didi-rare/vigilafrica/commit/00474a04a31c3c4e583f8e188dcc1d4bec258972))
+* **digest:** address openspec-review findings ([3d51621](https://github.com/didi-rare/vigilafrica/commit/3d51621a3f9afcb4aeb51ee5aa4850a2cad19fb1))
+* **security:** bump Go to 1.26.5 + pgx to v5.9.2 (July 2026 govulncheck findings) ([e9c935b](https://github.com/didi-rare/vigilafrica/commit/e9c935b728af6cef481513c11bf2b67af1e66721))
+* **security:** unblock the production cut — Go 1.26.5 + pgx 5.9.2 + npm audit fixes for main ([efdcb0c](https://github.com/didi-rare/vigilafrica/commit/efdcb0c30ea820b6f1f0ff9fd90542c205e20341))
+* **web:** resolve npm audit advisories on main (vite, undici, js-yaml, babel) ([f734fb8](https://github.com/didi-rare/vigilafrica/commit/f734fb8ecb5a0d033b195ab9cb9a22099805e158))
+
 ## [1.2.0](https://github.com/didi-rare/vigilafrica/compare/v1.1.1...v1.2.0) (2026-05-26)
 
 
