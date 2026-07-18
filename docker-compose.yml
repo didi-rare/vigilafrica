@@ -86,7 +86,10 @@ services:
     security_opt:
       - no-new-privileges:true
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/heartbeat || exit 1"]
+      # Probe IPv4 explicitly: in-container `localhost` resolves to ::1, but
+      # Umami (Next.js standalone) binds IPv4 0.0.0.0 only — ::1 → connection
+      # refused, which reports a false "unhealthy" on a healthy container.
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/heartbeat || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
