@@ -62,9 +62,68 @@ function robotsMetaPlugin(): Plugin {
   }
 }
 
+// Emit robots.txt + sitemap.xml into the build output. These cannot live in
+// web/public/ as static files: that copies the same bytes into every deploy,
+// so the staging build would ship an indexable robots.txt that contradicts the
+// `noindex, nofollow` meta tag robotsMetaPlugin writes one function above.
+//
+// Both files 404'd in production until now, which is why Search Console had no
+// crawl map for the site at all.
+//
+// The staging/production split mirrors robotsMetaPlugin deliberately: a build
+// with VITE_ENV unset is treated as production and gets the permissive
+// robots.txt. Defaulting the other way would mean a misconfigured production
+// deploy silently ships `Disallow: /` and deindexes the whole site — a far
+// more expensive failure than a stray crawl of a preview build, which the
+// meta tag still covers.
+const SITE_ORIGIN = 'https://vigilafrica.org'
+
+// Only stable, canonical routes belong here. /events/:id is deliberately
+// excluded — those IDs come from upstream NASA EONET feeds and expire, so
+// listing them would fill the sitemap with URLs that 404 within days.
+const SITEMAP_ROUTES: ReadonlyArray<string> = ['/']
+
+function seoFilesPlugin(): Plugin {
+  return {
+    name: 'vigilafrica-seo-files',
+    apply: 'build',
+    generateBundle() {
+      const isStaging = process.env.VITE_ENV === 'staging'
+
+      const robotsTxt = isStaging
+        ? ['User-agent: *', 'Disallow: /', ''].join('\n')
+        : [
+            'User-agent: *',
+            'Allow: /',
+            '',
+            `Sitemap: ${SITE_ORIGIN}/sitemap.xml`,
+            '',
+          ].join('\n')
+
+      this.emitFile({ type: 'asset', fileName: 'robots.txt', source: robotsTxt })
+
+      // A staging sitemap would either advertise production URLs from a
+      // noindex host or list staging URLs nothing should crawl. Skip it.
+      if (isStaging) return
+
+      const lastmod = new Date().toISOString().slice(0, 10)
+      const urls = SITEMAP_ROUTES.map(
+        (route) =>
+          `  <url>\n    <loc>${SITE_ORIGIN}${route}</loc>\n    <lastmod>${lastmod}</lastmod>\n  </url>`,
+      ).join('\n')
+
+      this.emitFile({
+        type: 'asset',
+        fileName: 'sitemap.xml',
+        source: `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`,
+      })
+    },
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), robotsMetaPlugin()],
+  plugins: [react(), robotsMetaPlugin(), seoFilesPlugin()],
   build: {
     // MapLibre is intentionally isolated behind lazy boundaries and a separate worker.
     chunkSizeWarningLimit: 1000,
