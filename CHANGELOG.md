@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.3.1](https://github.com/didi-rare/vigilafrica/compare/v1.3.0...v1.3.1) (2026-07-18)
+
+
+### Bug Fixes
+
+* **compose:** probe umami healthcheck over IPv4 (127.0.0.1) ([b6244fb](https://github.com/didi-rare/vigilafrica/commit/b6244fbab349501c25efcf5c955aa8b3cf4b9c76))
+* **compose:** probe umami healthcheck over IPv4 on release (bundle into v1.3.1) ([cdfdadd](https://github.com/didi-rare/vigilafrica/commit/cdfdadd602e17a03be48e01ffb0c917bb3aa60c1))
+* **csp:** allow Umami tracker origin in script-src ([5c35e84](https://github.com/didi-rare/vigilafrica/commit/5c35e845dd3dec6d4976988c53d44e9cb1d0a82c))
+* **csp:** allow Umami tracker origin in script-src on release (fixes prod analytics) ([4a76674](https://github.com/didi-rare/vigilafrica/commit/4a76674aef4c7c15cb7566bfd9bb861c61139839))
+
 ## [1.3.0](https://github.com/didi-rare/vigilafrica/compare/v1.2.0...v1.3.0) (2026-07-17)
 
 
