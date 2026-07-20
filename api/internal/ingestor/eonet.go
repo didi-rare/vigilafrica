@@ -189,8 +189,8 @@ func Ingest(ctx context.Context, repo database.Repository, country CountryConfig
 //
 // EONET is queried TWICE per country and the results unioned:
 //
-//	1. status=open  — deliberately WITHOUT a days window
-//	2. status=closed&days=30
+//  1. status=open  — deliberately WITHOUT a days window
+//  2. status=closed&days=30
 //
 // This is not arbitrary. EONET accepts only open|closed|all for status; the
 // previous single request used the invalid value "open,closed", which EONET
@@ -218,6 +218,11 @@ func runIngest(ctx context.Context, repo database.Repository, country CountryCon
 		eonetURL, bbox, closedEventWindowDays)
 
 	for _, reqURL := range []string{openURL, closedURL} {
+		// §3.6 — abort between requests rather than issuing the second one
+		// against an already-cancelled context.
+		if err := ctx.Err(); err != nil {
+			return result, err
+		}
 		body, err := fetchEONET(ctx, reqURL, country.Code)
 		if err != nil {
 			return result, err
@@ -351,12 +356,15 @@ func fetchEONET(ctx context.Context, reqURL string, countryCode string) ([]byte,
 }
 
 // processEONETBody decodes one EONET response and normalises + upserts each
-// event into repo, accumulating counts into result. Called once per request
-// in the open/closed union, so counters accumulate across both responses:
-// EventsFetched is the pre-dedup upstream total, EventsStored counts
-// successful upserts (UpsertEvent is idempotent on source_id, so an event
-// present in both responses is stored once but may be counted twice here —
-// stored ≤ fetched remains the only invariant either counter guarantees).
+// event into repo, accumulating counts into result. Called once per request in
+// the open/closed union, so both counters sum across the two responses.
+//
+// The two result sets are disjoint in practice — an event is either open or
+// closed, never both (verified against the live Nigeria bbox: 27 open, 1
+// closed, empty intersection). The only overlap window is an event closing
+// upstream between the two requests, in which case UpsertEvent's idempotency
+// on source_id (F-013) still stores it once, though EventsFetched would count
+// it twice. Treat EventsFetched as "records seen upstream", not a distinct count.
 func processEONETBody(
 	ctx context.Context,
 	repo database.Repository,

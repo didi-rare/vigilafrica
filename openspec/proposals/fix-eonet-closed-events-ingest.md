@@ -81,6 +81,15 @@ No existing test asserts the outbound query string — which is precisely why an
 - neither carries the invalid `status=open,closed`
 - a closed flood event in the second response is normalised to `StatusClosed` and upserted
 
+### Changes to existing tests
+
+Disclosed explicitly, since touching 13 existing tests is scope a reviewer must see rather than discover in the diff:
+
+- **All 13 `httptest.NewServer` handlers are wrapped in a new `closedQueryStub` helper**, which answers the `status=closed` request with an empty event list and returns *before* invoking the test's own handler. Every retry/backoff/error test in the file describes the behaviour of a **single** fetch, and their request counters and event-count assertions were written against the open request. Short-circuiting the closed request ahead of those counters means each test keeps its original meaning instead of being rewritten to accommodate a second request it does not care about. No existing assertion is relaxed.
+- **One test could not be handled that way and is changed deliberately.** `TestRunIngest_NetworkError_ThenSuccess` counts at the *transport* layer (`failOnceRoundTripper`), which sees every outbound request including the one `closedQueryStub` answers without reaching the handler. Its expectation moves from 2 RoundTrips to 3, with the reason recorded inline. The behaviour under test — one network failure retried exactly once — is unchanged and still asserted by the first two calls plus the unchanged `serverHits == 1` check.
+
+Both new tests were verified to **fail** against the original `status=open,closed` line before being accepted (see Verification).
+
 ## Out of Scope
 
 - **Default status filtering on `/v1/events`.** The handler accepts `?status=` but applies no default, so the dashboard will now also surface recently-closed events. This is arguably correct — a flood from three days ago is still relevant, and `EventDetail` already renders a status badge — but it is a **visible UX change** and deserves its own decision rather than riding along inside an ingestion fix. Flagged as an immediate follow-up.
@@ -91,9 +100,16 @@ No existing test asserts the outbound query string — which is precisely why an
 
 ## Verification
 
-- [ ] `scripts/test-api.ps1` unit suite green (Go tests run via Docker — native `go test` is AppLocker-blocked)
-- [ ] New query-string test fails against the old `status=open,closed` line and passes after
-- [ ] `scripts/test-api.ps1 -Integration` green
+Local (done 2026-07-20):
+
+- [x] `scripts/test-api.ps1` unit suite green (Go tests run via Docker — native `go test` is AppLocker-blocked)
+- [x] `go vet ./...` clean
+- [x] **Both new tests verified to fail against the reintroduced bug**, then pass after restoring the fix. Observed failures: `expected exactly 2 requests (open + closed), got 1: [...status=open,closed]` and `expected 1 stored event, got 0` — the latter being the exact production symptom.
+- [x] `scripts/test-api.ps1 -Integration` green (`internal/database 6.548s`)
+- [x] Open and closed result sets confirmed disjoint against the live Nigeria bbox (27 open, 1 closed, empty intersection) — no double-counting in `EventsFetched` under normal operation
+
+Post-deploy (staging) — **not yet run:**
+
 - [ ] Against staging after deploy: `GET /v1/events?category=floods` returns ≥1 event for Nigeria
 - [ ] `GET /v1/events?category=wildfires&status=open` still returns ~27 for Nigeria — **no regression in open wildfire coverage** (the specific risk this design guards against)
 - [ ] `EONET_20881` (Lagos, 2026-06-30) present with `status=closed`, `country_name=Nigeria`, `state_name=Lagos` — end-to-end proof through the enrichment layer
