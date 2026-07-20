@@ -576,6 +576,11 @@ func TestWithinBBox(t *testing.T) {
 		want bool
 	}{
 		{"inside nigeria", nigeria, 8.0, 9.0, true},
+		// Nigeria's bbox legitimately overlaps neighbouring countries. Real
+		// coordinates from production data — these must NOT be rejected: the
+		// guard drops out-of-box events, not out-of-country ones.
+		{"cameroon border event inside nigeria bbox", nigeria, 12.765, 5.992, true},
+		{"benin border event inside nigeria bbox", nigeria, 2.686, 11.781, true},
 		{"west of nigeria", nigeria, 0.0, 9.0, false},
 		{"east of nigeria", nigeria, 16.0, 9.0, false},
 		{"south of nigeria", nigeria, 8.0, 3.0, false},
@@ -682,6 +687,9 @@ func TestRunIngest_StoresEventWithUnverifiableGeometry(t *testing.T) {
 	}
 	if result.EventsSkippedBBox != 0 {
 		t.Errorf("polygon must not count as a bbox skip, got %d", result.EventsSkippedBBox)
+	}
+	if result.EventsUnverifiedGeom != 1 {
+		t.Errorf("expected 1 unverified-geometry event counted, got %d", result.EventsUnverifiedGeom)
 	}
 	if got := repo.sourceIDs(); len(got) != 1 || got[0] != "EONET_POLY" {
 		t.Errorf("expected EONET_POLY to be upserted, got %v", got)

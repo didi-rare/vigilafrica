@@ -99,7 +99,13 @@ type IngestResult struct {
 	// missing geometry, and upsert failures — so it cannot indicate an upstream
 	// bbox leak on its own.
 	EventsSkippedBBox int
-	Run               *models.IngestionRun
+	// EventsUnverifiedGeom counts events stored without a containment check
+	// because their geometry yielded no point (Polygon). Reported once per run
+	// rather than per event: a per-event line would be noise at Info, and Debug
+	// is invisible in production (LOG_LEVEL defaults to info) — which would
+	// defeat the point of recording it at all.
+	EventsUnverifiedGeom int
+	Run                  *models.IngestionRun
 }
 
 // Ingest pulls events from NASA EONET for the given country, upserts them
@@ -155,6 +161,7 @@ func Ingest(ctx context.Context, repo database.Repository, country CountryConfig
 			"events_fetched", result.EventsFetched,
 			"events_stored", result.EventsStored,
 			"events_skipped_bbox", result.EventsSkippedBBox,
+			"events_unverified_geom", result.EventsUnverifiedGeom,
 			"err", ingestErr,
 		)
 		return result, ingestErr
@@ -167,6 +174,7 @@ func Ingest(ctx context.Context, repo database.Repository, country CountryConfig
 		"events_fetched", result.EventsFetched,
 		"events_stored", result.EventsStored,
 		"events_skipped_bbox", result.EventsSkippedBBox,
+		"events_unverified_geom", result.EventsUnverifiedGeom,
 	)
 	return result, nil
 }
@@ -339,12 +347,14 @@ func runIngest(ctx context.Context, repo database.Repository, country CountryCon
 			// Containment is unverifiable: the normalizer resolves lon/lat only for
 			// Point geometry and leaves them nil for Polygon. Such events are stored
 			// deliberately — we do not drop data we cannot verify — but the fact is
-			// logged so a polygon-shaped upstream leak stays discoverable.
+			// counted so a polygon-shaped upstream leak stays discoverable in the
+			// run summary. Per-event detail stays at Debug for local diagnosis.
+			result.EventsUnverifiedGeom++
 			geomType := ""
 			if event.GeomType != nil {
 				geomType = *event.GeomType
 			}
-			slog.Info("ingestion: storing event without bbox verification",
+			slog.Debug("ingestion: storing event without bbox verification",
 				"country", country.Code,
 				"source_id", event.SourceID,
 				"geom_type", geomType,
