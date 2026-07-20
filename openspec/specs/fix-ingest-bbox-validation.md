@@ -22,32 +22,24 @@ already states events SHALL be *"filtered to the Nigeria bounding box"*. The
 requirement assumed upstream filtering was authoritative. This change restores
 compliance and sharpens the requirement to say containment is enforced locally.
 
-## MODIFIED Requirements
+## Requirement Delta
 
-> Delta only. Merged into `openspec/specs/vigilafrica/spec.md` at
-> `/openspec-archive` time, per the `feature-impact-categories` convention — the
-> canonical spec is not edited by this change.
+The `Requirement: Natural Event Ingestion` change — stating that containment is
+enforced **client-side**, plus the rejection, cross-border-retention, and
+unverifiable-geometry scenarios — lives in the change record, per the
+`feature-impact-categories` convention:
 
-### Requirement: Natural Event Ingestion
+[`openspec/changes/fix-ingest-bbox-validation/specs/vigilafrica/spec.md`](../changes/fix-ingest-bbox-validation/specs/vigilafrica/spec.md)
 
-The system SHALL ingest natural event data from the NASA EONET API v3 on a
-scheduled interval and persist enriched events in a PostgreSQL/PostGIS database.
-Bounding-box containment SHALL be enforced **client-side** by the ingestor;
-upstream `bbox` filtering is treated as a hint, not a guarantee.
+It merges into the canonical `openspec/specs/vigilafrica/spec.md` at
+`/openspec-archive` time; the canonical spec is not edited by this change.
 
-#### Scenario: Event outside the country bounding box is rejected
-
-- **WHEN** the upstream source returns an event whose resolved point falls outside the queried country's bounding box
-- **THEN** the ingestor SHALL NOT persist that event
-- **AND** it SHALL log the skip with the country, source_id, and coordinates
-- **AND** it SHALL count the skip separately from other skip reasons
-
-#### Scenario: Event with no resolvable point is not rejected on containment grounds
-
-- **WHEN** an event's geometry yields no point coordinates (e.g. Polygon)
-- **THEN** the ingestor SHALL persist it rather than drop unverifiable data
-- **AND** it SHALL count such events and report the count once per run
-- **AND** it SHALL emit per-event detail, including the geometry type, at Debug level
+> **Note:** the Sentinel gate (`api/cmd/sentinel`) only recognises
+> `openspec/proposals/` and `openspec/changes/` among a PR's *changed* files —
+> `openspec/specs/` is not a governance path, and a previously-merged proposal
+> does not satisfy the gate for a later code PR. Any PR touching
+> `api/internal/`, `api/cmd/`, or `web/src/` must therefore carry a record under
+> one of those two directories in its own diff.
 
 ## Components to Touch
 
