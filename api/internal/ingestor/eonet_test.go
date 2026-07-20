@@ -6,7 +6,10 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -156,6 +159,33 @@ func installTestServer(t *testing.T, srv *httptest.Server) func() {
 	return func() { eonetURL = orig }
 }
 
+// emptyEventsBody is a well-formed EONET response carrying no events.
+const emptyEventsBody = `{"events": []}`
+
+// closedQueryStub answers the status=closed request with an empty event list
+// and returns WITHOUT invoking h.
+//
+// Since fix-eonet-closed-events-ingest, runIngest issues two requests per
+// country (status=open, then status=closed&days=30). Every retry, backoff and
+// error test in this file describes the behaviour of a SINGLE fetch, and their
+// request counters and event-count assertions were written against the open
+// request. Short-circuiting the closed request before h runs means those
+// counters never see it, so each test keeps its original meaning rather than
+// being rewritten to accommodate a second request it does not care about.
+//
+// The union behaviour itself is covered separately by
+// TestRunIngest_QueriesOpenAndClosed and TestRunIngest_IngestsClosedFloodEvent.
+func closedQueryStub(h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("status") == "closed" {
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, emptyEventsBody)
+			return
+		}
+		h(w, r)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -166,7 +196,7 @@ func TestRunIngest_429_ThenSuccess(t *testing.T) {
 	defer installInstantSleep(t)()
 
 	var requestCount int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(closedQueryStub(func(w http.ResponseWriter, r *http.Request) {
 		if atomic.AddInt32(&requestCount, 1) == 1 {
 			w.WriteHeader(http.StatusTooManyRequests)
 			fmt.Fprint(w, `{"retry_after": 1}`)
@@ -196,7 +226,7 @@ func TestRunIngest_503_ThenSuccess(t *testing.T) {
 	defer installInstantSleep(t)()
 
 	var requestCount int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(closedQueryStub(func(w http.ResponseWriter, r *http.Request) {
 		if atomic.AddInt32(&requestCount, 1) == 1 {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			// No retry_after body — exercises the exponential fallback branch.
@@ -223,7 +253,7 @@ func TestRunIngest_ExhaustRetries(t *testing.T) {
 	defer installInstantSleep(t)()
 
 	var requestCount int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(closedQueryStub(func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt32(&requestCount, 1)
 		w.WriteHeader(http.StatusTooManyRequests)
 		fmt.Fprint(w, `{"retry_after": 1}`)
@@ -254,7 +284,7 @@ func TestRunIngest_MissingRetryAfter_ExponentialFallback(t *testing.T) {
 	defer func() { eonetSleepFn = orig }()
 
 	var requestCount int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(closedQueryStub(func(w http.ResponseWriter, r *http.Request) {
 		if atomic.AddInt32(&requestCount, 1) <= 2 {
 			w.WriteHeader(http.StatusTooManyRequests)
 			// Deliberately empty body — forces exponential fallback.
@@ -301,7 +331,7 @@ func TestRunIngest_ContextCancelledDuringSleep(t *testing.T) {
 	}
 	defer func() { eonetSleepFn = orig }()
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(closedQueryStub(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusTooManyRequests)
 		fmt.Fprint(w, `{"retry_after": 60}`) // large value — we must not actually wait
 	}))
@@ -321,7 +351,7 @@ func TestRunIngest_ContextCancelledDuringSleep(t *testing.T) {
 func TestRunIngest_RejectsExcessiveRetryAfter(t *testing.T) {
 	defer installInstantSleep(t)()
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(closedQueryStub(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusTooManyRequests)
 		fmt.Fprint(w, `{"retry_after": 86400}`)
 	}))
@@ -338,7 +368,7 @@ func TestRunIngest_RejectsExcessiveRetryAfter(t *testing.T) {
 }
 
 func TestRunIngest_RejectsOversizedEONETResponse(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(closedQueryStub(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprint(w, strings.Repeat("x", maxEONETResponseBytes+1))
 	}))
@@ -367,7 +397,7 @@ func TestRunIngest_RejectsOversizedRawEventPayload(t *testing.T) {
 		]
 	}`, largeTitle)
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(closedQueryStub(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprint(w, body)
 	}))
@@ -403,7 +433,7 @@ func TestRunIngest_NonRetryable4xx(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			var requestCount int32
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			srv := httptest.NewServer(closedQueryStub(func(w http.ResponseWriter, r *http.Request) {
 				atomic.AddInt32(&requestCount, 1)
 				w.WriteHeader(tt.status)
 			}))
@@ -432,7 +462,7 @@ func TestRunIngest_5xx_ThenSuccess(t *testing.T) {
 	defer installInstantSleep(t)()
 
 	var requestCount int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(closedQueryStub(func(w http.ResponseWriter, r *http.Request) {
 		if atomic.AddInt32(&requestCount, 1) == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
@@ -462,7 +492,7 @@ func TestRunIngest_5xx_ExhaustsTransientRetries(t *testing.T) {
 	defer installInstantSleep(t)()
 
 	var requestCount int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(closedQueryStub(func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt32(&requestCount, 1)
 		w.WriteHeader(http.StatusBadGateway)
 	}))
@@ -492,7 +522,7 @@ func TestRunIngest_NetworkError_ThenSuccess(t *testing.T) {
 	defer installInstantSleep(t)()
 
 	var serverHits int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(closedQueryStub(func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt32(&serverHits, 1)
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprint(w, okBody)
@@ -513,10 +543,12 @@ func TestRunIngest_NetworkError_ThenSuccess(t *testing.T) {
 	if result.EventsFetched != 1 {
 		t.Errorf("expected 1 event fetched, got %d", result.EventsFetched)
 	}
-	// First request fails at the RoundTripper before hitting the server,
-	// second request reaches the server normally.
-	if got := atomic.LoadInt32(&rt.count); got != 2 {
-		t.Errorf("expected 2 RoundTrip calls (1 fail + 1 success), got %d", got)
+	// rt.count is transport-level, so unlike serverHits it also sees the
+	// status=closed request that closedQueryStub answers without invoking the
+	// handler: open-fails, open-retry-succeeds, then closed. The behaviour under
+	// test — one network failure retried exactly once — is the first two.
+	if got := atomic.LoadInt32(&rt.count); got != 3 {
+		t.Errorf("expected 3 RoundTrip calls (open: 1 fail + 1 success, then closed), got %d", got)
 	}
 	if got := atomic.LoadInt32(&serverHits); got != 1 {
 		t.Errorf("expected 1 server hit (transport-layer fail doesn't reach server), got %d", got)
@@ -532,7 +564,7 @@ func TestRunIngest_NetworkError_ThenSuccess(t *testing.T) {
 //	go test -run TestRunIngest_RateLimit_RealSleep ./internal/ingestor/
 func TestRunIngest_RateLimit_RealSleep(t *testing.T) {
 	var requestCount int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(closedQueryStub(func(w http.ResponseWriter, r *http.Request) {
 		if atomic.AddInt32(&requestCount, 1) == 1 {
 			w.WriteHeader(http.StatusTooManyRequests)
 			fmt.Fprint(w, `{"retry_after": 1}`)
@@ -625,7 +657,7 @@ func TestRunIngest_SkipsEventOutsideCountryBBox(t *testing.T) {
 		]
 	}`
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(closedQueryStub(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprint(w, body)
 	}))
@@ -669,7 +701,7 @@ func TestRunIngest_StoresEventWithUnverifiableGeometry(t *testing.T) {
 		]
 	}`
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(closedQueryStub(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprint(w, body)
 	}))
@@ -693,5 +725,149 @@ func TestRunIngest_StoresEventWithUnverifiableGeometry(t *testing.T) {
 	}
 	if got := repo.sourceIDs(); len(got) != 1 || got[0] != "EONET_POLY" {
 		t.Errorf("expected EONET_POLY to be upserted, got %v", got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// fix-eonet-closed-events-ingest — open/closed union
+// ---------------------------------------------------------------------------
+
+// closedFloodBody mirrors the real EONET_20881 record — the Lagos flood of
+// 2026-06-30 that the invalid status=open,closed query silently dropped.
+// Its point is inside testCountry's bbox, so the containment guard from
+// fix-ingest-bbox-validation stores rather than skips it.
+const closedFloodBody = `{
+	"events": [
+		{
+			"id": "EONET_20881",
+			"title": "Flood in Nigeria 1103997",
+			"closed": "2026-07-02T00:00:00Z",
+			"categories": [{"id": "floods"}],
+			"geometry": [{"date": "2026-06-30T20:00:00Z", "type": "Point", "coordinates": [3.3941795, 6.4550575]}]
+		}
+	]
+}`
+
+// TestRunIngest_QueriesOpenAndClosed pins the outbound query strings.
+//
+// This is the regression guard for the root cause: the ingestor previously sent
+// status=open,closed, which is not a valid EONET v3 value. EONET answered 200
+// and silently degraded to open-only, so floods — which close within ~48h —
+// were never ingested. No test asserted the query string, which is exactly how
+// that survived to production.
+func TestRunIngest_QueriesOpenAndClosed(t *testing.T) {
+	var mu sync.Mutex
+	var gotURLs []string
+
+	// Deliberately NOT wrapped in closedQueryStub — this test inspects both requests.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		func() {
+			mu.Lock() // §7.7 — paired with defer
+			defer mu.Unlock()
+			gotURLs = append(gotURLs, r.URL.String())
+		}()
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, emptyEventsBody)
+	}))
+	defer srv.Close()
+	defer installTestServer(t, srv)()
+
+	if _, err := runIngest(context.Background(), &mockRepo{}, testCountry); err != nil {
+		t.Fatalf("runIngest failed: %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	if len(gotURLs) != 2 {
+		t.Fatalf("expected exactly 2 requests (open + closed), got %d: %v", len(gotURLs), gotURLs)
+	}
+
+	for _, raw := range gotURLs {
+		u, err := url.Parse(raw)
+		if err != nil {
+			t.Fatalf("unparseable request URL %q: %v", raw, err)
+		}
+		q := u.Query()
+
+		// The exact bug. EONET accepts only open|closed|all.
+		if got := q.Get("status"); got == "open,closed" {
+			t.Errorf("request used the invalid status value %q — EONET degrades this to open-only", got)
+		}
+		if got := q.Get("category"); got != "floods,wildfires" {
+			t.Errorf("category = %q, want floods,wildfires", got)
+		}
+	}
+
+	openQ, err := url.Parse(gotURLs[0])
+	if err != nil {
+		t.Fatalf("unparseable open URL: %v", err)
+	}
+	if got := openQ.Query().Get("status"); got != "open" {
+		t.Errorf("first request status = %q, want open", got)
+	}
+	// Load-bearing: EONET wildfires stay open for months (the oldest open
+	// Nigeria wildfire is dated 2024-10-24). days= filters on event date, so
+	// windowing the open query would silently drop them.
+	if got := openQ.Query().Get("days"); got != "" {
+		t.Errorf("open request must NOT be windowed, got days=%q — this drops long-burning wildfires", got)
+	}
+
+	closedQ, err := url.Parse(gotURLs[1])
+	if err != nil {
+		t.Fatalf("unparseable closed URL: %v", err)
+	}
+	if got := closedQ.Query().Get("status"); got != "closed" {
+		t.Errorf("second request status = %q, want closed", got)
+	}
+	if got, want := closedQ.Query().Get("days"), strconv.Itoa(closedEventWindowDays); got != want {
+		t.Errorf("closed request days = %q, want %q", got, want)
+	}
+}
+
+// TestRunIngest_IngestsClosedFloodEvent proves the fix end-to-end: a flood that
+// is already closed upstream is fetched, normalised to StatusClosed, and stored.
+// Before the fix this event was unreachable regardless of ingestion cadence.
+func TestRunIngest_IngestsClosedFloodEvent(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		if r.URL.Query().Get("status") == "closed" {
+			fmt.Fprint(w, closedFloodBody)
+			return
+		}
+		fmt.Fprint(w, emptyEventsBody)
+	}))
+	defer srv.Close()
+	defer installTestServer(t, srv)()
+
+	repo := &recordingRepo{mockRepo: &mockRepo{}}
+	result, err := runIngest(context.Background(), repo, testCountry)
+	if err != nil {
+		t.Fatalf("runIngest failed: %v", err)
+	}
+
+	if len(repo.upserts) != 1 {
+		t.Fatalf("expected 1 stored event, got %d", len(repo.upserts))
+	}
+	got := repo.upserts[0]
+
+	if got.SourceID != "EONET_20881" {
+		t.Errorf("source_id = %q, want EONET_20881", got.SourceID)
+	}
+	if got.Category != models.CategoryFloods {
+		t.Errorf("category = %q, want floods", got.Category)
+	}
+	if got.Status != models.StatusClosed {
+		t.Errorf("status = %q, want closed — the closed field must drive status so the UI cannot present a stale flood as active", got.Status)
+	}
+	if result.EventsStored != 1 {
+		t.Errorf("EventsStored = %d, want 1", result.EventsStored)
+	}
+	// Counters accumulate across both responses; the open one carried nothing.
+	if result.EventsFetched != 1 {
+		t.Errorf("EventsFetched = %d, want 1", result.EventsFetched)
+	}
+	if result.EventsSkippedBBox != 0 {
+		t.Errorf("Lagos is inside the Nigeria bbox and must not be skipped, got %d", result.EventsSkippedBBox)
 	}
 }
