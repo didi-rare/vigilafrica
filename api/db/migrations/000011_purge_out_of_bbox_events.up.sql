@@ -1,0 +1,49 @@
+-- Purpose: remove events stored before the withinBBox containment guard existed,
+--          whose coordinates fall outside every configured country bounding box.
+-- Milestone: v1.3 follow-up to fix-ingest-bbox-validation (step 7 of its spec).
+-- Data quality: production-quality. Operates on real ingested data.
+--
+-- Why this exists
+-- ---------------
+-- EONET's server-side bbox filter is a hint, not a guarantee. Before
+-- fix-ingest-bbox-validation added the withinBBox guard, out-of-bbox events were
+-- upserted verbatim. The guard blocks NEW inserts but never deletes rows already
+-- stored, so leaked rows are served indefinitely with a NULL country_name.
+-- Confirmed on staging 2026-07-20: EONET_20263 ("340 Wildfire, Wakulla, Florida",
+-- lon -84.566 / lat 30.053) was still being returned by GET /v1/events.
+--
+-- The guard is verified working — the 19:02 ingest run did not refresh that row's
+-- ingested_at, i.e. the event was correctly skipped on re-ingest. This migration
+-- only cleans up what predates it.
+--
+-- Why a migration rather than the manual DELETE the spec suggested
+-- ---------------------------------------------------------------
+-- Migrations run automatically on API startup (developers-go.md §11.3), so this
+-- executes in staging AND production without depending on an operator remembering
+-- to run psql against two databases.
+--
+-- Predicate
+-- ---------
+-- Generalised rather than targeting EONET_20263 by ID, per step 7 of the spec:
+-- the audit may reveal other latent violations. Ingestion only ever queries the
+-- configured country bboxes, so any stored point outside ALL of them is provably
+-- a leak.
+--
+-- Bounding boxes below mirror ingestor.DefaultCountries as of this migration
+-- (NG, GH). They are intentionally a point-in-time snapshot: a migration records
+-- what was true when it ran and must never be edited afterwards (§11.7). Adding a
+-- country later requires a NEW audit/cleanup migration, not an edit to this one.
+--
+-- NULL handling (load-bearing, do not "simplify")
+-- ----------------------------------------------
+-- Polygon events have NULL latitude/longitude — the normalizer resolves lon/lat
+-- only for Point geometry. Under SQL three-valued logic the predicate evaluates
+-- to NULL for those rows, WHERE does not match NULL, and they are therefore
+-- PRESERVED. That is deliberate and mirrors the ingestor's decision to store
+-- geometry it cannot verify rather than discard data (EventsUnverifiedGeom).
+--
+-- Idempotent by construction (§11.4): re-running deletes nothing once clean.
+
+DELETE FROM events WHERE NOT (
+  (longitude BETWEEN 2.0 AND 15.0 AND latitude BETWEEN 4.0 AND 14.0) OR
+  (longitude BETWEEN -3.5 AND 1.2 AND latitude BETWEEN 4.5 AND 11.2));
