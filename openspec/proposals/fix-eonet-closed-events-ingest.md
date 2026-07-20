@@ -40,7 +40,7 @@ This digest is the concrete pilot deliverable promised to the Nigerian Red Cross
 
 Kept explicit so neither is wrongly considered fixed:
 
-- **bbox ordering is fine.** `min_lon,min_lat,max_lon,max_lat` and W,N,E,S return an identical 146 events — EONET normalises the corners. The out-of-bbox Florida event ([fix-ingest-bbox-validation](openspec/proposals/fix-ingest-bbox-validation.md)) is a **separate defect** and is not addressed here.
+- **bbox ordering is fine.** `min_lon,min_lat,max_lon,max_lat` and W,N,E,S return an identical 146 events — EONET normalises the corners. The out-of-bbox Florida event was a **separate defect**, fixed independently by `fix-ingest-bbox-validation` (the `withinBBox` containment guard), which landed on `development` on 2026-07-20 while this change was in review. This branch is rebased on top of it; the two interact only in `eonet_test.go`, where the bbox tests are wrapped in `closedQueryStub` so the second request does not double their event counts. Both suites pass together under `-race`.
 - **Urban-pluvial coverage remains partial.** GDACS caught the 2026-06-30 Lagos flood but not the 2026-07-13 event that brought the city to a standstill. This fix recovers what upstream actually has; it does not make VigilAfrica a reliable detector of Lagos street flooding. See [project flood data-source gap] for the remaining source strategy.
 
 ## What Changes
