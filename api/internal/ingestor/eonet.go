@@ -79,11 +79,27 @@ var DefaultCountries = []CountryConfig{
 	{Code: "GH", Name: "Ghana", BBox: [4]float64{-3.5, 4.5, 1.2, 11.2}},
 }
 
+// withinBBox reports whether (lon, lat) falls inside bbox, which is
+// [min_lon, min_lat, max_lon, max_lat] in WGS84 (EPSG:4326).
+//
+// Bounds are inclusive, matching the semantics of EONET's own bbox query
+// parameter. Longitudes may legitimately be negative (Ghana's min_lon is -3.5),
+// so no sign assumptions are made.
+func withinBBox(bbox [4]float64, lon, lat float64) bool {
+	return lon >= bbox[0] && lon <= bbox[2] && lat >= bbox[1] && lat <= bbox[3]
+}
+
 // IngestResult holds the outcome of a single ingestion run for one country.
 type IngestResult struct {
 	EventsFetched int
 	EventsStored  int
-	Run           *models.IngestionRun
+	// EventsSkippedBBox counts events dropped because their resolved point fell
+	// outside the queried country's bounding box. Tracked separately from the
+	// EventsFetched-EventsStored delta, which also absorbs normalise failures,
+	// missing geometry, and upsert failures — so it cannot indicate an upstream
+	// bbox leak on its own.
+	EventsSkippedBBox int
+	Run               *models.IngestionRun
 }
 
 // Ingest pulls events from NASA EONET for the given country, upserts them
@@ -138,6 +154,7 @@ func Ingest(ctx context.Context, repo database.Repository, country CountryConfig
 			"duration_ms", duration.Milliseconds(),
 			"events_fetched", result.EventsFetched,
 			"events_stored", result.EventsStored,
+			"events_skipped_bbox", result.EventsSkippedBBox,
 			"err", ingestErr,
 		)
 		return result, ingestErr
@@ -149,6 +166,7 @@ func Ingest(ctx context.Context, repo database.Repository, country CountryConfig
 		"duration_ms", duration.Milliseconds(),
 		"events_fetched", result.EventsFetched,
 		"events_stored", result.EventsStored,
+		"events_skipped_bbox", result.EventsSkippedBBox,
 	)
 	return result, nil
 }
@@ -300,6 +318,37 @@ func runIngest(ctx context.Context, repo database.Repository, country CountryCon
 		if geoJSON == "" {
 			slog.Warn("ingestion: skipping event with no geometry", "country", country.Code, "source_id", event.SourceID)
 			continue
+		}
+
+		// Containment guard: EONET's server-side bbox filter is a hint, not a
+		// guarantee — it has been observed returning events wholly outside the
+		// requested box (a Florida wildfire against the Nigeria bbox). Validate
+		// client-side so foreign events never reach the database.
+		if event.Longitude != nil && event.Latitude != nil {
+			if !withinBBox(country.BBox, *event.Longitude, *event.Latitude) {
+				slog.Warn("ingestion: skipping event outside country bbox",
+					"country", country.Code,
+					"source_id", event.SourceID,
+					"lon", *event.Longitude,
+					"lat", *event.Latitude,
+				)
+				result.EventsSkippedBBox++
+				continue
+			}
+		} else {
+			// Containment is unverifiable: the normalizer resolves lon/lat only for
+			// Point geometry and leaves them nil for Polygon. Such events are stored
+			// deliberately — we do not drop data we cannot verify — but the fact is
+			// logged so a polygon-shaped upstream leak stays discoverable.
+			geomType := ""
+			if event.GeomType != nil {
+				geomType = *event.GeomType
+			}
+			slog.Info("ingestion: storing event without bbox verification",
+				"country", country.Code,
+				"source_id", event.SourceID,
+				"geom_type", geomType,
+			)
 		}
 
 		// F-013: upsert on source_id — idempotent, no duplicates
