@@ -89,17 +89,43 @@ func (m *mockRepo) GetDistinctStatesByCountry(ctx context.Context, country strin
 }
 func (m *mockRepo) Close() {}
 
+// recordingRepo is a mockRepo that remembers which events were upserted, so a
+// test can assert *which* events survived the ingest loop rather than only how
+// many. Embedding *mockRepo promotes the rest of the database.Repository
+// surface; only UpsertEvent is overridden.
+// Construct as: &recordingRepo{mockRepo: &mockRepo{}}
+type recordingRepo struct {
+	*mockRepo
+	upserts []models.Event
+}
+
+func (r *recordingRepo) UpsertEvent(ctx context.Context, e models.Event, geoJSON string) error {
+	r.upserts = append(r.upserts, e)
+	return nil
+}
+
+// sourceIDs returns the source IDs recorded so far, in upsert order.
+func (r *recordingRepo) sourceIDs() []string {
+	ids := make([]string, 0, len(r.upserts))
+	for _, e := range r.upserts {
+		ids = append(ids, e.SourceID)
+	}
+	return ids
+}
+
 // testCountry is the standard CountryConfig used in ingestor unit tests.
 var testCountry = CountryConfig{Code: "NG", Name: "Nigeria", BBox: [4]float64{2.0, 4.0, 15.0, 14.0}}
 
 // okBody is a minimal valid EONET JSON response that the normalizer accepts.
+// The point sits inside testCountry's bbox so the containment guard in
+// runIngest stores it — keep it that way, or tests asserting EventsStored break.
 const okBody = `{
 	"events": [
 		{
 			"id": "EONET_123",
 			"title": "Wildfire",
 			"categories": [{"id": "wildfires"}],
-			"geometry": [{"magnitudeValue": null, "magnitudeUnit": null, "date": "2023-01-01T00:00:00Z", "type": "Point", "coordinates": [0.0, 0.0]}]
+			"geometry": [{"magnitudeValue": null, "magnitudeUnit": null, "date": "2023-01-01T00:00:00Z", "type": "Point", "coordinates": [8.0, 9.0]}]
 		}
 	]
 }`
@@ -531,5 +557,141 @@ func TestRunIngest_RateLimit_RealSleep(t *testing.T) {
 	// Must have honoured retry_after(1) + 5s buffer = 6s minimum.
 	if elapsed < 6*time.Second {
 		t.Errorf("expected ≥6s sleep for retry_after=1 + 5s buffer; took %v", elapsed)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Bounding-box containment guard (fix-ingest-bbox-validation)
+// ---------------------------------------------------------------------------
+
+func TestWithinBBox(t *testing.T) {
+	nigeria := [4]float64{2.0, 4.0, 15.0, 14.0}
+	ghana := [4]float64{-3.5, 4.5, 1.2, 11.2}
+
+	tests := []struct {
+		name string
+		bbox [4]float64
+		lon  float64
+		lat  float64
+		want bool
+	}{
+		{"inside nigeria", nigeria, 8.0, 9.0, true},
+		// Nigeria's bbox legitimately overlaps neighbouring countries. Real
+		// coordinates from production data — these must NOT be rejected: the
+		// guard drops out-of-box events, not out-of-country ones.
+		{"cameroon border event inside nigeria bbox", nigeria, 12.765, 5.992, true},
+		{"benin border event inside nigeria bbox", nigeria, 2.686, 11.781, true},
+		{"west of nigeria", nigeria, 0.0, 9.0, false},
+		{"east of nigeria", nigeria, 16.0, 9.0, false},
+		{"south of nigeria", nigeria, 8.0, 3.0, false},
+		{"north of nigeria", nigeria, 8.0, 20.0, false},
+		{"florida is far outside nigeria", nigeria, -84.5657, 30.0531, false},
+		{"south-west corner is inclusive", nigeria, 2.0, 4.0, true},
+		{"north-east corner is inclusive", nigeria, 15.0, 14.0, true},
+		{"inside ghana with negative longitude", ghana, -1.5, 7.0, true},
+		{"west of ghana with negative longitude", ghana, -4.0, 7.0, false},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			if got := withinBBox(tt.bbox, tt.lon, tt.lat); got != tt.want {
+				t.Errorf("withinBBox(%v, %v, %v) = %v, want %v", tt.bbox, tt.lon, tt.lat, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestRunIngest_SkipsEventOutsideCountryBBox pins the containment guard: EONET's
+// server-side bbox filter is a hint, not a guarantee. It has been observed
+// returning EONET_20263 (a Wakulla, Florida wildfire) against the Nigeria bbox,
+// which then reached production with an empty country_name. Such an event must
+// never be upserted.
+func TestRunIngest_SkipsEventOutsideCountryBBox(t *testing.T) {
+	const body = `{
+		"events": [
+			{
+				"id": "EONET_NG_IN",
+				"title": "Wildfire in Nigeria",
+				"categories": [{"id": "wildfires"}],
+				"geometry": [{"date": "2026-07-18T00:00:00Z", "type": "Point", "coordinates": [8.0, 9.0]}]
+			},
+			{
+				"id": "EONET_20263",
+				"title": "340 Wildfire, Wakulla, Florida",
+				"categories": [{"id": "wildfires"}],
+				"geometry": [{"date": "2026-07-18T00:00:00Z", "type": "Point", "coordinates": [-84.5657, 30.0531]}]
+			}
+		]
+	}`
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, body)
+	}))
+	defer srv.Close()
+	defer installTestServer(t, srv)()
+
+	repo := &recordingRepo{mockRepo: &mockRepo{}}
+	result, err := runIngest(context.Background(), repo, testCountry)
+	if err != nil {
+		t.Fatalf("runIngest returned err: %v", err)
+	}
+
+	if result.EventsFetched != 2 {
+		t.Errorf("expected 2 events fetched, got %d", result.EventsFetched)
+	}
+	if result.EventsStored != 1 {
+		t.Errorf("expected 1 event stored, got %d", result.EventsStored)
+	}
+	if result.EventsSkippedBBox != 1 {
+		t.Errorf("expected 1 event skipped for bbox, got %d", result.EventsSkippedBBox)
+	}
+	if got := repo.sourceIDs(); len(got) != 1 || got[0] != "EONET_NG_IN" {
+		t.Errorf("expected only EONET_NG_IN to be upserted, got %v", got)
+	}
+}
+
+// TestRunIngest_StoresEventWithUnverifiableGeometry pins the deliberate decision
+// that events whose containment cannot be checked are stored rather than
+// dropped. The normalizer resolves lon/lat only for Point geometry and leaves
+// them nil for Polygon, so a polygon is unverifiable — we do not discard data we
+// cannot verify, even when the ring lies outside the country bbox.
+func TestRunIngest_StoresEventWithUnverifiableGeometry(t *testing.T) {
+	const body = `{
+		"events": [
+			{
+				"id": "EONET_POLY",
+				"title": "Flood polygon",
+				"categories": [{"id": "floods"}],
+				"geometry": [{"date": "2026-07-18T00:00:00Z", "type": "Polygon", "coordinates": [[[-84.6,30.0],[-84.5,30.0],[-84.5,30.1],[-84.6,30.1],[-84.6,30.0]]]}]
+			}
+		]
+	}`
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, body)
+	}))
+	defer srv.Close()
+	defer installTestServer(t, srv)()
+
+	repo := &recordingRepo{mockRepo: &mockRepo{}}
+	result, err := runIngest(context.Background(), repo, testCountry)
+	if err != nil {
+		t.Fatalf("runIngest returned err: %v", err)
+	}
+
+	if result.EventsStored != 1 {
+		t.Errorf("expected the polygon event to be stored, got %d stored", result.EventsStored)
+	}
+	if result.EventsSkippedBBox != 0 {
+		t.Errorf("polygon must not count as a bbox skip, got %d", result.EventsSkippedBBox)
+	}
+	if result.EventsUnverifiedGeom != 1 {
+		t.Errorf("expected 1 unverified-geometry event counted, got %d", result.EventsUnverifiedGeom)
+	}
+	if got := repo.sourceIDs(); len(got) != 1 || got[0] != "EONET_POLY" {
+		t.Errorf("expected EONET_POLY to be upserted, got %v", got)
 	}
 }

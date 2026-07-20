@@ -1,0 +1,124 @@
+/* Themed accessible select (feat-filter-dropdown). Trigger mirrors the prior
+   .dashboard-filter-select look; the popup is a fully-styled dark panel — the
+   thing native <select> can't give us. Tokens only (ADR-013); motion gated
+   (ADR-015). */
+
+.select {
+  position: relative;
+  display: inline-block;
+}
+
+/* Visually-hidden field label, kept in the a11y tree (self-contained so the
+   component doesn't depend on a global .sr-only). */
+.select__label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.select__trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-width: 9rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.select__trigger:hover {
+  border-color: var(--accent-amber);
+}
+
+.select__trigger:focus-visible {
+  outline: 2px solid var(--accent-amber);
+  outline-offset: 2px;
+}
+
+.select__trigger[aria-disabled='true'] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.select__chevron {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  transition: transform 0.18s ease;
+}
+
+.select__trigger[aria-expanded='true'] .select__chevron {
+  transform: rotate(180deg);
+}
+
+.select__list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: var(--z-dropdown);
+  min-width: 100%;
+  max-height: 16rem;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0.25rem;
+  list-style: none;
+  background: var(--bg-popup);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+}
+
+.select__option {
+  padding: 0.5rem 0.625rem;
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+/* Keyboard-highlighted / pointer-hovered option. */
+.select__option.is-active {
+  background: var(--surface-amber-soft);
+}
+
+/* Currently-selected option. */
+.select__option.is-selected {
+  color: var(--accent-amber);
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .select__trigger,
+  .select__chevron {
+    transition: none;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .select__list {
+    animation: select-pop 0.12s ease-out;
+  }
+
+  @keyframes select-pop {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}

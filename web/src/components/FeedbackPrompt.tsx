@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ThumbsUp, ThumbsDown } from 'lucide-react'
 import { track } from '../analytics'
 import './FeedbackPrompt.css'
 
@@ -46,7 +47,7 @@ export function FeedbackPrompt({ eventId }: FeedbackPromptProps) {
             onClick={() => handleVote('yes')}
             aria-label="Yes, this event detail was useful"
           >
-            <span aria-hidden="true">👍</span> Yes
+            <ThumbsUp size={15} aria-hidden="true" /> Yes
           </button>
           <button
             type="button"
@@ -54,7 +55,7 @@ export function FeedbackPrompt({ eventId }: FeedbackPromptProps) {
             onClick={() => handleVote('no')}
             aria-label="No, this event detail was not useful"
           >
-            <span aria-hidden="true">👎</span> No
+            <ThumbsDown size={15} aria-hidden="true" /> No
           </button>
         </div>
       )}

@@ -4,7 +4,9 @@ import { useQuery } from '@tanstack/react-query'
 import { fetchEvents, fetchContext, fetchHealth, fetchStates, getApiBaseUrl, eventKeys, stateKeys, healthKeys, contextKeys } from '../api/events'
 import type { HealthResponse, EventCategory, VigilEvent } from '../api/events'
 import { track } from '../analytics'
+import { Droplet, Flame, MapPin, CircleCheck, Clock, AlertTriangle } from 'lucide-react'
 
+import { Select, type SelectOption } from './Select'
 import './EventsDashboard.css'
 
 const STALENESS_THRESHOLD_HOURS = 2
@@ -22,6 +24,13 @@ const COUNTRY_CENTERS: Record<SupportedCountry, [number, number]> = {
   Nigeria: [8.6753, 9.082],
   Ghana:   [-1.0232, 7.9465],
 }
+
+// Static option set for the category filter (empty value = "all").
+const CATEGORY_OPTIONS: SelectOption[] = [
+  { value: '', label: 'All Categories' },
+  { value: 'floods', label: 'Floods' },
+  { value: 'wildfires', label: 'Wildfires' },
+]
 
 function formatLastUpdated(minutesAgo: number): string {
   if (minutesAgo < 1) return 'Last updated just now'
@@ -108,7 +117,7 @@ function FreshnessIndicator() {
         role="status"
         aria-live="polite"
       >
-        <span className="freshness-icon" aria-hidden="true">🟢</span>
+        <span className="freshness-icon" aria-hidden="true"><CircleCheck size={14} /></span>
         Data freshness unknown — no ingestion history available.
       </div>
     )
@@ -120,7 +129,7 @@ function FreshnessIndicator() {
       ? 'freshness-banner--warn'
       : 'freshness-banner--ok'
 
-  const icon = resolved.kind === 'error' ? '⚠️' : resolved.kind === 'warn' ? '🕐' : '🟢'
+  const FreshnessIcon = resolved.kind === 'error' ? AlertTriangle : resolved.kind === 'warn' ? Clock : CircleCheck
   const ariaRole = resolved.kind === 'ok' ? 'status' : 'alert'
 
   return (
@@ -129,7 +138,7 @@ function FreshnessIndicator() {
       role={ariaRole}
       aria-live="polite"
     >
-      <span className="freshness-icon" aria-hidden="true">{icon}</span>
+      <span className="freshness-icon" aria-hidden="true"><FreshnessIcon size={14} /></span>
       {resolved.message}
     </div>
   )
@@ -256,6 +265,15 @@ export function EventsDashboard() {
 
   const availableStates = statesData ?? []
 
+  const countryOptions: SelectOption[] = [
+    { value: '', label: 'All Countries' },
+    ...SUPPORTED_COUNTRIES.map((c) => ({ value: c, label: c })),
+  ]
+  const stateOptions: SelectOption[] = [
+    { value: '', label: 'All States' },
+    ...availableStates.map((s) => ({ value: s, label: s })),
+  ]
+
   return (
     <section id="dashboard" className="dashboard section" aria-labelledby="dashboard-heading">
       <div className="container">
@@ -268,55 +286,30 @@ export function EventsDashboard() {
         <DashboardDisclaimer />
         <FreshnessIndicator />
 
-        {/* ── Filters ── §9.3: visible labels via sr-only + htmlFor */}
+        {/* ── Filters ── each <Select> carries its own sr-only label (a11y tree) */}
         <div className="dashboard-filters" role="group" aria-label="Event filters">
-          <div className="dashboard-filter-group">
-            <label htmlFor="filter-country" className="sr-only">Country</label>
-            <select
-              id="filter-country"
-              className="dashboard-filter-select"
-              value={selectedCountry}
-              onChange={e => handleCountryChange(e.target.value)}
-              aria-label="Filter by country"
-            >
-              <option value="">All Countries</option>
-              {SUPPORTED_COUNTRIES.map(c => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="dashboard-filter-group">
-            <label htmlFor="filter-category" className="sr-only">Category</label>
-            <select
-              id="filter-category"
-              className="dashboard-filter-select"
-              value={selectedCategory}
-              onChange={e => handleCategoryChange(e.target.value)}
-              aria-label="Filter by category"
-            >
-              <option value="">All Categories</option>
-              <option value="floods">🌊 Floods</option>
-              <option value="wildfires">🔥 Wildfires</option>
-            </select>
-          </div>
-
-          <div className="dashboard-filter-group">
-            <label htmlFor="filter-state" className="sr-only">State / Region</label>
-            <select
-              id="filter-state"
-              className="dashboard-filter-select"
-              value={selectedState}
-              onChange={e => handleStateChange(e.target.value)}
-              disabled={availableStates.length === 0}
-              aria-label="Filter by state"
-            >
-              <option value="">All States</option>
-              {availableStates.map(s => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-          </div>
+          <Select
+            id="filter-country"
+            label="Filter by country"
+            value={selectedCountry}
+            onChange={handleCountryChange}
+            options={countryOptions}
+          />
+          <Select
+            id="filter-category"
+            label="Filter by category"
+            value={selectedCategory}
+            onChange={handleCategoryChange}
+            options={CATEGORY_OPTIONS}
+          />
+          <Select
+            id="filter-state"
+            label="Filter by state or region"
+            value={selectedState}
+            onChange={handleStateChange}
+            options={stateOptions}
+            disabled={availableStates.length === 0}
+          />
         </div>
 
         <div className="dashboard-layout">
@@ -330,7 +323,7 @@ export function EventsDashboard() {
 
             {eventsError && (
               <div className="dashboard-state error" role="alert">
-                <span role="img" aria-label="alert">⚠️</span>
+                <AlertTriangle size={18} aria-hidden="true" />
                 <p>Failed to connect to VigilAfrica Command Center</p>
                 {import.meta.env.VITE_SHOW_ERROR_DETAIL === 'true' && (
                   <>
@@ -372,7 +365,11 @@ export function EventsDashboard() {
                       <article className={`event-card event-card--${categoryClass}`}>
                         <div className="event-header">
                           <span className={`badge badge--${categoryClass}`}>
-                            {event.category === 'floods' ? '🌊 Floods' : '🔥 Wildfires'}
+                            {event.category === 'floods' ? (
+                              <><Droplet size={13} aria-hidden="true" /> Floods</>
+                            ) : (
+                              <><Flame size={13} aria-hidden="true" /> Wildfires</>
+                            )}
                           </span>
                           <span className="event-date">
                             {/* F8: explicit en-GB locale so the same event renders the same date everywhere. */}
@@ -384,7 +381,7 @@ export function EventsDashboard() {
                         </h3>
 
                         <div className="event-location glass-effect">
-                          <span className="location-pin" aria-hidden="true">📍</span>
+                          <span className="location-pin" aria-hidden="true"><MapPin size={13} /></span>
                           {event.state_name ? (
                             <span className="location-text">
                               <strong>{event.state_name}</strong>, {event.country_name}

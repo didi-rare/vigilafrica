@@ -3,16 +3,22 @@
   min-height: 100vh;
 }
 
-.back-link {
-  color: var(--color-text-dim);
-  text-decoration: none;
-  font-family: var(--font-mono);
-  font-size: 0.8rem;
-  transition: color 0.2s;
-}
+/* .back-link is shared across sub-pages and now lives in App.css. */
 
-.back-link:hover {
-  color: var(--color-primary);
+/* Loading / error / not-found shell — the same dashed state-card pattern as
+   .dashboard-state (EventsDashboard.css), scoped to the detail page. */
+.event-detail-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 5rem 2rem;
+  background: var(--bg-card);
+  border-radius: var(--radius-xl);
+  border: 1px dashed var(--border);
+  margin-top: 1.5rem;
+  color: var(--text-secondary);
+  text-align: center;
 }
 
 .event-detail-header {
@@ -44,6 +50,17 @@
   flex-direction: column;
   align-items: flex-end;
   gap: 0.5rem;
+}
+
+/* Cartographic coordinate readout for the event's position (Ground Truth). */
+.detail-coord {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  letter-spacing: 0.04em;
+  color: var(--coordinate-text);
 }
 
 .detail-layout {

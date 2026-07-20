@@ -373,6 +373,11 @@ navigate({ pathname: "/events", search: params.toString() });
 :root { --z-modal: 300; --z-nav: 200; --z-map-controls: 100; }
 ```
 
+**§7.11 — Font families come from the type tokens in `tokens.css` — `--font-display` (Space Grotesk), `--font-body` (IBM Plex Sans), `--font-mono` (IBM Plex Mono). Never hardcode a font name in component CSS (ADR-015 "Ground Truth").**
+*Why:* The three-family system is the brand voice; routing through tokens keeps it swappable in one place and prevents a stray `font-family: Inter` regressing the identity. Fonts are self-hosted via `@fontsource` (no runtime CDN call) — see §15.
+❌ `font-family: 'Space Grotesk', sans-serif;`
+✅ `font-family: var(--font-display);`
+
 ---
 
 ## 8. Performance
@@ -689,7 +694,7 @@ expect(results.violations).toHaveLength(0)
 
 **§14.2 — New dependencies require a line in an OpenSpec change record: problem solved, alternatives considered, why native isn't sufficient.**
 
-**§14.3 — Current approved production dependencies: `react`, `react-dom`, `react-router-dom`, `@tanstack/react-query`, `maplibre-gl`, `lucide-react`. Adding requires §14.2.**
+**§14.3 — Current approved production dependencies: `react`, `react-dom`, `react-router-dom`, `@tanstack/react-query`, `maplibre-gl`, `lucide-react`, and the self-hosted type families `@fontsource/space-grotesk`, `@fontsource/ibm-plex-sans`, `@fontsource/ibm-plex-mono` (Ground Truth visual identity, ADR-015). Adding requires §14.2.**
 
 **§14.4 — Bundle impact checked with `rollup-plugin-visualizer` before merging a new dep. Before/after size in the change record.**
 

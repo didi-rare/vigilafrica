@@ -35,13 +35,20 @@ step 5 are mandatory before the dashboard is reachable publicly.**
 1. **Generate and set secrets** in the VPS `.env` (gitignored):
 
    ```bash
-   openssl rand -base64 24   # → UMAMI_DB_PASSWORD
+   openssl rand -hex 24      # → UMAMI_DB_PASSWORD  (hex — URL-safe)
    openssl rand -base64 32   # → UMAMI_APP_SECRET
    ```
 
    Add `UMAMI_DB_PASSWORD=…` and `UMAMI_APP_SECRET=…` to `.env`. These have no
    fallback defaults in the prod/staging compose files — a missing value fails
    the container start loudly, by design.
+
+   > **`UMAMI_DB_PASSWORD` must be URL-safe.** Umami interpolates it raw into
+   > `postgresql://umami:<password>@<db>:5432/umami`, so a `/`, `+`, `=`, `@`, or
+   > `:` (all producible by `openssl rand -base64`) breaks Node's URL parser with
+   > `TypeError: Invalid URL` and the container crash-loops on `check-db`. Use
+   > `openssl rand -hex 24` (hex has none of those characters). `UMAMI_APP_SECRET`
+   > is not URL-embedded, so base64 is fine there.
 
 2. **Bootstrap the database** (one-time SQL — see §3).
 
@@ -161,10 +168,11 @@ is part of first deploy, not optional.
 
 ## 7. Notes & follow-ups
 
-- The Umami image is currently pinned to the `postgresql-latest` floating tag.
-  **Pin it to a specific digest before the first production deploy** so a
-  surprise upstream change cannot land unreviewed (`TODO` markers are in each
-  compose file).
+- The Umami image is pinned to a specific `postgresql-latest` digest in every
+  compose file, and CI (`scripts/check-image-pins.js`) enforces immutable refs.
+  Re-pin by running
+  `docker buildx imagetools inspect ghcr.io/umami-software/umami:postgresql-latest`
+  and updating the `@sha256:…` in each compose file.
 - Postgres growth from analytics rows is negligible at v1.3 scale; revisit
   retention only if VPS disk pressure becomes a real signal.
 - Restricting the `analytics.` subdomain to a known IP range is a reasonable

@@ -26,6 +26,8 @@
 | ADR-012 | Frontend Server State: TanStack Query     | ACCEPTED | 2026-04-18 |
 | ADR-013 | Frontend Styling: Plain CSS over CSS-in-JS | ACCEPTED | 2026-04-18 |
 | ADR-014 | Single-VPS Two-Stack Deployment Model     | ACCEPTED | 2026-04-24 |
+| ADR-015 | Visual Identity & Type System: Ground Truth | ACCEPTED | 2026-06-08 |
+| ADR-016 | Brand Mark: Epicenter Contours            | ACCEPTED | 2026-06-11 |
 
 ---
 
@@ -295,7 +297,7 @@ Implement an automated governance gate ("The Sentinel") that prevents code chang
 ### Enforcement Rules
 
 1. **Critical Packages**: Any change to `api/internal/*`, `api/cmd/*`, or `web/src/*` triggers an audit.
-2. **Governance Link**: The audit passes IF at least one file is added or modified in `openspec/changes/`.
+2. **Governance Link**: The audit passes IF at least one file is added or modified in an active OpenSpec record location — `openspec/proposals/` (the flat proposal layout) **or** `openspec/changes/` (the per-change layout). Archived records (any path under `/archive/`) do not count.
 3. **Exemptions**: 
    - **Trivial Fixes**: Commits containing `[trivial]` in the message skip the audit (for typos, linting, etc.).
    - **Maintenance**: Changes to `api/db/migrations/`, `docs/`, or root configuration files are exempt.
@@ -303,8 +305,23 @@ Implement an automated governance gate ("The Sentinel") that prevents code chang
 ### Consequences
 
 - **CI Failure**: Pull Requests that violate these rules will fail the `openspec-verify` workflow.
-- **Workflow Dependency**: Developers must run `/opsx-propose` before starting implementation on a new feature.
-- **Improved Scannability**: The `openspec/changes/archive` becomes a reliable history of *why* every part of the codebase exists.
+- **Workflow Dependency**: Developers must register an OpenSpec record before starting implementation on a new feature.
+- **Improved Scannability**: The OpenSpec record tree becomes a reliable history of *why* every part of the codebase exists.
+
+### Amendment (2026-06-08)
+
+The auditor binary (`api/cmd/sentinel`) was built with this decision, but the
+`openspec-verify` workflow ran only placeholder static-analysis steps — the gate
+was never actually enforced (a `web/src/` feature could, and did, merge without a
+record). Two changes make the decision real:
+
+1. **Wired into CI.** `openspec-verify` now runs `go run ./cmd/sentinel` as a
+   hard-fail step, so the enforcement promised above is live.
+2. **Both record layouts accepted.** Rule 2's Governance Link now passes on a
+   record in either `openspec/proposals/` or `openspec/changes/`. The original
+   text named only `openspec/changes/`, but the project's active workflow uses
+   the flat `openspec/proposals/` layout; accepting both reconciles the gate with
+   real practice instead of forcing a layout migration.
 
 ---
 
@@ -465,3 +482,92 @@ Run staging and production on one VPS as two isolated Docker Compose stacks behi
 - Staging and production must use separate `.env` files, Docker networks, and volumes.
 - `/health.version` is stamped at build time with a commit SHA for staging and a SemVer tag for production.
 - Rollback is performed by redeploying a prior tag through the production workflow.
+
+---
+
+## ADR-015 — Visual Identity & Type System: Ground Truth
+
+**Date**: 2026-06-08
+**Status**: ACCEPTED
+
+### Decision
+
+Adopt **"Ground Truth"** as the frontend visual identity: an instrument-grade
+cartographic design language for all `web/src/` surfaces. Establish a three-family
+type system — **Space Grotesk** (display), **IBM Plex Sans** (body/UI), **IBM Plex
+Mono** (coordinates & data) — self-hosted via `@fontsource`, replacing the prior
+Inter-only stack.
+
+### Rationale
+
+- **Look like the instrument it is.** VigilAfrica is a geospatial situational-
+  awareness tool; a cartographic language (lat/long graticules, coordinate
+  readouts, live-signal station aesthetic) is both distinctive and credible for a
+  humanitarian / grant audience, where a generic SaaS template undersells the work.
+- **Colour as meaning, not decoration.** Amber is the single brand accent; cyan
+  and lime are reserved for data semantics (flood = cyan, fire = amber/lime).
+- **Self-hosted type.** No Google-Fonts CDN request at runtime — better privacy
+  (matches the no-tracking analytics posture) and first-paint performance; Vite
+  bundles the woff2. The IBM Plex superfamily's "humans ↔ machines" thesis fits a
+  human-readable satellite-data instrument.
+
+### Enforcement Rules
+
+1. **No emoji as UI icons.** Use SVG (`lucide-react` or hand-authored marks).
+2. **Type tokens.** Components reference `--font-display` / `--font-body` /
+   `--font-mono` (in `tokens.css`), never raw font names.
+3. **Plain CSS only.** This ADR **complements ADR-013** (no Tailwind / CSS-in-JS);
+   the token system and stylelint colour-literal rule remain in force.
+4. **Motion is gated.** Every animation must be disabled under
+   `prefers-reduced-motion: reduce`.
+
+### Consequences
+
+- Adds three `@fontsource/*` packages to the approved frontend dependencies
+  (`developers-react.md` §14.3), exact-pinned per §14.5.
+- The brand mark is an SVG component (`components/BrandMark.tsx`) themed via tokens.
+- Rollout is incremental per surface (landing → /for-partners → EventDetail →
+  dashboard/map chrome); see `feat-ground-truth-redesign`.
+
+---
+
+## ADR-016 — Brand Mark: Epicenter Contours
+
+**Date**: 2026-06-11
+**Status**: ACCEPTED
+
+### Decision
+
+Adopt **Epicenter Contours** as the VigilAfrica brand mark: an event epicentre
+rendered as concentric topographic contour rings — a dashed outer contour, a
+neutral mid ring, an amber accent ring, and the amber live point at the core.
+It replaces the first-pass "vigil reticle" in `components/BrandMark.tsx`; all
+identity assets (favicon set, OG share card, README banner, map markers) derive
+from it.
+
+### Context
+
+The reticle shipped with ADR-015 as a single unexplored concept. Per
+`feat-ground-truth-identity`, five hand-authored candidates (reticle refined,
+sentinel pin, meridian V, epicenter contours, radar sweep) were rendered
+side-by-side at 16/32/120px with nav-context lockups and DFII scores.
+
+### Rationale
+
+- **Best small-size legibility of the five** — the concentric rings survive
+  16px (favicon, the hardest test) without muddying; verified in-browser.
+- **Most honest thesis**: events as phenomena on mapped terrain — exactly what
+  the product shows. Calm and data-first rather than military or maps-app
+  generic.
+- **Scales structurally**: pure circles rasterise cleanly at any size and
+  simplify naturally (drop the dashed ring below 24px if ever needed).
+
+### Consequences
+
+- `BrandMark.tsx` carries the new geometry under the existing class API
+  (`brand-mark__*`), so nav, tests, and the reduced-motion gating are unchanged.
+- The Phase-A `brand-concepts/` folder and dev route are deleted (selection
+  done).
+- Favicon, OG image, README banner, and map-marker geometry must derive from
+  this mark (Phase C of `feat-ground-truth-identity`).
+- Revisiting the mark requires a superseding ADR.

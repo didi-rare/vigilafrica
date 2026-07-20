@@ -1,4 +1,6 @@
-# VigilAfrica 🌍
+![VigilAfrica — floods & wildfires, localised for African response](docs/screenshots/readme-banner.png)
+
+# VigilAfrica
 
 **VigilAfrica** is an open-source effort to make natural event data more understandable and locally relevant across Africa.
 

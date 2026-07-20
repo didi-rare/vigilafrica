@@ -9,9 +9,10 @@ import (
 )
 
 const (
-	baseBranch     = "origin/development"
-	changeDir      = "openspec/changes/"
-	trivialFlag    = "[trivial]"
+	baseBranch  = "origin/development"
+	changeDir   = "openspec/changes/"
+	proposalDir = "openspec/proposals/"
+	trivialFlag = "[trivial]"
 )
 
 var criticalPaths = []string{
@@ -55,7 +56,7 @@ func run() error {
 	governanceChanges := []string{}
 
 	for _, file := range files {
-		if strings.HasPrefix(file, changeDir) && !strings.Contains(file, "/archive/") {
+		if isGovernanceRecord(file) {
 			governanceChanges = append(governanceChanges, file)
 			continue
 		}
@@ -74,8 +75,9 @@ func run() error {
 		for _, f := range criticalChanges {
 			fmt.Printf("  - %s\n", f)
 		}
-		fmt.Println("\n👉 SOLUTION: Run '/opsx-propose' to register this feature before implementing,")
-		fmt.Println("   or add '[trivial]' to your commit message if this is a minor maintenance task.")
+		fmt.Println("\n👉 SOLUTION: add an OpenSpec record for this change — a proposal under")
+		fmt.Println("   'openspec/proposals/' or a change record under 'openspec/changes/' —")
+		fmt.Println("   or add '[trivial]' to a commit message if this is a minor maintenance task.")
 		return fmt.Errorf("governance violation")
 	}
 
@@ -112,6 +114,19 @@ func checkTrivial() (bool, error) {
 	}
 
 	return strings.Contains(strings.ToLower(out.String()), trivialFlag), nil
+}
+
+// isGovernanceRecord reports whether a changed file is an active OpenSpec
+// record that satisfies the gate. Both layouts are accepted: the flat
+// `openspec/proposals/*.md` layout (used by the current sprint workflow) and
+// the `openspec/changes/<id>/` layout. Archived records (any path containing
+// `/archive/`) do not count — archiving is a past decision, not a record for
+// the change under review.
+func isGovernanceRecord(path string) bool {
+	if strings.Contains(path, "/archive/") {
+		return false
+	}
+	return strings.HasPrefix(path, proposalDir) || strings.HasPrefix(path, changeDir)
 }
 
 func isCritical(path string) bool {

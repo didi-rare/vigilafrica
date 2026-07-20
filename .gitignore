@@ -39,3 +39,10 @@ vigil-demo-data/
 # Local browser/demo verification artifacts
 .chrome-demo-*/
 web-vite-demo*.log
+
+# Sensitive security working notes — keep LOCAL only, never commit to the
+# public repo. priority-fixes.md is the live audit queue (attack paths +
+# unverified fixes); docs/security/private/ is for any future sensitive notes.
+# Public, non-sensitive security docs (e.g. api-docs-policy.md) stay tracked.
+docs/security/priority-fixes.md
+docs/security/private/

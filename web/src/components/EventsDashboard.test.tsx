@@ -160,7 +160,9 @@ describe('EventsDashboard', () => {
     renderWithProviders(<EventsDashboard />)
 
     await screen.findByRole("heading", { level: 3, name: /Lagos Flood 42/i })
-    await user.selectOptions(screen.getByLabelText(/filter by country/i), 'Ghana')
+    // The filters are now the custom <Select> listbox: open it, then pick the option.
+    await user.click(screen.getByRole('combobox', { name: /filter by country/i }))
+    await user.click(screen.getByRole('option', { name: 'Ghana' }))
 
     await waitFor(() => {
       expect(mockFetchEvents).toHaveBeenLastCalledWith(undefined, undefined, 'Ghana')
