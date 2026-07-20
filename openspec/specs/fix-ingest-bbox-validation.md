@@ -133,3 +133,23 @@ DELETE FROM events WHERE NOT (
   (longitude BETWEEN 2.0 AND 15.0 AND latitude BETWEEN 4.0 AND 14.0) OR
   (longitude BETWEEN -3.5 AND 1.2 AND latitude BETWEEN 4.5 AND 11.2));
 ```
+
+> **✅ EXECUTED 2026-07-20 — as migration `000011_purge_out_of_bbox_events`, not a manual `psql` run.**
+>
+> Staging verification after the guard went live confirmed this step was still outstanding: `EONET_20263` (Wakulla, Florida) was **still being served** by `GET /v1/events` with `country_name: null`, ingested `16:19:42` — i.e. before the guard deployed at 16:37. The guard itself was confirmed working: the 19:02 ingest run did not refresh that row's `ingested_at`, so the event was correctly skipped on re-ingest. The guard blocks new inserts but never deletes what predates it.
+>
+> The predicate above is used **verbatim**, but delivered as a migration rather than a manual DELETE so it executes automatically on API startup (`developers-go.md` §11.3) in staging *and* production, instead of depending on an operator remembering to run `psql` against two databases.
+>
+> Verified against a real Postgres 16 before shipping, with a fixture covering every boundary case:
+>
+> | row | outcome |
+> | --- | --- |
+> | `EONET_20263` Wakulla Florida | **deleted** ✅ |
+> | far-Pacific control point | **deleted** ✅ |
+> | Cameroon + Benin events *inside* the NG bbox | kept ✅ (guard drops out-of-box, not out-of-country) |
+> | `EONET_20881` Lagos flood | kept ✅ |
+> | Ghana event inside GH bbox | kept ✅ |
+> | NG bbox SW `(2.0, 4.0)` and NE `(15.0, 14.0)` corners | kept ✅ (`BETWEEN` is inclusive) |
+> | Polygon row with NULL lat/lon | **kept** ✅ |
+>
+> The NULL case is load-bearing and deliberate: under SQL three-valued logic the predicate evaluates to NULL for rows with NULL coordinates, `WHERE` does not match NULL, so unverifiable-geometry events are preserved — mirroring the ingestor's `EventsUnverifiedGeom` decision to store geometry it cannot verify rather than discard data. Re-running the migration yields `DELETE 0` (idempotent, §11.4), and the audit query then returns `0`.
