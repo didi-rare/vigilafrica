@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.3](https://github.com/didi-rare/vigilafrica/compare/v1.3.2...v1.3.3) (2026-07-21)
+
+
+### Bug Fixes
+
+* **deps:** clear GO-2026-5970 (x/text) + GHSA-4c8g-83qw-93j6 (fast-uri) to unblock CI ([#161](https://github.com/didi-rare/vigilafrica/issues/161)) ([082be5f](https://github.com/didi-rare/vigilafrica/commit/082be5fc776a1304089e819ad558c539e848b455))
+
 ## [1.3.2](https://github.com/didi-rare/vigilafrica/compare/v1.3.1...v1.3.2) (2026-07-21)
 
 
