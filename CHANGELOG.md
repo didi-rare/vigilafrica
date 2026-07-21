@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.3.2](https://github.com/didi-rare/vigilafrica/compare/v1.3.1...v1.3.2) (2026-07-21)
+
+
+### Bug Fixes
+
+* **db:** purge events stored before the bbox containment guard existed ([7620eb3](https://github.com/didi-rare/vigilafrica/commit/7620eb39bcacdde7bc2482456c324d379812288d))
+* **db:** purge events stored before the bbox containment guard existed ([0ac7361](https://github.com/didi-rare/vigilafrica/commit/0ac736165eecb8eec0f17907c0d7c0c5861100e1))
+* **enrich:** label border-spillover events by country (ADM0 fallback) ([b81e783](https://github.com/didi-rare/vigilafrica/commit/b81e78367f701224a63f82e7fc804273372464f6))
+* **enrich:** label border-spillover events by country (ADM0 fallback) ([9da4336](https://github.com/didi-rare/vigilafrica/commit/9da4336602b8c20f887386e18241097a34adc6b2))
+* **ingestor:** address openspec-review findings on EONET closed-event fix ([f539a43](https://github.com/didi-rare/vigilafrica/commit/f539a43f67be8279d91a4265321d7ae6ecc13cf0))
+* **ingestor:** query EONET for closed events so floods are ingested ([a661045](https://github.com/didi-rare/vigilafrica/commit/a6610454c05c650c771208097a02f5eac0c8585e))
+* **ingestor:** query EONET for closed events so floods are ingested ([a9f599c](https://github.com/didi-rare/vigilafrica/commit/a9f599c206798c4039cddeea9adc203888ae5ddb))
+* **ingest:** report unverified geometry per run, add border-case tests ([991a309](https://github.com/didi-rare/vigilafrica/commit/991a30970113ce2065b5a5d6d73a027cc773306a))
+* **ingest:** validate event coordinates against the country bbox ([53e7e6b](https://github.com/didi-rare/vigilafrica/commit/53e7e6bf0951663249b2965ffecce236b70093e2))
+* **ingest:** validate event coordinates against the country bbox ([93ba370](https://github.com/didi-rare/vigilafrica/commit/93ba370482e26ae238d82e5aec2703c4835d8529))
+* **web:** add SPA rewrite and per-env robots.txt + sitemap.xml ([acc973f](https://github.com/didi-rare/vigilafrica/commit/acc973fee14ad590acce718f08d918a0bf537f3d))
+* **web:** add SPA rewrite and per-env robots.txt + sitemap.xml ([51962f4](https://github.com/didi-rare/vigilafrica/commit/51962f43018e18370b22c8d1e71faa1d51225696))
+* **web:** resolve brace-expansion npm audit advisory ([7c6d76c](https://github.com/didi-rare/vigilafrica/commit/7c6d76c355f80e053ca655b03e0744bc935f5e68))
+* **web:** resolve brace-expansion npm audit advisory (GHSA-3jxr-9vmj-r5cp) ([7fe6458](https://github.com/didi-rare/vigilafrica/commit/7fe6458599d44081553f48c1b0bb726e6046eeda))
+
 ## [1.3.1](https://github.com/didi-rare/vigilafrica/compare/v1.3.0...v1.3.1) (2026-07-18)
 
 
