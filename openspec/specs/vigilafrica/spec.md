@@ -21,11 +21,29 @@ observed returning events wholly outside the requested box (a Wakulla, Florida
 wildfire against the Nigeria bounding box), which then reached production with
 no country attribution.
 
+Status coverage SHALL be obtained with **two separate upstream requests per
+country per run** — an unwindowed `status=open` query and a `status=closed`
+query bounded to a recent-days window. The EONET v3 API accepts only `open`,
+`closed`, or `all` for `status` and silently degrades an unrecognised value to
+open-only, so the two concerns cannot be expressed in a single request.
+Long-lived events (wildfires can stay open for years) SHALL NOT be constrained
+by a days window, while recently-closed events — floods typically close within
+~48 hours — SHALL be captured by the windowed closed query.
+
 #### Scenario: Scheduled event polling
 
 - **WHEN** the ingestor worker runs on its configured interval (default 60 minutes)
-- **THEN** it SHALL fetch open events from EONET filtered to each configured country bounding box
+- **THEN** it SHALL fetch events from EONET filtered to each configured country bounding box
+- **AND** the open-status request SHALL carry no days window, so long-burning events are never dropped
 - **AND** store each event with its ingested timestamp and source identifier
+
+#### Scenario: Recently-closed events are ingested
+
+- **WHEN** the ingestor polls a configured country
+- **THEN** it SHALL issue a second request for events with `status=closed`, bounded to a recent-days window (30 days)
+- **AND** it SHALL union those results with the open-query results
+- **AND** an event returned by both requests SHALL be persisted once, de-duplicated on its source identifier
+- **AND** the fetched-event count SHALL be treated as records seen upstream, not a distinct-event count
 
 #### Scenario: Event outside the country bounding box is rejected
 
