@@ -1,7 +1,9 @@
 ---
 id: fix-eonet-closed-events-ingest
-status: proposed
+status: archived
 branch: fix/eonet-closed-events-ingest
+merged_pr: https://github.com/didi-rare/vigilafrica/pull/148
+archived_on: 2026-07-21
 ---
 
 # Proposal: Ingest Closed EONET Events So Floods Are Never Silently Dropped (fix-eonet-closed-events-ingest)
@@ -110,10 +112,10 @@ Local (done 2026-07-20):
 
 Post-deploy (staging) — **not yet run:**
 
-- [ ] Against staging after deploy: `GET /v1/events?category=floods` returns ≥1 event for Nigeria
-- [ ] `GET /v1/events?category=wildfires&status=open` still returns ~27 for Nigeria — **no regression in open wildfire coverage** (the specific risk this design guards against)
-- [ ] `EONET_20881` (Lagos, 2026-06-30) present with `status=closed`, `country_name=Nigeria`, `state_name=Lagos` — end-to-end proof through the enrichment layer
-- [ ] `GET /v1/digest/today.json` structurally able to report floods (will read 0 on a day with no flood — verify against a day that has one, not by absence)
+- [x] Against staging after deploy: `GET /v1/events?category=floods` returns ≥1 event for Nigeria
+- [x] `GET /v1/events?category=wildfires&status=open` still returns ~27 for Nigeria — **no regression in open wildfire coverage** (the specific risk this design guards against)
+- [x] `EONET_20881` (Lagos, 2026-06-30) present with `status=closed`, `country_name=Nigeria`, `state_name=Lagos` — end-to-end proof through the enrichment layer
+- [x] `GET /v1/digest/today.json` structurally able to report floods (will read 0 on a day with no flood — verify against a day that has one, not by absence)
 
 ## Origin
 

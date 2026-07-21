@@ -1,7 +1,9 @@
 ---
 id: fix-ingest-bbox-validation
-status: proposed
-branch: tbd
+status: archived
+branch: fix/ingest-bbox-validation
+merged_pr: https://github.com/didi-rare/vigilafrica/pull/146
+archived_on: 2026-07-21
 ---
 
 # Proposal: Validate ingested EONET event coordinates against the query bbox (fix-ingest-bbox-validation)
@@ -66,11 +68,11 @@ Then confirm the next hourly ingest does not re-add it.
 ## Verification
 
 After the fix deploys:
-- [ ] `WHERE NOT(bbox)` query on `prod-db` returns **0 rows** (after the one-time DELETE).
-- [ ] A full ingest cycle logs the skip for EONET_20263 (or whatever the current leaked id is) and does not upsert it.
-- [ ] No new empty-`country_name` rows appear.
-- [ ] Legitimate Cameroon/Benin/Niger border events (inside the box) are still ingested — the guard must not over-reject.
-- [ ] The public `vigilafrica.org` feed shows only African events.
+- [x] `WHERE NOT(bbox)` query on `prod-db` returns **0 rows** (after the one-time DELETE).
+- [x] A full ingest cycle logs the skip for EONET_20263 (or whatever the current leaked id is) and does not upsert it.
+- [x] No new empty-`country_name` rows appear.
+- [x] Legitimate Cameroon/Benin/Niger border events (inside the box) are still ingested — the guard must not over-reject.
+- [x] The public `vigilafrica.org` feed shows only African events.
 
 ## Origin
 
