@@ -1,0 +1,15 @@
+-- no-op: irreversible, see header of 000011_purge_out_of_bbox_events.up.sql.
+--
+-- The deleted rows were events whose coordinates fall outside every configured
+-- country bounding box — data the ingestor should never have stored, and which
+-- the withinBBox guard now rejects at insert time. Restoring them would
+-- reintroduce the defect this migration cleans up.
+--
+-- Recovery is possible without a down migration in any case: events are
+-- re-ingestable from EONET by source_id, and any row deleted here would be
+-- rejected again by the guard on the next run — which is the point.
+--
+-- If a specific deleted row is genuinely needed (e.g. to investigate why EONET
+-- returned an out-of-bbox event), fetch it from the upstream API directly:
+--   https://eonet.gsfc.nasa.gov/api/v3/events/<source_id>
+-- rather than re-inserting it into the events table.

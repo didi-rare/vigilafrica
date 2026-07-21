@@ -74,9 +74,17 @@ ALERT_FROM_EMAIL=VigilAfrica Alerts <alerts@vigilafrica.org>
 ALERTS_TO=ops@example.com,maintainer@example.com
 ALERT_STALENESS_THRESHOLD_HOURS=2
 ALERT_STALENESS_CHECK_INTERVAL_MIN=15
-MAXMIND_ACCOUNT_ID=<optional>
-MAXMIND_LICENSE_KEY=<optional>
+MAXMIND_ACCOUNT_ID=<maxmind-account-id>
+MAXMIND_LICENSE_KEY=<per-environment-license-key>
 ```
+
+The `MAXMIND_*` values are **required for `/v1/context` ("near me") to work**, not
+truly optional: the `geoipupdate` sidecar needs them to download `GeoLite2-City.mmdb`.
+Left unset, the compose files fall back to placeholders, the sidecar crash-loops,
+the database is never written, and `/v1/context` returns empty locations while the
+API still reports healthy — so the failure is silent. Use a **separate license key
+per environment** (one shared AccountID) so staging and production can be revoked
+independently. Register free at <https://www.maxmind.com/en/geolite2/signup>.
 
 `APP_ENV` does not need to appear in these `.env` files: `docker-compose.staging.yml`
 and `docker-compose.prod.yml` hardcode it (`staging` / `production` respectively) so

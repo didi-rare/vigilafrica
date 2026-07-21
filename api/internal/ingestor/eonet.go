@@ -22,6 +22,12 @@ const (
 	// responses (chore-eonet-retry-backoff). Distinct from the 429/503
 	// retry budget which uses maxRetries (=3) inside runIngest.
 	maxTransientRetries = 2
+	// closedEventWindowDays bounds the days= window on the status=closed
+	// request. EONET flood events close within ~48h, so 30 days is ~15x
+	// margin and survives a multi-day ingestion outage without data loss.
+	// Applied ONLY to the closed query — the open query is deliberately
+	// unwindowed (see runIngest). See fix-eonet-closed-events-ingest.
+	closedEventWindowDays = 30
 )
 
 // transientRetryDelays are the fixed waits before retry attempts 1 and 2 on
@@ -79,11 +85,33 @@ var DefaultCountries = []CountryConfig{
 	{Code: "GH", Name: "Ghana", BBox: [4]float64{-3.5, 4.5, 1.2, 11.2}},
 }
 
+// withinBBox reports whether (lon, lat) falls inside bbox, which is
+// [min_lon, min_lat, max_lon, max_lat] in WGS84 (EPSG:4326).
+//
+// Bounds are inclusive, matching the semantics of EONET's own bbox query
+// parameter. Longitudes may legitimately be negative (Ghana's min_lon is -3.5),
+// so no sign assumptions are made.
+func withinBBox(bbox [4]float64, lon, lat float64) bool {
+	return lon >= bbox[0] && lon <= bbox[2] && lat >= bbox[1] && lat <= bbox[3]
+}
+
 // IngestResult holds the outcome of a single ingestion run for one country.
 type IngestResult struct {
 	EventsFetched int
 	EventsStored  int
-	Run           *models.IngestionRun
+	// EventsSkippedBBox counts events dropped because their resolved point fell
+	// outside the queried country's bounding box. Tracked separately from the
+	// EventsFetched-EventsStored delta, which also absorbs normalise failures,
+	// missing geometry, and upsert failures — so it cannot indicate an upstream
+	// bbox leak on its own.
+	EventsSkippedBBox int
+	// EventsUnverifiedGeom counts events stored without a containment check
+	// because their geometry yielded no point (Polygon). Reported once per run
+	// rather than per event: a per-event line would be noise at Info, and Debug
+	// is invisible in production (LOG_LEVEL defaults to info) — which would
+	// defeat the point of recording it at all.
+	EventsUnverifiedGeom int
+	Run                  *models.IngestionRun
 }
 
 // Ingest pulls events from NASA EONET for the given country, upserts them
@@ -138,6 +166,8 @@ func Ingest(ctx context.Context, repo database.Repository, country CountryConfig
 			"duration_ms", duration.Milliseconds(),
 			"events_fetched", result.EventsFetched,
 			"events_stored", result.EventsStored,
+			"events_skipped_bbox", result.EventsSkippedBBox,
+			"events_unverified_geom", result.EventsUnverifiedGeom,
 			"err", ingestErr,
 		)
 		return result, ingestErr
@@ -149,11 +179,31 @@ func Ingest(ctx context.Context, repo database.Repository, country CountryConfig
 		"duration_ms", duration.Milliseconds(),
 		"events_fetched", result.EventsFetched,
 		"events_stored", result.EventsStored,
+		"events_skipped_bbox", result.EventsSkippedBBox,
+		"events_unverified_geom", result.EventsUnverifiedGeom,
 	)
 	return result, nil
 }
 
 // runIngest is the core fetch-normalise-upsert loop for a single country.
+//
+// EONET is queried TWICE per country and the results unioned:
+//
+//  1. status=open  — deliberately WITHOUT a days window
+//  2. status=closed&days=30
+//
+// This is not arbitrary. EONET accepts only open|closed|all for status; the
+// previous single request used the invalid value "open,closed", which EONET
+// silently degraded to open-only. Because every EONET flood event closes
+// within ~48h, floods were never ingested at all (fix-eonet-closed-events-ingest).
+//
+// The obvious repair — status=all&days=N — regresses wildfires: they stay open
+// for months (the oldest open Nigeria wildfire is dated 2024-10-24), and days
+// filters on event date, so any practical window drops them. EONET cannot
+// express "open OR closed-within-N-days" in one request, hence two.
+//
+// Overlap between the two responses is harmless: UpsertEvent is idempotent on
+// source_id (F-013).
 func runIngest(ctx context.Context, repo database.Repository, country CountryConfig) (*IngestResult, error) {
 	result := &IngestResult{}
 
@@ -161,9 +211,35 @@ func runIngest(ctx context.Context, repo database.Repository, country CountryCon
 		country.BBox[0], country.BBox[1],
 		country.BBox[2], country.BBox[3],
 	)
-	reqURL := fmt.Sprintf("%s?bbox=%s&category=floods,wildfires&status=open,closed", eonetURL, bbox)
 
-	slog.Info("ingestion: fetching from EONET", "country", country.Code, "url", reqURL)
+	// No days window on the open query — long-burning wildfires must not be dropped.
+	openURL := fmt.Sprintf("%s?bbox=%s&category=floods,wildfires&status=open", eonetURL, bbox)
+	closedURL := fmt.Sprintf("%s?bbox=%s&category=floods,wildfires&status=closed&days=%d",
+		eonetURL, bbox, closedEventWindowDays)
+
+	for _, reqURL := range []string{openURL, closedURL} {
+		// §3.6 — abort between requests rather than issuing the second one
+		// against an already-cancelled context.
+		if err := ctx.Err(); err != nil {
+			return result, err
+		}
+		body, err := fetchEONET(ctx, reqURL, country.Code)
+		if err != nil {
+			return result, err
+		}
+		if err := processEONETBody(ctx, repo, country, body, result); err != nil {
+			return result, err
+		}
+	}
+
+	return result, nil
+}
+
+// fetchEONET performs a single EONET request with the full retry budget:
+// 2 transient retries (5s/15s) for network errors and 5xx-non-503, and a
+// 3-retry 429/503 budget honouring the server's retry_after hint.
+func fetchEONET(ctx context.Context, reqURL string, countryCode string) ([]byte, error) {
+	slog.Info("ingestion: fetching from EONET", "country", countryCode, "url", reqURL)
 
 	var body []byte
 	var reqErr error
@@ -174,7 +250,7 @@ func runIngest(ctx context.Context, repo database.Repository, country CountryCon
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 		if err != nil {
-			return result, fmt.Errorf("failed to create http request: %w", err)
+			return nil, fmt.Errorf("failed to create http request: %w", err)
 		}
 		req.Header.Set("Accept", "application/json")
 		req.Header.Set("User-Agent", "VigilAfrica-Ingestor")
@@ -184,11 +260,11 @@ func runIngest(ctx context.Context, repo database.Repository, country CountryCon
 			// Network error (TCP stall, connection reset, DNS, request timeout).
 			// Retry up to maxTransientRetries with fixed 5s/15s delays.
 			if transientAttempt >= maxTransientRetries {
-				return result, fmt.Errorf("http request failed after %d retries: %w", maxTransientRetries, reqErr)
+				return nil, fmt.Errorf("http request failed after %d retries: %w", maxTransientRetries, reqErr)
 			}
 			sleepDuration := transientRetryDelays[transientAttempt]
 			slog.Warn("ingestion: transient error, retrying",
-				"country", country.Code,
+				"country", countryCode,
 				"cause", "network-error",
 				"attempt", transientAttempt+1,
 				"sleep_sec", int(sleepDuration.Seconds()),
@@ -196,7 +272,7 @@ func runIngest(ctx context.Context, repo database.Repository, country CountryCon
 			)
 			transientAttempt++
 			if err := eonetSleepFn(ctx, sleepDuration); err != nil {
-				return result, err
+				return nil, err
 			}
 			continue
 		}
@@ -205,7 +281,7 @@ func runIngest(ctx context.Context, repo database.Repository, country CountryCon
 			body, reqErr = readLimitedResponseBody(resp.Body, maxEONETResponseBytes)
 			resp.Body.Close()
 			if reqErr != nil {
-				return result, fmt.Errorf("failed to read response body: %w", reqErr)
+				return nil, fmt.Errorf("failed to read response body: %w", reqErr)
 			}
 			break
 		}
@@ -219,7 +295,7 @@ func runIngest(ctx context.Context, repo database.Repository, country CountryCon
 			if attempt == maxRetries {
 				// The outer loop runs attempts 0..maxRetries inclusive, so reaching this
 				// branch means we already tried maxRetries+1 times. Report that honestly.
-				return result, fmt.Errorf("unexpected EONET status after %d attempts: %d", maxRetries+1, resp.StatusCode)
+				return nil, fmt.Errorf("unexpected EONET status after %d attempts: %d", maxRetries+1, resp.StatusCode)
 			}
 
 			var rateLimitData struct {
@@ -230,21 +306,21 @@ func runIngest(ctx context.Context, repo database.Repository, country CountryCon
 			sleepSeconds := 5 * (1 << attempt)
 			if err := json.Unmarshal(bodyBytes, &rateLimitData); err == nil && rateLimitData.RetryAfter > 0 {
 				if rateLimitData.RetryAfter > maxRetryAfterSeconds {
-					return result, fmt.Errorf("EONET retry_after %d exceeds maximum %d seconds", rateLimitData.RetryAfter, maxRetryAfterSeconds)
+					return nil, fmt.Errorf("EONET retry_after %d exceeds maximum %d seconds", rateLimitData.RetryAfter, maxRetryAfterSeconds)
 				}
 				// Dynamic backoff: honour the server's hint + 5s buffer for clock drift.
 				sleepSeconds = rateLimitData.RetryAfter + 5
 			}
 
 			slog.Warn("ingestion: high demand, retrying",
-				"country", country.Code,
+				"country", countryCode,
 				"status", resp.StatusCode,
 				"attempt", attempt+1,
 				"sleep_sec", sleepSeconds,
 			)
 
 			if err := eonetSleepFn(ctx, time.Duration(sleepSeconds)*time.Second); err != nil {
-				return result, err
+				return nil, err
 			}
 			continue
 		}
@@ -254,11 +330,11 @@ func runIngest(ctx context.Context, repo database.Repository, country CountryCon
 		if resp.StatusCode >= 500 && resp.StatusCode < 600 {
 			resp.Body.Close()
 			if transientAttempt >= maxTransientRetries {
-				return result, fmt.Errorf("unexpected EONET status %d after %d transient retries", resp.StatusCode, maxTransientRetries)
+				return nil, fmt.Errorf("unexpected EONET status %d after %d transient retries", resp.StatusCode, maxTransientRetries)
 			}
 			sleepDuration := transientRetryDelays[transientAttempt]
 			slog.Warn("ingestion: transient error, retrying",
-				"country", country.Code,
+				"country", countryCode,
 				"cause", "server-error-5xx",
 				"status", resp.StatusCode,
 				"attempt", transientAttempt+1,
@@ -266,30 +342,50 @@ func runIngest(ctx context.Context, repo database.Repository, country CountryCon
 			)
 			transientAttempt++
 			if err := eonetSleepFn(ctx, sleepDuration); err != nil {
-				return result, err
+				return nil, err
 			}
 			continue
 		}
 
 		// 4xx (non-429) and any other unexpected status — no retry.
 		resp.Body.Close()
-		return result, fmt.Errorf("unexpected EONET status: %d", resp.StatusCode)
+		return nil, fmt.Errorf("unexpected EONET status: %d", resp.StatusCode)
 	}
 
+	return body, nil
+}
+
+// processEONETBody decodes one EONET response and normalises + upserts each
+// event into repo, accumulating counts into result. Called once per request in
+// the open/closed union, so both counters sum across the two responses.
+//
+// The two result sets are disjoint in practice — an event is either open or
+// closed, never both (verified against the live Nigeria bbox: 27 open, 1
+// closed, empty intersection). The only overlap window is an event closing
+// upstream between the two requests, in which case UpsertEvent's idempotency
+// on source_id (F-013) still stores it once, though EventsFetched would count
+// it twice. Treat EventsFetched as "records seen upstream", not a distinct count.
+func processEONETBody(
+	ctx context.Context,
+	repo database.Repository,
+	country CountryConfig,
+	body []byte,
+	result *IngestResult,
+) error {
 	var root struct {
 		Events []normalizer.RawEONETEvent `json:"events"`
 	}
 	if err := json.Unmarshal(body, &root); err != nil {
-		return result, fmt.Errorf("failed to decode EONET JSON: %w", err)
+		return fmt.Errorf("failed to decode EONET JSON: %w", err)
 	}
 
-	result.EventsFetched = len(root.Events)
-	slog.Info("ingestion: events fetched", "country", country.Code, "count", result.EventsFetched)
+	result.EventsFetched += len(root.Events)
+	slog.Info("ingestion: events fetched", "country", country.Code, "count", len(root.Events))
 
 	for _, rawEvt := range root.Events {
 		rawEvtBytes, _ := json.Marshal(rawEvt)
 		if len(rawEvtBytes) > maxEONETEventRawPayloadBytes {
-			return result, fmt.Errorf("EONET event %s raw payload exceeds maximum %d bytes", rawEvt.ID, maxEONETEventRawPayloadBytes)
+			return fmt.Errorf("EONET event %s raw payload exceeds maximum %d bytes", rawEvt.ID, maxEONETEventRawPayloadBytes)
 		}
 
 		event, geoJSON, err := normalizer.Normalize(rawEvt, rawEvtBytes)
@@ -302,6 +398,39 @@ func runIngest(ctx context.Context, repo database.Repository, country CountryCon
 			continue
 		}
 
+		// Containment guard: EONET's server-side bbox filter is a hint, not a
+		// guarantee — it has been observed returning events wholly outside the
+		// requested box (a Florida wildfire against the Nigeria bbox). Validate
+		// client-side so foreign events never reach the database.
+		if event.Longitude != nil && event.Latitude != nil {
+			if !withinBBox(country.BBox, *event.Longitude, *event.Latitude) {
+				slog.Warn("ingestion: skipping event outside country bbox",
+					"country", country.Code,
+					"source_id", event.SourceID,
+					"lon", *event.Longitude,
+					"lat", *event.Latitude,
+				)
+				result.EventsSkippedBBox++
+				continue
+			}
+		} else {
+			// Containment is unverifiable: the normalizer resolves lon/lat only for
+			// Point geometry and leaves them nil for Polygon. Such events are stored
+			// deliberately — we do not drop data we cannot verify — but the fact is
+			// counted so a polygon-shaped upstream leak stays discoverable in the
+			// run summary. Per-event detail stays at Debug for local diagnosis.
+			result.EventsUnverifiedGeom++
+			geomType := ""
+			if event.GeomType != nil {
+				geomType = *event.GeomType
+			}
+			slog.Debug("ingestion: storing event without bbox verification",
+				"country", country.Code,
+				"source_id", event.SourceID,
+				"geom_type", geomType,
+			)
+		}
+
 		// F-013: upsert on source_id — idempotent, no duplicates
 		if err := repo.UpsertEvent(ctx, event, geoJSON); err != nil {
 			slog.Error("ingestion: upsert failed", "country", country.Code, "source_id", event.SourceID, "err", err)
@@ -310,7 +439,7 @@ func runIngest(ctx context.Context, repo database.Repository, country CountryCon
 		result.EventsStored++
 	}
 
-	return result, nil
+	return nil
 }
 
 func readLimitedResponseBody(r io.Reader, maxBytes int64) ([]byte, error) {
