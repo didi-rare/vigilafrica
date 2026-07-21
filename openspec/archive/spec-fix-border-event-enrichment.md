@@ -1,8 +1,9 @@
-## MODIFIED Requirements
+# Spec Delta: Geospatial Event Enrichment — ADM0 country fallback (fix-border-event-enrichment)
 
-> Delta only. Merged into `openspec/specs/vigilafrica/spec.md` at
-> `/openspec-archive` time, per the `feature-impact-categories` convention — the
-> canonical spec is not edited by this change.
+**Status:** Archived — implemented and merged via PR #152; the delta below was merged into `openspec/specs/vigilafrica/spec.md` (Requirement: Geospatial Event Enrichment) and archived 2026-07-21.
+**Companion:** [`openspec/archive/proposal-fix-border-event-enrichment.md`](./proposal-fix-border-event-enrichment.md) (rationale, boundary-data scope, risks).
+
+## MODIFIED Requirements
 
 ### Requirement: Geospatial Event Enrichment
 
