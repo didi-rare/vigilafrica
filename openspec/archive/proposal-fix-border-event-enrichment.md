@@ -1,7 +1,9 @@
 ---
 id: fix-border-event-enrichment
-status: proposed
+status: archived
 branch: fix/border-event-enrichment
+merged_pr: https://github.com/didi-rare/vigilafrica/pull/152
+archived_on: 2026-07-21
 ---
 
 # Proposal: Label neighbour-country border events (fix-border-event-enrichment)

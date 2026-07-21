@@ -1,7 +1,9 @@
 ---
 id: fix-vercel-spa-fallback
-status: proposed
-branch: tbd
+status: archived
+branch: fix/seo-spa-rewrite-and-robots
+merged_pr: https://github.com/didi-rare/vigilafrica/pull/145
+archived_on: 2026-07-21
 ---
 
 # Proposal: Add Vercel SPA Fallback Rewrite for Deep-Link Routes (fix-vercel-spa-fallback)
@@ -58,11 +60,11 @@ For everything else (`/`, `/events/<id>`, future top-level routes), Vercel serve
 ## Verification
 
 After the change:
-- [ ] `curl -sI https://vigilafrica.org/events/<any-id>` returns `HTTP/2 200` with `content-type: text/html`
-- [ ] Same for `https://staging.vigilafrica.org/events/<any-id>`
-- [ ] Loading `/events/<id>` directly in a browser renders the event detail page (same as click-through from dashboard)
-- [ ] `curl https://vigilafrica.org/assets/index-<hash>.js` still serves the JS bundle (not rewritten to index.html — would be catastrophic)
-- [ ] Browser refresh on `/events/<id>` keeps the page (no 404 flash)
+- [x] `curl -sI https://vigilafrica.org/events/<any-id>` returns `HTTP/2 200` with `content-type: text/html`
+- [x] Same for `https://staging.vigilafrica.org/events/<any-id>`
+- [x] Loading `/events/<id>` directly in a browser renders the event detail page (same as click-through from dashboard)
+- [x] `curl https://vigilafrica.org/assets/index-<hash>.js` still serves the JS bundle (not rewritten to index.html — would be catastrophic)
+- [x] Browser refresh on `/events/<id>` keeps the page (no 404 flash)
 
 ## Origin
 
