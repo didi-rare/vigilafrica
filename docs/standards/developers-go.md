@@ -295,11 +295,15 @@ json.NewEncoder(w).Encode(response)
 **§6.7 — Middleware is `func(http.Handler) http.Handler` and is composed in `cmd/server/main.go`.**
 Current chain, outermost first:
 ```go
-handlers.SecurityHeadersMiddleware(handlers.CORSMiddleware(handlers.GlobalRateLimitMiddleware(mux)))
+handlers.RecoveryMiddleware(
+    handlers.SecurityHeadersMiddleware(
+        handlers.CORSMiddleware(
+            handlers.GlobalRateLimitMiddleware(mux))))
 ```
 plus a per-`/v1/` `handlers.RateLimitMiddleware` and a response-cache middleware on `GET /v1/events`. Implementations live in `internal/handlers/middleware.go`.
-*Why this order:* security headers outermost so they are set even on rejected requests; CORS before rate-limiting so preflights get correct headers; the global limiter protects everything, with the tighter `/v1/` limiter nested inside.
-*Not present:* there is **no** recovery middleware and **no** access-log middleware. §4.4 (never panic) is therefore load-bearing rather than backstopped, and §8.7's "middleware handles the access log" describes a target, not current behaviour. Adding a recovery middleware is an open item.
+*Why this order:* recovery outermost so it also catches panics raised inside the other middleware (the security headers it wraps are already on the `ResponseWriter` when a recovered 500 is written, so they still apply); CORS before rate-limiting so preflights get correct headers; the global limiter protects everything, with the tighter `/v1/` limiter nested inside.
+*On recovery specifically:* §4.4 (never panic) still stands — `RecoveryMiddleware` is a backstop, not permission. It re-panics `http.ErrAbortHandler` (the documented way to abort a connection deliberately) and will not overwrite a response that is already framed. Note the stdlib's own per-connection recovery is **not** a substitute: it closes the connection without a response and bypasses slog entirely.
+*Still not present:* there is **no** access-log middleware, so §8.7's "middleware handles the access log" describes a target, not current behaviour.
 
 **§6.8 — Never block in a handler on an unbounded operation. Wrap long calls in `context.WithTimeout` derived from `r.Context()`.**
 *Why:* A slow downstream (EONET fetch, slow query) shouldn't hold an HTTP goroutine indefinitely.
@@ -405,7 +409,7 @@ defer m.mu.Unlock()
 ```go
 type EventHandler struct { repo database.Repository; log *slog.Logger }
 ```
-⚠️ **Partially adopted.** `NewDigestHandler` injects a logger; `handlers/enrichment_stats.go` and `handlers/health.go` call package-level `slog` directly, and `alert/resend.go`, `alert/watchdog.go` and `digest/scheduler.go` fall back to `slog.Default()`. `EventHandler` holds no logger at all — so its `500` paths currently respond without logging anything, which also breaks §4.5. Wiring a logger into `EventHandler` is the highest-value instance to fix.
+⚠️ **Partially adopted.** `NewDigestHandler` and `NewEventHandler` both inject (nil → `slog.Default()`, so tests can pass nil). Still outstanding: `handlers/enrichment_stats.go` and `handlers/health.go` call package-level `slog` directly, and `alert/resend.go`, `alert/watchdog.go` and `digest/scheduler.go` fall back to `slog.Default()`. Those all *do* log, so they are a consistency gap rather than a blind spot — unlike the `EventHandler` case, which responded `500` without logging anything until it was fixed.
 
 **§8.7 — Request handlers log at most once per request outcome (success at Debug, failure at Error). Middleware handles the access log.**
 *Why:* Double-logging (middleware + handler) doubles volume and cost without adding signal.

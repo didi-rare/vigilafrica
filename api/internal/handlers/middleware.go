@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"container/list"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
 	"os"
+	"runtime/debug"
 	"strconv"
 	"sync"
 	"time"
@@ -75,6 +77,81 @@ func SecurityHeadersMiddleware(next http.Handler) http.Handler {
 		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()")
 		next.ServeHTTP(w, r)
 	})
+}
+
+// ─── Panic Recovery ───────────────────────────────────────────────────────────
+
+// RecoveryMiddleware turns a panic in any downstream handler into a logged 500
+// instead of a silently dropped connection. It belongs outermost in the chain
+// (see docs/standards/developers-go.md §6.7) so it also covers panics raised
+// inside the other middleware.
+//
+// Why this is needed even though net/http already recovers per-connection:
+// the stdlib's recovery closes the connection WITHOUT a response and prints to
+// the server's error log, not our slog handler. The client sees a dropped
+// request and the panic never reaches our structured logs.
+//
+// §4.4 still stands — handlers must not panic. This is the backstop for when
+// one does anyway (a nil map write, an out-of-range index in a parser).
+func RecoveryMiddleware(next http.Handler) http.Handler {
+	return recoveryMiddlewareWithLogger(nil, next)
+}
+
+// recoveryMiddlewareWithLogger is the injectable form used by tests (§8.6).
+// A nil logger falls back to slog.Default(), mirroring NewDigestHandler.
+func recoveryMiddlewareWithLogger(logger *slog.Logger, next http.Handler) http.Handler {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rw := &recoveryWriter{ResponseWriter: w}
+		defer func() {
+			recovered := recover()
+			if recovered == nil {
+				return
+			}
+			// http.ErrAbortHandler is the documented way for a handler to abort
+			// a connection on purpose. Re-panic so net/http handles it as
+			// intended rather than reporting it as a server fault.
+			if recovered == http.ErrAbortHandler {
+				panic(recovered)
+			}
+
+			logger.Error("panic recovered in handler",
+				"err", fmt.Sprintf("%v", recovered),
+				"method", r.Method,
+				"path", r.URL.Path,
+				"stack", string(debug.Stack()),
+			)
+
+			if rw.wroteHeader {
+				// The status line is already on the wire, so a 500 cannot be
+				// sent. The client gets a truncated body; the log above is the
+				// record of what happened.
+				return
+			}
+			respondWithError(rw, http.StatusInternalServerError, "internal server error")
+		}()
+
+		next.ServeHTTP(rw, r)
+	})
+}
+
+// recoveryWriter records whether the response has been framed, so the recovery
+// path knows whether it can still write a 500.
+type recoveryWriter struct {
+	http.ResponseWriter
+	wroteHeader bool
+}
+
+func (w *recoveryWriter) WriteHeader(code int) {
+	w.wroteHeader = true
+	w.ResponseWriter.WriteHeader(code)
+}
+
+func (w *recoveryWriter) Write(b []byte) (int, error) {
+	w.wroteHeader = true
+	return w.ResponseWriter.Write(b)
 }
 
 // ─── Rate Limiter ─────────────────────────────────────────────────────────────

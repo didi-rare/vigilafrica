@@ -1,7 +1,10 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
+	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -19,6 +22,7 @@ type listEventsTestRepo struct {
 	filters           database.EventFilters
 	statesCalled      bool
 	lastStatesCountry string
+	listErr           error
 }
 
 func (r *listEventsTestRepo) UpsertEvent(context.Context, models.Event, string) error {
@@ -28,6 +32,9 @@ func (r *listEventsTestRepo) UpsertEvent(context.Context, models.Event, string) 
 func (r *listEventsTestRepo) ListEvents(ctx context.Context, filters database.EventFilters) ([]models.Event, int, error) {
 	r.called = true
 	r.filters = filters
+	if r.listErr != nil {
+		return nil, 0, r.listErr
+	}
 	return []models.Event{}, 0, nil
 }
 
@@ -96,7 +103,7 @@ func TestListEventsRejectsNonIntegerPagination(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			repo := &listEventsTestRepo{}
-			handler := NewEventHandler(repo)
+			handler := NewEventHandler(repo, nil)
 			req := httptest.NewRequest(http.MethodGet, "/v1/events?"+tt.query, nil)
 			rec := httptest.NewRecorder()
 
@@ -117,7 +124,7 @@ func TestListEventsRejectsNonIntegerPagination(t *testing.T) {
 
 func TestListEventsUsesValidPagination(t *testing.T) {
 	repo := &listEventsTestRepo{}
-	handler := NewEventHandler(repo)
+	handler := NewEventHandler(repo, nil)
 	req := httptest.NewRequest(http.MethodGet, "/v1/events?limit=25&offset=3", nil)
 	rec := httptest.NewRecorder()
 
@@ -161,7 +168,7 @@ func TestListEventsCountryFilter(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			repo := &listEventsTestRepo{}
-			handler := NewEventHandler(repo)
+			handler := NewEventHandler(repo, nil)
 			req := httptest.NewRequest(http.MethodGet, "/v1/events?"+tt.query, nil)
 			rec := httptest.NewRecorder()
 
@@ -186,5 +193,34 @@ func TestListEventsCountryFilter(t *testing.T) {
 				t.Errorf("filters.Country = %q, want %q", repo.filters.Country, tt.wantCountry)
 			}
 		})
+	}
+}
+
+func TestListEventsLogsRepositoryFailure(t *testing.T) {
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelError}))
+
+	repo := &listEventsTestRepo{listErr: errors.New("connection refused")}
+	handler := NewEventHandler(repo, logger)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/events?category=floods", nil)
+	rec := httptest.NewRecorder()
+
+	handler.ListEvents(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+	// The client must not see the internal cause (§4.5).
+	if strings.Contains(rec.Body.String(), "connection refused") {
+		t.Errorf("response body leaked the internal error: %q", rec.Body.String())
+	}
+	// ...but it must reach the log, or the 500 is invisible in production.
+	logged := buf.String()
+	if !strings.Contains(logged, "list events failed") {
+		t.Errorf("expected log to contain %q, got %q", "list events failed", logged)
+	}
+	if !strings.Contains(logged, "connection refused") {
+		t.Errorf("expected log to contain the underlying error, got %q", logged)
 	}
 }
