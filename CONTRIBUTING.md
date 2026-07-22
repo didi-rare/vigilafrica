@@ -193,7 +193,9 @@ vigilafrica/
 
 All Go code in `api/` follows [`docs/standards/developers-go.md`](docs/standards/developers-go.md) — 11 numbered sections covering package layout, error handling, the repository pattern, HTTP handlers, concurrency, logging, testing, dependencies, and migrations. Reviewers cite specific rules (e.g. `§5.3`) in `/openspec-review` findings, so it's worth reading top-to-bottom before your first PR.
 
-The document is a **living standard**: if you hit a case the rules don't cover, or disagree with one, open a PR updating `developers-go.md` alongside your code change.
+All frontend code in `web/` follows [`docs/standards/developers-react.md`](docs/standards/developers-react.md), structured the same way (15 sections, cited as `§7.5`).
+
+Both documents are **living standards**: if you hit a case the rules don't cover, or disagree with one, open a PR updating them alongside your code change. Each rule states whether it is enforced by CI, by a local-only script, or by review alone — check that before assuming a gate will catch a mistake for you.
 
 ### Branches
 

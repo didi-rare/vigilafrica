@@ -7,8 +7,9 @@
 Each rule has the shape: **statement → why → example (where useful)**. Rules are numbered (`§4.2`) so reviewers can cite them directly.
 
 Cross-references:
-- [ADR-007](../../openspec/specs/vigilafrica/decisions.md) — Go + stdlib `net/http` as the server runtime.
+- [ADR-007](../../openspec/specs/vigilafrica/decisions.md) — Go Backend Package Structure (`cmd/` + `internal/`). Note: ADR-007 does **not** cover the framework choice — the stdlib-`net/http`, no-framework rule (§6.1, §10.7) is this document's own standard and has no ADR behind it.
 - [ADR-009](../../openspec/specs/vigilafrica/decisions.md) — No ORM; raw `pgx` queries in `internal/database/` only.
+- [ADR-008](../../openspec/specs/vigilafrica/decisions.md) — dependency/toolchain advisory handling (§10.11).
 
 ---
 
@@ -35,7 +36,7 @@ Cross-references:
 
 **§1.1 — Binaries live under `cmd/<name>/`; each has one `main.go`.**
 *Why:* Multiple binaries (API server, one-shot ingestor) share internal packages without circular imports. Matches Go community convention.
-Current layout: `cmd/server/main.go`, `cmd/ingest/main.go`. New binaries (e.g. `cmd/backfill/`) follow the same shape.
+Current binaries: `cmd/server/`, `cmd/ingest/`, `cmd/seed/`, `cmd/sentinel/` — each with one `main.go`. New binaries follow the same shape.
 
 **§1.2 — All non-`main` code lives under `internal/`.**
 *Why:* Go's compiler enforces `internal/` as import-private to the module. Prevents external consumers from depending on implementation details and keeps the public surface at zero.
@@ -44,6 +45,7 @@ Current layout: `cmd/server/main.go`, `cmd/ingest/main.go`. New binaries (e.g. `
 
 **§1.3 — One concern per package. Package name matches directory name and is a single lowercase noun.**
 *Why:* `handlers`, `database`, `ingestor`, `normalizer` — readable at import sites (`database.NewRepository`, not `db.NewDB`).
+Current `internal/` packages: `alert` (Resend client + staleness watchdog), `database`, `digest` (daily digest + scheduler), `geoip` (MaxMind reader), `handlers`, `ingestor`, `models`, `normalizer`.
 ❌ `package utils` / `package helpers` / `package common` — grab-bags rot fast.
 ✅ `package normalizer` — one job: EONET → internal model.
 
@@ -60,7 +62,8 @@ Current layout: `cmd/server/main.go`, `cmd/ingest/main.go`. New binaries (e.g. `
 **§2.1 — Read all configuration from environment variables via `os.Getenv`. No config files, no flags for runtime config.**
 *Why:* 12-factor. Works identically in local dev, Docker, and the VPS deployment. Env vars are the only surface ops needs to manage.
 
-**§2.2 — Required env vars must fail fast at startup with `log.Fatal`. Never fall back to a default for secrets or DB URLs.**
+**§2.2 — Required env vars must fail fast at startup. Never fall back to a default for secrets or DB URLs.**
+*Mechanism differs by binary:* `cmd/server/` uses `slog.Error(...)` + `os.Exit(1)` (structured, per §8.1); `cmd/ingest/`, `cmd/seed/` and `cmd/sentinel/` use `log.Fatal` (grandfathered, §8.1). New binaries use the slog form.
 *Why:* A silent default means the wrong database or a missing API key ships to prod unnoticed.
 ❌
 ```go
@@ -78,9 +81,9 @@ if dbURL == "" {
 ```
 
 **§2.3 — Non-secret operational defaults (ports, timeouts, poll intervals) may have safe fallbacks. Document the default in code.**
-*Why:* `PORT=8080` is fine to default; `RESEND_API_KEY` is not.
+*Why:* `API_PORT=8080` is fine to default; `RESEND_API_KEY` is not.
 ```go
-port := os.Getenv("PORT")
+port := os.Getenv("API_PORT")
 if port == "" {
     port = "8080" // default
 }
@@ -90,10 +93,15 @@ if port == "" {
 *Why:* Git history is forever. `.env.example` is the canonical template; `.env` is gitignored.
 
 **§2.5 — Env var names are `SCREAMING_SNAKE_CASE` and scoped by feature prefix where ambiguous.**
-*Why:* `RESEND_API_KEY`, `ALERT_EMAIL_TO`, `DATABASE_URL`, `INGEST_POLL_INTERVAL`. Prefix disambiguates when multiple subsystems have similar concepts.
+*Why:* Prefix disambiguates when multiple subsystems have similar concepts.
+Current server-side vars (read via `os.Getenv` or the `envOrDefault` helper): `DATABASE_URL`, `API_PORT`, `CORS_ORIGIN`, `TRUSTED_PROXY_CIDRS`, `API_DOCS_ENABLED`, `LOG_LEVEL`, `GEOIP_DB_PATH`, `INGEST_INTERVAL_MIN`, `RESEND_API_KEY`, `ALERT_EMAIL_TO`, `ALERT_FROM_EMAIL`, `DIGEST_TO`, `DIGEST_FROM`, plus the dev-only `DEV_FORCE_LAGOS` / `DEV_OVERRIDE_IP`. `.env.example` is the canonical list — update it in the same PR that adds a var.
 
 **§2.6 — Read env vars once at startup into a typed config struct or local vars in `main`. Do not call `os.Getenv` from deep in the call stack.**
 *Why:* Makes dependencies explicit, testable, and auditable. Handlers and the repository should receive their config via constructor args, not read env directly.
+
+**§2.7 — The server version is a build-time value, not config. `cmd/server/main.go` declares `var version` and CI injects the real value via `-ldflags "-X main.version=…"`.**
+*Why:* `/health`, `/live` and `/ready` report it, and release verification compares it against the tag — a wrong value makes a deploy look successful when it isn't.
+⚠️ **Footgun:** the hardcoded fallback in source is what a plain `go build` (and any local run) reports. Bump it alongside each tagged release so a non-ldflags build never claims a stale version.
 
 ---
 
@@ -197,10 +205,11 @@ if err != nil {
 
 > Cross-ref: ADR-009.
 
-**§5.1 — All SQL lives in `internal/database/`. Handlers, ingestor, and normalizer call repository methods; they never import `pgx` directly or write SQL.**
+**§5.1 — All SQL lives in `internal/database/`. Handlers, ingestor, and normalizer call repository methods; they never write SQL.**
 *Why:* Single place to audit queries, index usage, and PostGIS calls. Handlers stay focused on HTTP concerns.
 ❌ `pool.Query(ctx, "SELECT ...")` inside a handler.
 ✅ `h.repo.ListEvents(r.Context(), filters)`.
+*Known divergence:* `internal/handlers/events.go` imports `pgx` solely to branch on `pgx.ErrNoRows` (see §5.5). No handler constructs SQL. Target state is that the repository translates the sentinel so handlers can drop the import; until then this one import is accepted.
 
 **§5.2 — Define the repository surface as a Go `interface`. Handlers and the ingestor depend on the interface, not the concrete `pgRepo`.**
 *Why:* Enables swapping implementations for tests and composition. The interface is the contract; `pgRepo` is one implementation.
@@ -226,8 +235,9 @@ for rows.Next() { ... }
 if err := rows.Err(); err != nil { return nil, 0, fmt.Errorf("rows iteration error: %w", err) }
 ```
 
-**§5.5 — `QueryRow` callers must handle `pgx.ErrNoRows` explicitly. Translate it to a domain error (`nil, nil` for "optional", a sentinel for "required but missing") before returning.**
-*Why:* Callers shouldn't know `pgx.ErrNoRows` exists; they should know "no last run" or "event not found". Prefer `errors.Is(err, pgx.ErrNoRows)` per §4.3; update legacy sites opportunistically.
+**§5.5 — `QueryRow` callers must handle `pgx.ErrNoRows` explicitly, always via `errors.Is` (§4.3), never `==`.**
+*Why:* Callers shouldn't know `pgx.ErrNoRows` exists; they should know "no last run" or "event not found".
+*Current practice vs target:* the repository does **not** yet translate the sentinel — `handlers/events.go` branches on `pgx.ErrNoRows` itself (the §4.3 example is that call site). Translating it in the repository (`nil, nil` for "optional", a package sentinel for "required but missing") is the target state and needs its own chore; do not treat the existing handler as the pattern to copy into new handlers.
 
 **§5.6 — Return typed slices, not `*sql.Rows` or `any`. Scan inside the repository.**
 *Why:* The repository owns the row → struct mapping. Leaking `rows` to callers couples them to pgx and the query shape.
@@ -282,8 +292,14 @@ json.NewEncoder(w).Encode(response)
 **§6.6 — Use `respondWithError` for every error response. Do not mix bare `http.Error` calls with JSON responses.**
 *Why:* `http.Error` returns `text/plain`; the rest of the API returns JSON. Consistency matters for clients.
 
-**§6.7 — Middleware is `func(http.Handler) http.Handler`. Compose in `main` in the order: recovery → logging → CORS → rate-limit → auth → handler.**
-*Why:* Recovery outermost so panics in any later middleware are caught. Logging sees the request even if rate-limit rejects. Auth after rate-limit so unauthenticated floods are cheap to reject.
+**§6.7 — Middleware is `func(http.Handler) http.Handler` and is composed in `cmd/server/main.go`.**
+Current chain, outermost first:
+```go
+handlers.SecurityHeadersMiddleware(handlers.CORSMiddleware(handlers.GlobalRateLimitMiddleware(mux)))
+```
+plus a per-`/v1/` `handlers.RateLimitMiddleware` and a response-cache middleware on `GET /v1/events`. Implementations live in `internal/handlers/middleware.go`.
+*Why this order:* security headers outermost so they are set even on rejected requests; CORS before rate-limiting so preflights get correct headers; the global limiter protects everything, with the tighter `/v1/` limiter nested inside.
+*Not present:* there is **no** recovery middleware and **no** access-log middleware. §4.4 (never panic) is therefore load-bearing rather than backstopped, and §8.7's "middleware handles the access log" describes a target, not current behaviour. Adding a recovery middleware is an open item.
 
 **§6.8 — Never block in a handler on an unbounded operation. Wrap long calls in `context.WithTimeout` derived from `r.Context()`.**
 *Why:* A slow downstream (EONET fetch, slow query) shouldn't hold an HTTP goroutine indefinitely.
@@ -293,6 +309,10 @@ json.NewEncoder(w).Encode(response)
 
 **§6.10 — Register routes in `main` (or a dedicated `routes.go`), not inside handler packages.**
 *Why:* One place to audit the public API surface. Matches the `cmd/server/main.go` pattern.
+
+**§6.11 — The OpenAPI spec is the API contract, and it is CI-enforced. Edit `openspec/specs/vigilafrica/openapi.yaml` (the source of truth), then run `npm run sync:openapi` to propagate it to `api/internal/handlers/openapi.yaml`.**
+*Why:* CI's "Check OpenAPI spec in sync" step fails the build when the two diverge. Editing the served copy directly is the common mistake — the sync script overwrites it.
+Any PR changing a route, a query parameter, a status code, or a response shape updates the spec in the same PR.
 
 ---
 
@@ -347,8 +367,9 @@ defer m.mu.Unlock()
 **§7.8 — Prefer channels for coordination (signalling, pipelines) and mutexes for protection (shared state). Do not use a channel where a mutex fits, or vice versa.**
 *Why:* "Share memory by communicating" applies to data flow; a counter doesn't need a channel.
 
-**§7.9 — Every package with goroutines or shared state must be tested with `-race` in CI. Failing race detector = failing build.**
-*Why:* Race conditions are silent in dev and corrupting in prod. The detector is cheap; skipping it is not.
+**§7.9 — Concurrent code should be exercised under the race detector (`go test -race ./...`).**
+*Why:* Race conditions are silent in dev and corrupting in prod.
+⚠️ **Not currently enforced.** CI's "Run Go Tests" step runs plain `go test ./...` with no `-race` flag, and `scripts/test-api.ps1` does not pass it either (Windows AppLocker blocks locally-built test binaries — see the repo's Windows workaround notes). Treat this as a target, not a gate; adding `-race` to the CI step is an open item. Do not cite this rule as though a build would fail on it.
 
 **§7.10 — The scheduler's `runAllCountries` loop checks `ctx.Err()` between countries and logs errors per-country without aborting siblings.**
 *Why:* One country's ingestion failure should not block the others. See §3.6.
@@ -356,12 +377,14 @@ defer m.mu.Unlock()
 **§7.11 — No global state for concurrency primitives. Mutexes, channels, and wait groups live on the owning struct.**
 *Why:* Package-level `sync.Mutex` is untestable and usually hides a missing abstraction.
 
+> **Known exception — `internal/ingestor/eonet.go`.** The package still carries mutable package-level vars used as test seams: `transientRetryDelays`, `eonetHTTPClient`, `eonetURL`, `eonetSleepFn`, and `DefaultCountries`. Tests override them via the `installTestServer` / `installInstantSleep` / `installHTTPClient` helpers — which is exactly what §9.5 forbids. This is a deliberate deferral (B6 of `chore-post-v11-quality-sweep`, tracked in-source as `chore-eonet-ingestor-struct`); the fix is to hang them off an `Ingestor` struct and inject. **Do not add new package-level seams on the strength of this precedent, and do not "fix" it piecemeal** — the refactor touches every caller of `Ingest` and needs its own proposal.
+
 ---
 
 ## 8. Logging & Observability
 
 **§8.1 — Use `log/slog` for all new logging. Do not use `log.Printf` or `fmt.Println` in `internal/`.**
-*Why:* Structured logs are queryable; unstructured strings aren't. Legacy `log.Printf` in `cmd/ingest/main.go` is grandfathered — new code uses slog.
+*Why:* Structured logs are queryable; unstructured strings aren't. Legacy `log.Printf` / `log.Println` / `log.Fatal` in the one-shot binaries `cmd/ingest/`, `cmd/seed/` and `cmd/sentinel/` is grandfathered — new code uses slog. `internal/` and `cmd/server/` are slog-only.
 
 **§8.2 — Log as key-value pairs, not formatted strings.**
 *Why:* `slog` fields become JSON keys; grep becomes filter.
@@ -382,6 +405,7 @@ defer m.mu.Unlock()
 ```go
 type EventHandler struct { repo database.Repository; log *slog.Logger }
 ```
+⚠️ **Partially adopted.** `NewDigestHandler` injects a logger; `handlers/enrichment_stats.go` and `handlers/health.go` call package-level `slog` directly, and `alert/resend.go`, `alert/watchdog.go` and `digest/scheduler.go` fall back to `slog.Default()`. `EventHandler` holds no logger at all — so its `500` paths currently respond without logging anything, which also breaks §4.5. Wiring a logger into `EventHandler` is the highest-value instance to fix.
 
 **§8.7 — Request handlers log at most once per request outcome (success at Debug, failure at Error). Middleware handles the access log.**
 *Why:* Double-logging (middleware + handler) doubles volume and cost without adding signal.
@@ -438,19 +462,21 @@ if got.Total != 1 {
 
 **§9.5 — Mocks are hand-written or generated; never stub by modifying globals. Tests depend on the repository `interface`, not `pgRepo`.**
 *Why:* Modifying globals bleeds state across tests. Interface substitution is the project's mocking seam (§5.2).
+*Known exception:* the `internal/ingestor` package-level test seams — see the note under §7.11. That is the only sanctioned instance; new code does not get one.
 
 **§9.6 — Integration tests hit a real Postgres + PostGIS. Do not mock the database.**
 *Why:* Mocked DB tests have passed while a migration broke prod. Integration tests catch schema, trigger, and PostGIS behaviour mocks miss. Use `docker-compose up -d` or `testcontainers-go` for the test DB.
 
-**§9.7 — Integration tests are tagged `//go:build integration` and gated behind a `make test-integration` target.**
+**§9.7 — Integration tests are tagged `//go:build integration` and run as a separate CI step.**
 *Why:* Unit tests stay fast (`go test ./...` in seconds); integration tests run separately in CI.
+The gate is CI's "Run Database Integration Tests" step — `go test -v -cover -tags=integration ./internal/database/`. There is **no Makefile in this repository**; locally, use `scripts/test-api.ps1`.
 ```go
 //go:build integration
 package database_test
 ```
 
-**§9.8 — Every package with goroutines or shared state runs under `-race` in CI.**
-*Why:* Repeats §7.9 because it's a testing rule too. Race detector is mandatory for concurrent code.
+**§9.8 — Run `-race` locally when touching concurrent code.**
+*Why:* Repeats §7.9 because it's a testing rule too — including the caveat: `-race` is **not** wired into CI or `scripts/test-api.ps1` today, so nothing catches a regression for you.
 
 **§9.9 — Table rows must not share mutable state. If the test mutates, capture the row variable: `tt := tt` before `t.Run`.**
 *Why:* Classic loop-variable capture bug. Go 1.22+ fixes this for `for` loops; pin `tt` anyway for 1.21 compatibility and parallel subtests.
@@ -503,14 +529,18 @@ Note: Resend email alerts use stdlib `net/http` against the Resend REST API dire
 **§10.11 — Pin the Go toolchain to an exact patch and keep it consistent everywhere: `actions/setup-go` `go-version` in every workflow and `api/Dockerfile`'s `GO_IMAGE` digest must resolve to the same `go1.X.Y`.**
 *Why:* If they drift, CI tests one stdlib while the production image ships another — and the build can silently miss already-released security fixes. They drifted once: the Dockerfile pinned `go1.26.2` while CI floated on the unpinned minor `go-version: '1.26'` (which resolves to whatever the latest patch is at run time, not a fixed version), leaving shipped stdlib CVE fixes out of the production build — including two `html/template` XSS issues the digest and alert emails render with. The lesson is the floating-vs-pinned split itself, not the specific patch CI happened to resolve to.
 When `govulncheck` (the CI "Run Go Vulnerability Check") flags a *standard-library* advisory, bump the toolchain in **both** places to the patched release — do **not** suppress or allow-list the finding. Confirm the patch is actually published via **go.dev/dl** (authoritative), not a single registry tag probe, which can be mid-rollout.
-✅ `go-version: '1.26.4'` (CI) + `GO_IMAGE=golang:1.26-alpine@sha256:…` resolving to `go1.26.4` (Dockerfile).
+✅ `go-version: '1.26.5'` (CI) + `GO_IMAGE=golang:1.26-alpine@sha256:…` resolving to `go1.26.5` (Dockerfile) — the current pin. Update this example whenever the pin moves, so the doc can't be mistaken for the authority: the workflow and the Dockerfile are.
+
+**§10.12 — There is no Go linter gate in this repository.**
+*Why:* Stated so nobody assumes one. There is no `.golangci.yml`, no lint step in any workflow, and CI runs `go test`, `go mod tidy -diff`, and `govulncheck` only — `gofmt` and `go vet` are not enforced. `CONTRIBUTING.md` suggests `golangci-lint` for local use; that is advice, not a gate. Adopting one repo-wide is an open item and would want its own change record (it will surface a backlog of findings on first run).
+⚠️ Do not rely on a linter to catch what §4.7 (ignored errors) or §8.2 (formatted log strings) describe — those are review-enforced here.
 
 ---
 
 ## 11. Migrations & SQL
 
 **§11.1 — Migrations live in `api/db/migrations/` and are numbered sequentially: `NNNNNN_description.up.sql` and `NNNNNN_description.down.sql`. Six-digit zero-padded prefix.**
-*Why:* `golang-migrate` orders by numeric prefix. Zero-padding keeps lexical sort matching numeric sort. Current sequence: `000001` … `000006`.
+*Why:* `golang-migrate` orders by numeric prefix. Zero-padding keeps lexical sort matching numeric sort. The next number is one above the highest file in `api/db/migrations/` — read the directory rather than trusting a count written here, which goes stale by construction.
 
 **§11.2 — Every `up.sql` has a matching `down.sql`. If a migration genuinely cannot be reversed (e.g. data transformation), `down.sql` contains `-- no-op: irreversible, see header` with justification in the `up.sql` header comment.**
 *Why:* Rollback is a production-incident tool. "We can't roll back" is a decision, not an accident; it should be explicit.
@@ -567,3 +597,5 @@ Decisions made during the brainstorming session that produced this document.
 | 9 | Order: Context before Error Handling; Concurrency after Handlers | Original 8-section order | Context is foundational; concurrency builds on ctx + handlers |
 | 10 | Added §10.11 — pin + sync the Go toolchain across CI and Dockerfile (post-review) | Floating `go-version: '1.26'`; suppress govulncheck findings | 2026-06-03 Go stdlib CVE batch failed govulncheck repo-wide; the Dockerfile pinned go1.26.2 while CI floated on the unpinned minor `'1.26'` (missing shipped `html/template` XSS fixes). Bumped both to a pinned go1.26.4 (PR #108) instead of allow-listing |
 | 11 | §9.4 corrected to stdlib `testing` (post-review) | Adopt `testify` as written | `testify` was never adopted — it is not in `go.mod` and every existing test uses plain `testing`. Documenting reality (and that adopting testify needs an ADR) beats either a permanently-violated rule or churning every test for an unjustified dependency. Surfaced in the feature-daily-flood-digest review |
+| 12 | 2026-07-22 accuracy pass: describe the codebase as it is, and mark every unenforced rule as unenforced | Leave the rules aspirational; or change the code to match the doc | An external review checked every checkable claim against the tree and found the doc asserting enforcement gates that do not exist (`-race` in CI, a `make test-integration` target), a middleware chain with three middlewares the repo never had, two wrong env var names, a wrong ADR-007 citation, and a stale migration count. A rule nobody enforces still reads as enforced to a reviewer citing it — that is worse than an acknowledged gap. Corrections here; the code-side fixes (adding `-race`, a recovery middleware, a logger on `EventHandler`) are tracked separately so this PR stays docs-only |
+| 13 | Known divergences kept in the doc as marked exceptions rather than deleted rules (§5.1/§5.5 pgx leakage, §7.11/§9.5 ingestor globals, §8.6 logger injection) | Delete the rule; or silently leave the violation | The rule is still the right target; what was missing is an honest note that the code hasn't got there yet, plus a pointer to why (B6 deferral) so the next contributor doesn't "fix" it piecemeal |
