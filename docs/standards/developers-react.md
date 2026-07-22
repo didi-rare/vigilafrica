@@ -772,14 +772,15 @@ There is no `.env.development` / `.env.production` in this project and no commit
 
 **§15.8 — Source maps are generated for production and kept private (uploaded to error reporter, not served publicly).**
 
-**§15.9 — Stylelint runs in CI (`npm run lint:styles`) and failures block the build. ESLint (`npm run lint`) exists as a script but is local-only — no workflow invokes it. `// eslint-disable` requires an explanatory comment.**
-⚠️ Because ESLint isn't in CI, `eslint-plugin-react-hooks` violations (§3.10) and unused-var errors can merge. Run `npm run lint` before pushing frontend changes; wiring it into CI is an open item.
-Also installed but **not wired** into `eslint.config.js`: `@tanstack/eslint-plugin-query`. Either enable it (it would mechanically enforce parts of §5) or drop the dependency.
+**§15.9 — Both linters run in CI and failures block the build: ESLint (`npm run lint`, "Run Frontend Lint") and stylelint (`npm run lint:styles`, "Run Frontend Style Lint"). `// eslint-disable` requires an explanatory comment.**
+*Why both:* ESLint covers `eslint-plugin-react-hooks` (§3.10) and unused-symbol errors; stylelint covers the colour-token rule (§7). Neither subsumes the other.
+Installed but **not wired** into `eslint.config.js`: `@tanstack/eslint-plugin-query`. Either enable it (it would mechanically enforce parts of §5) or drop the dependency — still open.
 
 **§15.10 — Every `vite.config.ts` plugin carries a justification comment.**
 *The config is not minimal, by design:* it holds two custom plugins (`robotsMetaPlugin`, `seoFilesPlugin` — per-environment `robots.txt`/`sitemap.xml`), the `assertDeploymentEnvVars` gate, `manualChunks` vendor splitting, the dev proxy, and the vitest block. Each is commented; keep that up. When adding a stable public route, add it to `SITEMAP_ROUTES` — but never `/events/:id`, whose upstream IDs expire.
 
-**§15.11 — Type checking runs as part of `npm run build` (`tsc -b && vite build`, §15.5). There is no standalone `type-check` script — adding one is an open item.**
+**§15.11 — `npm run type-check` (`tsc -b --force`) is the standalone type check, and runs as its own CI step ("Run Frontend Type Check"). Type checking also happens inside `npm run build` (§15.5).**
+*Why `--force`:* `tsc -b` is incremental and will report success from a stale `.tsbuildinfo`; `--force` makes the check unconditional, which is what you want in CI and before pushing.
 
 ---
 

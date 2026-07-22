@@ -367,9 +367,9 @@ defer m.mu.Unlock()
 **§7.8 — Prefer channels for coordination (signalling, pipelines) and mutexes for protection (shared state). Do not use a channel where a mutex fits, or vice versa.**
 *Why:* "Share memory by communicating" applies to data flow; a counter doesn't need a channel.
 
-**§7.9 — Concurrent code should be exercised under the race detector (`go test -race ./...`).**
-*Why:* Race conditions are silent in dev and corrupting in prod.
-⚠️ **Not currently enforced.** CI's "Run Go Tests" step runs plain `go test ./...` with no `-race` flag, and `scripts/test-api.ps1` does not pass it either (Windows AppLocker blocks locally-built test binaries — see the repo's Windows workaround notes). Treat this as a target, not a gate; adding `-race` to the CI step is an open item. Do not cite this rule as though a build would fail on it.
+**§7.9 — Concurrent code is exercised under the race detector. CI's "Run Go Tests" step runs `go test -race ./...`; a detected race fails the build.**
+*Why:* Race conditions are silent in dev and corrupting in prod. The detector is cheap; skipping it is not.
+*Local caveat:* `scripts/test-api.ps1` runs the suite inside the digest-pinned `golang:*-alpine` image, which has no gcc — and `-race` needs cgo, so passing `-race` to that script fails to build rather than reporting a clean run. Locally, either add gcc to the container invocation or rely on CI for race coverage.
 
 **§7.10 — The scheduler's `runAllCountries` loop checks `ctx.Err()` between countries and logs errors per-country without aborting siblings.**
 *Why:* One country's ingestion failure should not block the others. See §3.6.
@@ -475,8 +475,8 @@ The gate is CI's "Run Database Integration Tests" step — `go test -v -cover -t
 package database_test
 ```
 
-**§9.8 — Run `-race` locally when touching concurrent code.**
-*Why:* Repeats §7.9 because it's a testing rule too — including the caveat: `-race` is **not** wired into CI or `scripts/test-api.ps1` today, so nothing catches a regression for you.
+**§9.8 — Every package with goroutines or shared state runs under `-race` in CI.**
+*Why:* Repeats §7.9 because it's a testing rule too. See §7.9 for the local-Docker caveat (alpine has no gcc, so `-race` can't run there).
 
 **§9.9 — Table rows must not share mutable state. If the test mutates, capture the row variable: `tt := tt` before `t.Run`.**
 *Why:* Classic loop-variable capture bug. Go 1.22+ fixes this for `for` loops; pin `tt` anyway for 1.21 compatibility and parallel subtests.
