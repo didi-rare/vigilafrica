@@ -1,7 +1,7 @@
 ---
 id: chore-typecheck-test-files
 status: proposed
-branch: tbd
+branch: chore/typecheck-test-files
 ---
 
 # Proposal: Bring Test Files Under the Type Checker (chore-typecheck-test-files)
@@ -37,7 +37,23 @@ Then:
 3. Ensure `npm run type-check` covers the new project (`tsc -b` follows project references, so Option B is picked up automatically once referenced).
 4. Update `developers-react.md` §2.1 — remove the "test files are not type-checked" warning — and §13, which should state that tests are type-checked and at what strictness.
 
-## Risks
+## Measurement (2026-07-22) — Option A taken, zero fallout
+
+Measured before choosing, as this proposal requires:
+
+- Dropping the four `exclude` entries pulls all **8** test files into the program (23 files total, confirmed via `tsc --showConfig`).
+- `tsc -p tsconfig.app.json --noEmit` then reports **0 errors** — at full strict, since #169.
+- **Canary confirms the gate is live, not a config no-op.** A deliberately drifted mock (`id: 42` where `id` is a string; `category: 'earthquakes'`, absent from the `EventCategory` union) is rejected with two `TS2322`s — precisely the failure mode this proposal was written to catch. Canary removed after the check.
+- `npm run lint`, `npm run test` (8 files / 57 tests) and `npm run build` all clean afterwards.
+
+So **Option A** applies and Option B is unnecessary — no separate `tsconfig.test.json`, no strictness ratchet, no test edits. The predicted mock-drift backlog did not exist.
+
+Two risks in the section below did not materialise and are recorded as closed:
+
+- *"may not be free"* — it was free. Worth noting the reason: the tests were written by contributors following §2.8 (consume the API types, never redeclare a subset), so the mocks were already typed against the real shapes.
+- *"`vitest/globals` could mask a missing import"* — moot. All 8 test files already import `describe`/`it`/`expect`/`vi` explicitly from `vitest`, so no global types were added. Codified as new rule §13.0 so it stays that way.
+
+## Risks (as written before measurement — see above for what actually happened)
 
 - **This one may not be free.** Unlike #169, mocks are exactly where loose typing accumulates, so a non-trivial error count is likely. If it is large, land Option B with a reduced strictness for tests and ratchet, rather than a single large PR that mixes a config change with dozens of test edits.
 - Adding `vitest/globals` types repo-wide can mask a missing import in non-test code. Prefer explicit `import { describe, it, expect } from 'vitest'` if the project already does that.
