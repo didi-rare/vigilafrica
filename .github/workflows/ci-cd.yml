@@ -49,9 +49,12 @@ jobs:
             (echo "❌ api/internal/handlers/openapi.yaml is out of sync with openspec/specs/vigilafrica/openapi.yaml — run 'npm run sync:openapi' and commit the result." && exit 1)
 
       - name: Run Go Tests
+        # -race is required by developers-go.md §7.9/§9.8. It needs cgo, which the
+        # ubuntu runner has; note it does NOT work under the digest-pinned
+        # golang:*-alpine image scripts/test-api.ps1 uses locally (no gcc).
         run: |
           cd api
-          go test ./...
+          go test -race ./...
 
       - name: Verify Go Modules Are Tidy
         run: |
@@ -80,6 +83,16 @@ jobs:
         run: |
           cd api
           go test -v -cover -tags=integration ./internal/database/
+
+      - name: Run Frontend Lint
+        run: |
+          cd web
+          npm run lint
+
+      - name: Run Frontend Type Check
+        run: |
+          cd web
+          npm run type-check
 
       - name: Run Frontend Style Lint
         run: |
