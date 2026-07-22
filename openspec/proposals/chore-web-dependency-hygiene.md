@@ -1,7 +1,7 @@
 ---
 id: chore-web-dependency-hygiene
 status: proposed
-branch: tbd
+branch: chore/web-dependency-hygiene
 ---
 
 # Proposal: Remove the Stale React Router v5 Types (chore-web-dependency-hygiene)
@@ -23,6 +23,8 @@ Low severity, near-zero effort — the reason to do it is that it is the kind of
 3. Commit the resulting `package.json` + `package-lock.json`.
 4. Verify: `npm run type-check` (strict, since #169) and `npm run build` both clean. If the type check fails, the dependency was load-bearing after all — stop and reassess rather than reinstating it.
 5. Optional in the same pass: `npx depcheck` (§14.10) and record anything else it flags, without acting on it in this change.
+
+**depcheck result (2026-07-22, recorded not acted on):** zero unused *production* dependencies. Four `devDependencies` flagged, three of them false positives — `stylelint-config-standard` and `stylelint-declaration-strict-value` are referenced from `.stylelintrc.json`, and `axe-core` is required by `vitest-axe`; depcheck cannot see config-file or peer references. The fourth, **`@tanstack/eslint-plugin-query`, is genuinely unused** — it is installed but absent from `eslint.config.js`, independently confirming the review finding. Left alone here on purpose: enabling a lint plugin surfaces real findings and needs its own change.
 
 ## Out of Scope
 
