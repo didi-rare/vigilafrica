@@ -83,10 +83,10 @@ const EventsDashboard = lazy(async () => {
 
 ## 2. TypeScript
 
-**§2.1 — ⚠️ Strict mode is NOT enabled today. Do not write code that would block enabling it.**
-*Current state:* `strict` appears in none of `web/tsconfig.json`, `web/tsconfig.app.json`, or `web/tsconfig.node.json`. `tsconfig.app.json` sets only `noUnusedLocals`, `noUnusedParameters` and `noFallthroughCasesInSwitch`, so `strictNullChecks` and friends are **off** — a `possibly undefined` bug compiles clean.
-*Why it matters:* §2.2 (no `any`) and §2.3 (justify every `!`) are the manual substitutes for a check the compiler isn't doing. Hold that line in review.
-*Target:* enable `"strict": true` in `tsconfig.app.json` and fix the fallout in a dedicated PR. Until that lands, treat every nullable value as genuinely nullable regardless of what the compiler says.
+**§2.1 — `strict: true` in both `web/tsconfig.app.json` and `web/tsconfig.node.json`. Do not disable individual strict sub-flags.**
+*Why:* Strict mode catches an order of magnitude more bugs at compile time. Disabling a sub-flag is a permanent tax on every future contributor.
+*Enforced by* `npm run type-check` (§15.11), which runs as its own CI step.
+⚠️ **Coverage gap: test files are not type-checked at all.** `tsconfig.app.json` excludes `src/**/*.test.ts(x)` and `src/test/**`, and Vitest transpiles via esbuild without type-checking, so a type error inside a test is invisible to every gate. Bringing tests under the checker is an open item — until then, a green `type-check` says nothing about test-file types.
 
 **§2.2 — No `any`. If you genuinely need "any shape", use `unknown` and narrow.**
 *Why:* `any` disables type checking for everything it touches. `unknown` forces a narrowing check.
@@ -804,4 +804,5 @@ Installed but **not wired** into `eslint.config.js`: `@tanstack/eslint-plugin-qu
 | 14 | Fixed §13.9 axe example to `results.violations` assertion (post-review) | Wire `toHaveNoViolations()` matcher | The matcher example didn't run — vitest-axe's `extend-expect` is empty and its `Vi`-namespace types don't hold under Vitest 4; documented the matcher-free convention already used in every component test (chore-analytics-and-feedback review) |
 | 15 | 2026-07-22 accuracy pass: rewrite every rule that misdescribed the codebase, and label unenforced rules as unenforced | Leave as aspirational; or change the code to match | An external review verified each checkable claim against the tree. Two were flatly false — §2.1 claimed `strict: true` (absent from all three tsconfigs) and §13 claimed Vitest/RTL "not yet installed" (installed, and a CI step). §10.1 prescribed `errorElement`, which the app had already abandoned because it is silently ignored under JSX `<Routes>`. §1.4/§3.2 had the export convention backwards. The doc also never mentioned stylelint — the one style gate CI actually runs |
 | 16 | Enforcement status stated inline per rule (CI-enforced / local-only / review-only / not implemented) | A single "what CI checks" section | A reviewer reads the rule they are citing, not a table elsewhere. Colour tokens are machine-checked while spacing and z-index are not — that asymmetry is invisible unless it sits next to the rule |
-| 17 | `strict: true` deferred to its own PR rather than bundled here | Flip it in this PR | Enabling it changes `web/src/`, which trips the OpenSpec Sentinel gate and needs a change record; keeping this PR docs-only keeps it reviewable |
+| 17 | `strict: true` deferred to its own PR rather than bundled with the doc corrections | Flip it in the docs PR | Kept the docs PR docs-only and reviewable. The expected fallout in `web/src/` (and the OpenSpec record it would have needed) turned out not to exist — see row 18 |
+| 18 | 2026-07-22: `strict: true` enabled in `tsconfig.app.json` **and** `tsconfig.node.json` | Enable only for `app`; or stage it behind individual sub-flags | Measured first: enabling it produces **zero** type errors. A canary (`string \| null` assigned to `string`) confirmed `strictNullChecks` really is live, so the clean result is real and not a config no-op. With no fallout there was no reason to stage it, and `tsconfig.node.json` (which type-checks `vite.config.ts` — the deploy env-var gate and SEO plugins live there) had the same gap |
