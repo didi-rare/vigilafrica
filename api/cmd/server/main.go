@@ -84,7 +84,7 @@ func main() {
 
 	// ── Handlers ──────────────────────────────────────────────────────────────
 	healthHandler := handlers.NewHealthHandler(version, repo)
-	eventHandler := handlers.NewEventHandler(repo)
+	eventHandler := handlers.NewEventHandler(repo, slog.Default().With("component", "events"))
 	enrichmentStatsHandler := handlers.NewEnrichmentStatsHandler(repo)
 	digestHandler := handlers.NewDigestHandler(repo, slog.Default().With("component", "digest"))
 
@@ -110,8 +110,18 @@ func main() {
 	mux.Handle("GET /docs/", handlers.SwaggerUIHandler())          // local docs/testing
 	mux.Handle("/v1/", handlers.RateLimitMiddleware(v1Mux))        // rate-limited v1 routes
 
-	// Global middleware chain: security headers, CORS, and a light public limiter wrap everything.
-	globalHandler := handlers.SecurityHeadersMiddleware(handlers.CORSMiddleware(handlers.GlobalRateLimitMiddleware(mux)))
+	// Global middleware chain, outermost first: panic recovery, security headers,
+	// CORS, and a light public limiter wrap everything. Recovery is outermost so
+	// it also catches panics raised inside the other middleware; the security
+	// headers it wraps are already set on the ResponseWriter by the time a
+	// recovered 500 is written, so they still apply. See developers-go.md §6.7.
+	globalHandler := handlers.RecoveryMiddleware(
+		handlers.SecurityHeadersMiddleware(
+			handlers.CORSMiddleware(
+				handlers.GlobalRateLimitMiddleware(mux),
+			),
+		),
+	)
 
 	// ── HTTP server ───────────────────────────────────────────────────────────
 	port := os.Getenv("API_PORT")
