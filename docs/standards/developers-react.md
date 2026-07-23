@@ -256,8 +256,10 @@ export const eventKeys = {
 };
 ```
 **Anti-pattern:** `useQuery({ queryKey: ['events-list-nigeria'] })` — unfilterable, un-invalidatable by prefix.
+*Enforced by* `@tanstack/query/exhaustive-deps` (CI, via `npm run lint`). **The bug it prevents:** if a value the `queryFn` reads is missing from the `queryKey`, two different filter states share one cache entry — a user sees another country's events. No error, no crash, just wrong data. That is why this rule is worth more than its noise.
 
 **§5.3 — One `QueryClient` instance, created at app root. Never instantiate inside a component.**
+*Enforced by* `@tanstack/query/stable-query-client` (CI). A `QueryClient` built inside a component is discarded and rebuilt on every render, silently throwing away the entire cache.
 The single instance lives in `src/main.tsx` ✅. It is currently constructed **bare** — `new QueryClient()` — so every query runs on library defaults (`staleTime: 0`, `retry: 3`).
 *Consequence to know:* with `staleTime: 0` every remount refetches, and a failing endpoint is retried three times with backoff before `isError` shows. If you want different behaviour, set it per-query today, or propose project-wide defaults:
 ```tsx
@@ -779,7 +781,7 @@ There is no `.env.development` / `.env.production` in this project and no commit
 
 **§15.9 — Both linters run in CI and failures block the build: ESLint (`npm run lint`, "Run Frontend Lint") and stylelint (`npm run lint:styles`, "Run Frontend Style Lint"). `// eslint-disable` requires an explanatory comment.**
 *Why both:* ESLint covers `eslint-plugin-react-hooks` (§3.10) and unused-symbol errors; stylelint covers the colour-token rule (§7). Neither subsumes the other.
-Installed but **not wired** into `eslint.config.js`: `@tanstack/eslint-plugin-query`. Either enable it (it would mechanically enforce parts of §5) or drop the dependency — still open.
+ESLint's config extends `@tanstack/eslint-plugin-query`'s `flat/recommended`, which is what makes §5.2 and §5.3 machine-checked rather than review-only.
 
 **§15.10 — Every `vite.config.ts` plugin carries a justification comment.**
 *The config is not minimal, by design:* it holds two custom plugins (`robotsMetaPlugin`, `seoFilesPlugin` — per-environment `robots.txt`/`sitemap.xml`), the `assertDeploymentEnvVars` gate, `manualChunks` vendor splitting, the dev proxy, and the vitest block. Each is commented; keep that up. When adding a stable public route, add it to `SITEMAP_ROUTES` — but never `/events/:id`, whose upstream IDs expire.
