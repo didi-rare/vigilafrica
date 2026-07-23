@@ -85,8 +85,8 @@ const EventsDashboard = lazy(async () => {
 
 **§2.1 — `strict: true` in both `web/tsconfig.app.json` and `web/tsconfig.node.json`. Do not disable individual strict sub-flags.**
 *Why:* Strict mode catches an order of magnitude more bugs at compile time. Disabling a sub-flag is a permanent tax on every future contributor.
-*Enforced by* `npm run type-check` (§15.11), which runs as its own CI step.
-⚠️ **Coverage gap: test files are not type-checked at all.** `tsconfig.app.json` excludes `src/**/*.test.ts(x)` and `src/test/**`, and Vitest transpiles via esbuild without type-checking, so a type error inside a test is invisible to every gate. Bringing tests under the checker is an open item — until then, a green `type-check` says nothing about test-file types.
+*Enforced by* `npm run type-check` (§15.11), which runs as its own CI step and covers **`src/` including test files** — `tsconfig.app.json` has no `exclude`, so tests are held to the same strict settings as the code they exercise.
+*Why tests specifically:* Vitest transpiles via esbuild, which strips types without checking them. If the type checker skipped tests too, a mock whose shape had drifted from the real API type would still compile and still pass — a green test asserting against a shape production never produces.
 
 **§2.2 — No `any`. If you genuinely need "any shape", use `unknown` and narrow.**
 *Why:* `any` disables type checking for everything it touches. `unknown` forces a narrowing check.
@@ -661,6 +661,11 @@ useEffect(() => {
 ## 13. Testing
 
 > **Installed and enforced.** Vitest 4 + React Testing Library are the test stack, `npm run test` (`vitest run`) is a CI step, and components across `src/` have tests. Setup lives in `src/setupTests.ts` (jest-dom matchers + RTL cleanup) and the `test` block of `vite.config.ts` (jsdom, with the jsdom URL pinned so `window.location` is stable).
+>
+> **Test files are type-checked** at full strict, same as `src/` (§2.1). Three consequences: a drifted mock is a compile error rather than a silently-passing test; `noUnusedLocals` applies, so an unused import in a test fails `type-check`; and because `npm run build` is `tsc -b && vite build`, **a type error in a test file also fails the production build (and therefore a Vercel deploy)** — a red deploy can originate in a test, not in `src/`.
+
+**§13.0 — Import test globals explicitly: `import { describe, it, expect, vi } from 'vitest'`. Do not enable `vitest/globals`.**
+*Why:* every test file in the project already does this, and it keeps the global type surface honest — with `globals: true`, a missing import in *non-test* code can resolve against the injected globals and compile anyway.
 
 **§13.1 — Vitest is the test runner. React Testing Library (RTL) is the component testing layer. Do not add Jest.**
 *Why:* Vitest is Vite-native — shares the transform pipeline, no duplicate TS/babel setup.
@@ -806,3 +811,5 @@ Installed but **not wired** into `eslint.config.js`: `@tanstack/eslint-plugin-qu
 | 16 | Enforcement status stated inline per rule (CI-enforced / local-only / review-only / not implemented) | A single "what CI checks" section | A reviewer reads the rule they are citing, not a table elsewhere. Colour tokens are machine-checked while spacing and z-index are not — that asymmetry is invisible unless it sits next to the rule |
 | 17 | `strict: true` deferred to its own PR rather than bundled with the doc corrections | Flip it in the docs PR | Kept the docs PR docs-only and reviewable. The expected fallout in `web/src/` (and the OpenSpec record it would have needed) turned out not to exist — see row 18 |
 | 18 | 2026-07-22: `strict: true` enabled in `tsconfig.app.json` **and** `tsconfig.node.json` | Enable only for `app`; or stage it behind individual sub-flags | Measured first: enabling it produces **zero** type errors. A canary (`string \| null` assigned to `string`) confirmed `strictNullChecks` really is live, so the clean result is real and not a config no-op. With no fallout there was no reason to stage it, and `tsconfig.node.json` (which type-checks `vite.config.ts` — the deploy env-var gate and SEO plugins live there) had the same gap |
+| 19 | 2026-07-22: test files brought under the type checker by dropping `tsconfig.app.json`'s `exclude`, at full strict | A separate `tsconfig.test.json` with a strictness ratchet | Measured first: 8 test files join the program and produce **0** errors, and a canary (a mock with `id: 42` and `category: 'earthquakes'`) is correctly rejected — so the gate bites. The ratchet existed to absorb a mock-drift backlog that turned out not to exist, because tests already followed §2.8 and typed their mocks against the real API types |
+| 20 | Added §13.0 — import vitest helpers explicitly, do not enable `vitest/globals` | Turn on `globals: true` for brevity | All 8 test files already import explicitly, and `globals: true` would let a missing import in *non-test* code resolve against injected globals and compile anyway. Codifying the existing practice costs nothing and keeps the global type surface honest |
