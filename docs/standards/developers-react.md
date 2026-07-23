@@ -662,7 +662,7 @@ useEffect(() => {
 
 > **Installed and enforced.** Vitest 4 + React Testing Library are the test stack, `npm run test` (`vitest run`) is a CI step, and components across `src/` have tests. Setup lives in `src/setupTests.ts` (jest-dom matchers + RTL cleanup) and the `test` block of `vite.config.ts` (jsdom, with the jsdom URL pinned so `window.location` is stable).
 >
-> **Test files are type-checked** at full strict, same as `src/` (§2.1). Two consequences: a drifted mock is a compile error rather than a silently-passing test, and `noUnusedLocals` applies — an unused import in a test fails `type-check`.
+> **Test files are type-checked** at full strict, same as `src/` (§2.1). Three consequences: a drifted mock is a compile error rather than a silently-passing test; `noUnusedLocals` applies, so an unused import in a test fails `type-check`; and because `npm run build` is `tsc -b && vite build`, **a type error in a test file also fails the production build (and therefore a Vercel deploy)** — a red deploy can originate in a test, not in `src/`.
 
 **§13.0 — Import test globals explicitly: `import { describe, it, expect, vi } from 'vitest'`. Do not enable `vitest/globals`.**
 *Why:* every test file in the project already does this, and it keeps the global type surface honest — with `globals: true`, a missing import in *non-test* code can resolve against the injected globals and compile anyway.

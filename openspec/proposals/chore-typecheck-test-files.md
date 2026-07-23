@@ -65,11 +65,11 @@ Two risks in the section below did not materialise and are recorded as closed:
 
 ## Verification
 
-- [ ] Error count measured and recorded in the PR before any fix is written
-- [ ] `npm run type-check` covers test files and is clean
-- [ ] `npm run test` still green — the fixes must not change test behaviour, only its types
-- [ ] A deliberate canary (a mock with a wrong field type) is rejected by `type-check`, proving the gate is live and not a config no-op
-- [ ] §2.1 warning removed; §13 states the new coverage
+- [x] Error count measured and recorded in the PR before any fix is written — 8 test files join the program, **0 errors**
+- [x] `npm run type-check` covers test files and is clean
+- [x] `npm run test` still green — 8 files / 57 tests; no behaviour changed, only coverage
+- [x] A deliberate canary (a mock with a wrong field type) is rejected by `type-check`, proving the gate is live and not a config no-op — two `TS2322`s, canary removed after
+- [x] §2.1 warning removed; §13 states the new coverage (and the build/deploy coupling)
 
 ## Origin
 
