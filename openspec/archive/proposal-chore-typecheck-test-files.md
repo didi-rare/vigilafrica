@@ -1,7 +1,9 @@
 ---
 id: chore-typecheck-test-files
-status: proposed
+status: archived
 branch: chore/typecheck-test-files
+merged_pr: https://github.com/didi-rare/vigilafrica/pull/172
+archived_on: 2026-07-23
 ---
 
 # Proposal: Bring Test Files Under the Type Checker (chore-typecheck-test-files)

@@ -1,7 +1,9 @@
 ---
 id: fix-api-observability-backstop
-status: proposed
+status: archived
 branch: fix/api-observability-backstop
+merged_pr: https://github.com/didi-rare/vigilafrica/pull/170
+archived_on: 2026-07-23
 ---
 
 # Proposal: Log the 500s and Catch the Panics (fix-api-observability-backstop)
@@ -44,12 +46,12 @@ Relying on `net/http`'s built-in per-connection recovery is not sufficient: it *
 
 ## Verification
 
-- [ ] `go build ./...` and `go vet ./...` clean
-- [ ] New test: a repository failure on `GET /v1/events` returns 500, the body does **not** contain the underlying error, and the log **does**
-- [ ] New test: a panicking handler yields a logged 500 with a stack, and the panic value never reaches the response body
-- [ ] New test: a panic after the response is framed leaves the original status intact and still logs
-- [ ] New test: `http.ErrAbortHandler` propagates rather than being swallowed
-- [ ] Full suite green, including under `-race` in CI (gate added in #168)
+- [x] `go build ./...` and `go vet ./...` clean
+- [x] New test: a repository failure on `GET /v1/events` returns 500, the body does **not** contain the underlying error, and the log **does** — `TestListEventsLogsRepositoryFailure`
+- [x] New test: a panicking handler yields a logged 500 with a stack, and the panic value never reaches the response body — `TestRecoveryMiddlewareConvertsPanicToLogged500`
+- [x] New test: a panic after the response is framed leaves the original status intact and still logs — `TestRecoveryMiddlewarePreservesAlreadyWrittenResponse`
+- [x] New test: `http.ErrAbortHandler` propagates rather than being swallowed — `TestRecoveryMiddlewareRepanicsErrAbortHandler`
+- [x] Full suite green, including under `-race` in CI (gate added in #168) — verified on PR #170's `build-and-test` run
 
 ## Origin
 

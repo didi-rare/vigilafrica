@@ -1,7 +1,9 @@
 ---
 id: chore-web-dependency-hygiene
-status: proposed
+status: archived
 branch: chore/web-dependency-hygiene
+merged_pr: https://github.com/didi-rare/vigilafrica/pull/171
+archived_on: 2026-07-23
 ---
 
 # Proposal: Remove the Stale React Router v5 Types (chore-web-dependency-hygiene)
@@ -33,10 +35,10 @@ Low severity, near-zero effort — the reason to do it is that it is the kind of
 
 ## Verification
 
-- [ ] `npm run type-check` clean
-- [ ] `npm run lint` clean
-- [ ] `npm run build` clean
-- [ ] `git diff` touches only `web/package.json` and `web/package-lock.json`
+- [x] `npm run type-check` clean
+- [x] `npm run lint` clean
+- [x] `npm run build` clean
+- [x] `git diff` touches only `web/package.json` and `web/package-lock.json` (plus this proposal's depcheck note)
 
 ## Origin
 
