@@ -9,7 +9,7 @@ Each rule has the shape: **statement → why → example (where useful)**. Rules
 Cross-references:
 - [ADR-007](../../openspec/specs/vigilafrica/decisions.md) — Go Backend Package Structure (`cmd/` + `internal/`). Note: ADR-007 does **not** cover the framework choice — the stdlib-`net/http`, no-framework rule (§6.1, §10.7) is this document's own standard and has no ADR behind it.
 - [ADR-009](../../openspec/specs/vigilafrica/decisions.md) — No ORM; raw `pgx` queries in `internal/database/` only.
-- [ADR-008](../../openspec/specs/vigilafrica/decisions.md) — dependency/toolchain advisory handling (§10.11).
+- [ADR-008](../../openspec/specs/vigilafrica/decisions.md) — Go Version: 1.26 (the toolchain floor §10.11 pins and keeps in sync).
 
 ---
 
@@ -63,7 +63,7 @@ Current `internal/` packages: `alert` (Resend client + staleness watchdog), `dat
 *Why:* 12-factor. Works identically in local dev, Docker, and the VPS deployment. Env vars are the only surface ops needs to manage.
 
 **§2.2 — Required env vars must fail fast at startup. Never fall back to a default for secrets or DB URLs.**
-*Mechanism differs by binary:* `cmd/server/` uses `slog.Error(...)` + `os.Exit(1)` (structured, per §8.1); `cmd/ingest/`, `cmd/seed/` and `cmd/sentinel/` use `log.Fatal` (grandfathered, §8.1). New binaries use the slog form.
+*Mechanism differs by binary:* `cmd/server/` uses `slog.Error(...)` + `os.Exit(1)` (structured, per §8.1); `cmd/ingest/` and `cmd/seed/` use `log.Fatal` (grandfathered, §8.1). New binaries use the slog form. (`cmd/sentinel/` is a governance CLI — it reads no env vars, so this rule doesn't apply to it; see §8.1.)
 *Why:* A silent default means the wrong database or a missing API key ships to prod unnoticed.
 ❌
 ```go
@@ -388,7 +388,7 @@ defer m.mu.Unlock()
 ## 8. Logging & Observability
 
 **§8.1 — Use `log/slog` for all new logging. Do not use `log.Printf` or `fmt.Println` in `internal/`.**
-*Why:* Structured logs are queryable; unstructured strings aren't. Legacy `log.Printf` / `log.Println` / `log.Fatal` in the one-shot binaries `cmd/ingest/`, `cmd/seed/` and `cmd/sentinel/` is grandfathered — new code uses slog. `internal/` and `cmd/server/` are slog-only.
+*Why:* Structured logs are queryable; unstructured strings aren't. Legacy `log.Printf` / `log.Println` / `log.Fatal` in the one-shot binaries `cmd/ingest/` and `cmd/seed/` is grandfathered — new code uses slog. `internal/` and `cmd/server/` are slog-only. Exception: `cmd/sentinel/` is a git-diff governance CLI whose stdout/stderr **is** its product (human-facing audit output) — it uses `fmt.Println` / `fmt.Fprintf` deliberately and imports neither `log` nor `slog`; structured logging does not apply to it.
 
 **§8.2 — Log as key-value pairs, not formatted strings.**
 *Why:* `slog` fields become JSON keys; grep becomes filter.
