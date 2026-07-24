@@ -20,7 +20,10 @@ flowchart TD
 | `api.vigilafrica.org` | A | VPS IPv4 |
 | `api.staging.vigilafrica.org` | A | VPS IPv4 |
 | `vigilafrica.org` | Vercel | production project |
+| `www.vigilafrica.org` | CNAME | Vercel domain target — added to the production project as a **308 redirect to the apex**, not a second alias. Verify with `curl -sSI https://www.vigilafrica.org` → `308` → `https://vigilafrica.org/` |
 | `staging.vigilafrica.org` | Vercel | staging project |
+
+DNS for `vigilafrica.org` is hosted at **Namecheap** (`dns1/dns2.registrar-servers.com`), not Vercel — records are edited under Namecheap → Advanced DNS. Add a hostname to the Vercel project *first*, then create the record Vercel asks for, so Vercel can issue the TLS certificate. A registrar-level "URL redirect" record is not a substitute: it serves HTTP only and leaves `https://` with a certificate error.
 
 ## Environment Matrix
 
