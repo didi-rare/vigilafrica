@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -14,10 +15,16 @@ import (
 
 type EventHandler struct {
 	repo database.Repository
+	log  *slog.Logger
 }
 
-func NewEventHandler(repo database.Repository) *EventHandler {
-	return &EventHandler{repo: repo}
+// NewEventHandler builds the handler. A nil logger falls back to slog.Default()
+// (mirrors NewDigestHandler), so tests can pass nil.
+func NewEventHandler(repo database.Repository, logger *slog.Logger) *EventHandler {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	return &EventHandler{repo: repo, log: logger}
 }
 
 type APIError struct {
@@ -97,6 +104,9 @@ func (h *EventHandler) ListEvents(w http.ResponseWriter, r *http.Request) {
 	// Note: repo.ListEvents guarantees a non-nil slice — no defensive nil-coalesce needed here.
 	events, total, err := h.repo.ListEvents(r.Context(), filters)
 	if err != nil {
+		// Log the real cause (§4.5/§8.6); return a sanitised message to the client.
+		h.log.Error("list events failed", "err", err,
+			"category", filters.Category, "country", filters.Country, "state", filters.State)
 		respondWithError(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
@@ -132,9 +142,12 @@ func (h *EventHandler) GetEventByID(w http.ResponseWriter, r *http.Request) {
 	event, err := h.repo.GetEventByID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
+			// Not an error condition — a 404 is the correct answer, so no log.
 			respondWithError(w, http.StatusNotFound, "event not found")
 			return
 		}
+		// Log the real cause (§4.5/§8.6); return a sanitised message to the client.
+		h.log.Error("get event by id failed", "err", err, "event_id", id)
 		respondWithError(w, http.StatusInternalServerError, "internal server error")
 		return
 	}

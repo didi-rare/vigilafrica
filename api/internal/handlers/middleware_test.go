@@ -1,9 +1,12 @@
 package handlers
 
 import (
+	"bytes"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -163,4 +166,86 @@ func TestCORSMiddlewareAllowsConfiguredOriginAndNoOriginRequests(t *testing.T) {
 	if got := noOriginRec.Header().Get("Access-Control-Allow-Origin"); got != "" {
 		t.Fatalf("expected no Access-Control-Allow-Origin for no-Origin request, got %q", got)
 	}
+}
+
+func TestRecoveryMiddlewareConvertsPanicToLogged500(t *testing.T) {
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelError}))
+
+	handler := recoveryMiddlewareWithLogger(logger, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		panic("boom")
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/events", nil)
+	rec := httptest.NewRecorder()
+
+	// The whole point: this must not propagate out of ServeHTTP.
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
+		t.Errorf("Content-Type = %q, want application/json", ct)
+	}
+	// The client gets the sanitised envelope, never the panic value (§4.5).
+	if strings.Contains(rec.Body.String(), "boom") {
+		t.Errorf("response leaked the panic value: %q", rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "internal server error") {
+		t.Errorf("body = %q, want the standard error envelope", rec.Body.String())
+	}
+
+	logged := buf.String()
+	for _, want := range []string{"panic recovered in handler", "boom", "/v1/events"} {
+		if !strings.Contains(logged, want) {
+			t.Errorf("expected log to contain %q, got %q", want, logged)
+		}
+	}
+	if !strings.Contains(logged, "stack") {
+		t.Error("expected the recovery log to carry a stack trace")
+	}
+}
+
+func TestRecoveryMiddlewarePreservesAlreadyWrittenResponse(t *testing.T) {
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelError}))
+
+	handler := recoveryMiddlewareWithLogger(logger, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":`))
+		panic("mid-stream failure")
+	}))
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v1/events", nil))
+
+	// The status line was already on the wire — it must not be rewritten to 500.
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d (already-framed response must be left alone)", rec.Code, http.StatusOK)
+	}
+	if strings.Contains(rec.Body.String(), "internal server error") {
+		t.Errorf("recovery appended an error envelope to a partial body: %q", rec.Body.String())
+	}
+	if !strings.Contains(buf.String(), "panic recovered in handler") {
+		t.Errorf("panic must still be logged even when no 500 can be sent, got %q", buf.String())
+	}
+}
+
+func TestRecoveryMiddlewareRepanicsErrAbortHandler(t *testing.T) {
+	handler := recoveryMiddlewareWithLogger(slog.Default(), http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		panic(http.ErrAbortHandler)
+	}))
+
+	defer func() {
+		recovered := recover()
+		if recovered == nil {
+			t.Fatal("expected http.ErrAbortHandler to propagate so net/http can handle it")
+		}
+		if recovered != http.ErrAbortHandler {
+			t.Fatalf("recovered = %v, want http.ErrAbortHandler", recovered)
+		}
+	}()
+
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/v1/events", nil))
 }
