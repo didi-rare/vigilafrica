@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.4](https://github.com/didi-rare/vigilafrica/compare/v1.3.3...v1.3.4) (2026-07-24)
+
+
+### Bug Fixes
+
+* **api:** log EventHandler 500s and add a panic recovery backstop ([#170](https://github.com/didi-rare/vigilafrica/issues/170)) ([cf1eab2](https://github.com/didi-rare/vigilafrica/commit/cf1eab205f68573404b0a5a5499faf5e1ae71576))
+* **deps:** bump react-router-dom 7.17.0 -&gt; 7.18.1 to clear 4 advisories ([#177](https://github.com/didi-rare/vigilafrica/issues/177)) ([8671eaf](https://github.com/didi-rare/vigilafrica/commit/8671eaf080acf6903edeb79a21bb0f96f6a29aeb))
+
 ## [1.3.3](https://github.com/didi-rare/vigilafrica/compare/v1.3.2...v1.3.3) (2026-07-21)
 
 
