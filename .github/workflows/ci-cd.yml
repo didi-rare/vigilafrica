@@ -72,9 +72,12 @@ jobs:
         run: npm audit --audit-level=moderate
 
       - name: Run Web Dependency Audit
+        # Wrapper over `npm audit --audit-level=moderate` that carries a narrow,
+        # documented allowlist for advisories that are unreachable AND unpatchable
+        # (see web/scripts/audit-ci.mjs). Everything else still fails the build.
         run: |
           cd web
-          npm audit --audit-level=moderate
+          npm run audit:ci
 
       - name: Verify Container Image Pins
         run: node scripts/check-image-pins.js
