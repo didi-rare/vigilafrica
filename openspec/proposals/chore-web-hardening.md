@@ -1,7 +1,7 @@
 ---
 id: chore-web-hardening
-status: proposed
-branch: tbd
+status: in-progress
+branch: chore/web-hardening
 ---
 
 # Proposal: Close the Cheap Findings From the 2026-07-26 Production Web Audit (chore-web-hardening)
@@ -33,7 +33,11 @@ Five independent edits. Each can be reviewed and reverted alone.
 
 [`web/src/App.css`](../../web/src/App.css) animates `box-shadow` spread in `@keyframes signal-ping` (~L432-436), applied to `.signal-dot` / `.signal-dot--sm`. Lighthouse reports **2 non-composited animated elements — "Unsupported CSS Property: box-shadow"** in all three runs. Box-shadow animation repaints every frame.
 
-Re-implement as a pseudo-element ring animating `transform: scale()` + `opacity` (both compositor-driven). CLS is currently **0** and must stay 0.
+Re-implement as a pseudo-element ring animating `transform: scale()` + `opacity` (both compositor-driven). CLS is currently **0** and must stay 0 — `inset: 0` means the ring grows from the dot's own footprint, so scaling has no layout effect.
+
+⚠️ **Regression caught while implementing:** `App.css` already had a `prefers-reduced-motion` rule listing `.signal-dot { animation: none }`. Moving the animation onto `::after` takes it *out of that rule's reach*, so reduced-motion users would have kept the pulse. The selector had to move with the animation (`.signal-dot::after`). The file's catch-all `*, *::before, *::after { animation-duration: 0.001ms !important }` block would also have neutered it, but relying on that alone leaves a dead selector and an implicit dependency on rule order — worth knowing for any future animation moved onto a pseudo-element.
+
+**One intended visual difference.** The old ring reached a fixed 7px spread: 22px outer diameter on the 8px dot (2.75×), but 20px on the 6px `--sm` dot (3.33×). `transform: scale()` is relative, so a single keyframe now scales both *proportionally* — the small dot's ring becomes 16.5px rather than 20px. This reads as more consistent, not less, but it is a real pixel difference and the reason the screenshot check below is scoped to "apart from the intended `.signal-dot` change".
 
 ### 3. Add the two missing security headers
 
@@ -64,14 +68,24 @@ Mirror the established staging/production split exactly: production gets a real 
 
 ## Verification
 
-- [ ] Lighthouse desktop **in incognito** (see below): Accessibility **97 → 100**
+Local (done on `chore/web-hardening`):
+
+- [x] `npm run type-check` clean · `npm run lint` clean · `npx stylelint "src/**/*.css"` clean · `npm run test` **70/70** · `npm run build` clean
+- [x] **Production build emits `llms.txt`, `robots.txt`, `sitemap.xml`**; the file begins with an `# H1` as the audit requires
+- [x] **Staging build (`VITE_ENV=staging`) emits robots.txt only** — `Disallow: /`, no sitemap, **no `llms.txt`** — confirming the new file inherited the existing production-only guard rather than needing its own
+- [x] Source maps emitted — 9 `.map` files including `map-vendor` (1.95 MB map alongside a 946 kB chunk)
+- [x] `.map` and `.txt` are excluded from the SPA rewrite by the existing extension lookahead in `vercel.json`, so they serve as static files
+- [x] Reduced-motion coverage followed the animation onto `.signal-dot::after` (see the regression note in *What Changes* §2)
+
+Post-deploy (staging, then production):
+
+- [ ] Lighthouse desktop **in incognito**: Accessibility **97 → 100**
 - [ ] "Avoid non-composited animations": **2 elements → 0**; CLS still **0**
 - [ ] `curl -I https://vigilafrica.org` shows `cross-origin-opener-policy: same-origin` and `strict-transport-security` containing `includeSubDomains`
 - [ ] Umami still capturing after the header change (the v1.3.0 regression class) — confirm a pageview lands in the dashboard
 - [ ] "Missing source maps for large first-party JavaScript" audit clears
-- [ ] `https://vigilafrica.org/llms.txt` → HTTP 200 Markdown with an H1; **staging does not serve one**
-- [ ] `npm run type-check` / `npm run lint` / `npm run test` / `npm run build` all clean
-- [ ] Playwright screenshot diff at 375/768/1280 px is zero apart from the intended `.signal-dot` change
+- [ ] `https://vigilafrica.org/llms.txt` → HTTP 200; `https://staging.vigilafrica.org/llms.txt` → 404
+- [ ] Visual check of `.signal-dot` at 375/768/1280 px: ring still pulses, sits *behind* the dot, and the `--sm` variant's now-proportional ring reads correctly
 
 ⚠️ **Run Lighthouse in incognito.** The first run of this audit was taken with browser extensions loaded and was materially wrong: TBT read **80 ms vs 10 ms**, unused JS **536 KiB vs 149 KiB**, plus a phantom 64 KiB "Minify JavaScript" item that was **100% extension code**. Extension noise is attributed to the page.
 
