@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.5](https://github.com/didi-rare/vigilafrica/compare/v1.3.4...v1.3.5) (2026-07-26)
+
+
+### Bug Fixes
+
+* **ci:** clear the overnight web-audit advisory batch ([#183](https://github.com/didi-rare/vigilafrica/issues/183)) ([9c7fbe5](https://github.com/didi-rare/vigilafrica/commit/9c7fbe565c1bdb2245a83572e0a7f4f724702a71))
+* **web:** reveal landing sections on load so they are never blank ([#182](https://github.com/didi-rare/vigilafrica/issues/182)) ([5b880c3](https://github.com/didi-rare/vigilafrica/commit/5b880c38874349814ab0492beeebb75a1c5d5930))
+
 ## [1.3.4](https://github.com/didi-rare/vigilafrica/compare/v1.3.3...v1.3.4) (2026-07-24)
 
 
