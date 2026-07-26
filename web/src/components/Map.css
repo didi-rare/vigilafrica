@@ -179,3 +179,27 @@
 .maplibregl-popup-anchor-bottom .maplibregl-popup-tip {
   border-top-color: var(--bg-popup) !important;
 }
+
+/*
+  Attribution links: give them a non-colour affordance.
+
+  WCAG 1.4.1 (use of colour). This was the ONLY failing accessibility audit on
+  the site — Lighthouse "Links rely on color to be distinguishable", desktop
+  score 97 — because MapLibre ships `.maplibregl-ctrl-attrib a{…;
+  text-decoration:none}` and the links then differ from the surrounding
+  attribution text by colour alone.
+
+  `!important` is required, not stylistic: MapLibre's rule has *identical*
+  specificity (one class + one element), so the winner would otherwise be
+  decided by stylesheet order between `maplibre-gl.css` and this file — both
+  imported by Map.tsx into a lazily-loaded chunk. Matches the convention already
+  used by the overrides above.
+
+  Targets `.maplibregl-ctrl-attrib a` rather than `…-attrib-inner a` so it also
+  covers the compact/collapsed control used at narrow viewports. Note the mobile
+  Lighthouse run reports this audit NOT APPLICABLE and Accessibility 100 purely
+  because that control is collapsed — the desktop 97 is the true score.
+*/
+.maplibregl-ctrl-attrib a {
+  text-decoration: underline !important;
+}

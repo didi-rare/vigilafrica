@@ -117,6 +117,58 @@ function seoFilesPlugin(): Plugin {
         fileName: 'sitemap.xml',
         source: `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`,
       })
+
+      // llms.txt — guidance for LLM agents and AI crawlers, the same way
+      // robots.txt addresses search crawlers. Lighthouse 13.3.0's "Agentic
+      // Browsing" category checks for it; we scored 2/2 on the scored audits but
+      // the llms.txt check reported NOT APPLICABLE because no file existed.
+      //
+      // Emitted after the `isStaging` return above, so it is production-only for
+      // the same reason the sitemap is: a staging copy would either advertise
+      // production URLs from a noindex host or point agents at a preview build.
+      //
+      // Deliberately links to the canonical API contract rather than restating
+      // endpoints here — duplicating it would drift from
+      // openspec/specs/vigilafrica/openapi.yaml, which is the source of truth.
+      // Must contain at least one H1 to satisfy the audit.
+      const llmsTxt = [
+        '# VigilAfrica',
+        '',
+        'Open-source natural-event awareness for Africa. VigilAfrica translates raw',
+        'NASA satellite event data into local context — floods and wildfires located by',
+        'country and state rather than by bare coordinates. Nigeria and Ghana are live.',
+        '',
+        '## Important limitation',
+        '',
+        'VigilAfrica is an awareness and situational-context tool, not an emergency',
+        'service or an authoritative alerting system. Event data is upstream-sourced and',
+        'may be incomplete, delayed, or superseded. Do not present it as a basis for',
+        'life-safety decisions; direct people to their local authorities for',
+        'confirmation and for guidance on any active hazard.',
+        '',
+        '## Data source',
+        '',
+        'NASA EONET (Earth Observatory Natural Event Tracker). Locations are enriched',
+        'server-side to country and admin-1 (state) names.',
+        '',
+        '## Key pages',
+        '',
+        `- ${SITE_ORIGIN}/ — event map and current feed`,
+        `- ${SITE_ORIGIN}/for-partners — for NGOs, newsrooms and response organisations`,
+        '',
+        '## For developers and agents',
+        '',
+        '- Source and issues: https://github.com/didi-rare/vigilafrica',
+        '- Public API host: https://api.vigilafrica.org',
+        '- API contract: openspec/specs/vigilafrica/openapi.yaml in the repository',
+        '',
+        'Event identifiers originate from upstream feeds and expire, so individual',
+        'event URLs are intentionally excluded from the sitemap and should not be',
+        'treated as stable or archival links.',
+        '',
+      ].join('\n')
+
+      this.emitFile({ type: 'asset', fileName: 'llms.txt', source: llmsTxt })
     },
   }
 }
@@ -127,6 +179,13 @@ export default defineConfig({
   build: {
     // MapLibre is intentionally isolated behind lazy boundaries and a separate worker.
     chunkSizeWarningLimit: 1000,
+    // Emit source maps. Lighthouse reports "Large JavaScript file is missing a
+    // source map" for map-vendor, and without them a production stack trace is
+    // unreadable. `true` rather than 'hidden': hidden maps omit the
+    // `sourceMappingURL` comment, so neither devtools nor Lighthouse can find
+    // them, which defeats the point. This project is open-source under a public
+    // repo, so published maps disclose nothing that is not already readable.
+    sourcemap: true,
     rollupOptions: {
       output: {
         manualChunks(id) {
