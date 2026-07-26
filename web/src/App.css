@@ -415,12 +415,14 @@ h2[id],
 .hero__readout-sep { color: var(--text-muted); }
 
 .signal-dot {
+  position: relative;
+  /* Contains the ring's z-index: -1 so it sits behind the dot but cannot
+     escape into the surrounding stacking context. */
+  isolation: isolate;
   width: 8px;
   height: 8px;
   border-radius: 50%;
   background: var(--signal-live);
-  box-shadow: 0 0 0 0 var(--signal-live-glow);
-  animation: signal-ping 2.4s ease-out infinite;
   flex-shrink: 0;
 }
 
@@ -429,10 +431,38 @@ h2[id],
   height: 6px;
 }
 
+/*
+  The pulsing ring, moved onto a pseudo-element.
+
+  Previously `.signal-dot` itself animated `box-shadow` spread (0 → 7px), which
+  cannot run on the compositor: Lighthouse flagged both instances in every run
+  ("Avoid non-composited animations — Unsupported CSS Property: box-shadow"), and
+  a box-shadow animation repaints each frame. Animating `transform` + `opacity`
+  on a ring pseudo-element is compositor-driven and visually equivalent.
+
+  Geometry: the old ring reached a 7px spread around an 8px dot — a 22px outer
+  diameter, i.e. 2.75×. Because `transform: scale()` is relative, the ring now
+  scales *proportionally* for `.signal-dot--sm` (6px → 16.5px) where the old
+  fixed 7px spread gave the smaller dot a proportionally larger 20px ring. This
+  is the one intended visual difference; it reads as more consistent, not less.
+
+  `inset: 0` means the ring grows from the dot's own footprint, so scaling has no
+  layout effect — CLS stays 0.
+*/
+.signal-dot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 50%;
+  background: var(--signal-live-glow);
+  animation: signal-ping 2.4s ease-out infinite;
+}
+
 @keyframes signal-ping {
-  0%   { box-shadow: 0 0 0 0 var(--signal-live-glow); }
-  70%  { box-shadow: 0 0 0 7px transparent; }
-  100% { box-shadow: 0 0 0 0 transparent; }
+  0%   { transform: scale(1);    opacity: 1; }
+  70%  { transform: scale(2.75); opacity: 0; }
+  100% { transform: scale(2.75); opacity: 0; }
 }
 
 /* Telemetry panel — instrument readout that breaks the centred single column */
@@ -576,7 +606,12 @@ h2[id],
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .signal-dot,
+  /* `.signal-dot::after`, not `.signal-dot` — the ping animation moved onto the
+     ring pseudo-element to become compositor-driven, and this rule has to follow
+     it or reduced-motion users keep the pulse. The catch-all `*::after` block at
+     the end of this file would also neuter it, but relying on that alone would
+     leave a dead selector here and an implicit dependency on rule order. */
+  .signal-dot::after,
   .brand-mark__point,
   .hero__graticule,
   .hero__lead > *,
