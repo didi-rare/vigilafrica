@@ -440,10 +440,15 @@ h2[id],
 */
 .dashboard-fallback {
   min-height: 100vh;
-  /* Centre the single line of text: without this it clings to the top of a
-     now screen-tall box and reads as a broken layout rather than a load state. */
+  /*
+    Top-aligned, NOT centred. The reserved box starts near the bottom of the
+    fold (y≈710 at 1350x940), so centring pushed the loading text to y≈1180 —
+    below the fold, leaving the user staring at an empty band where they
+    previously saw "Loading dashboard telemetry...". Keeping the text at the top
+    of the reservation is the only position that stays on screen.
+  */
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   color: var(--text-secondary);
 }
