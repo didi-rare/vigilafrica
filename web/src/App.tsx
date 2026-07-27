@@ -244,7 +244,15 @@ function App() {
                 </div>
               </section>
 
-              <Suspense fallback={<div className="container section">Loading dashboard telemetry...</div>}>
+              {/*
+                `dashboard-fallback` reserves viewport height while the lazy
+                chunk loads. Without it the fallback is ~26px and the mounted
+                dashboard is ~1459px (desktop), so mounting shoves everything
+                below it — `#how-it-works`, visible at the bottom of the
+                viewport — clean off the screen. Measured CLS 0.262 at
+                1350x940, 0.082 at 768x1024. See the proposal for the trial data.
+              */}
+              <Suspense fallback={<div className="container section dashboard-fallback">Loading dashboard telemetry...</div>}>
                 <EventsDashboard />
               </Suspense>
 
