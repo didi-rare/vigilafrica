@@ -66,6 +66,16 @@ Also confirmed on production by CSS injection that `min-height: 60vh` and a fixe
 - [ ] Visual check that the fallback reads as a deliberate loading state at 375 / 768 / 1350
 - [ ] `#how-it-works` still reveals correctly (the #182 backstop contract is untouched)
 
+## Follow-up 2026-07-27 — the first implementation hid the loading text
+
+Staging verification passed on the numbers (see the table above, reproduced there with a working control) but a **screenshot** of the fallback state showed the reserved area as an empty dark band.
+
+Cause: the reservation begins near the bottom of the fold (y≈710 at 1350×940) and the box is a full viewport tall, so `align-items: center` placed the text at **y≈1180 — below the fold.** Users previously saw "Loading dashboard telemetry…" at y=667; they would now see nothing at all while the chunk loads. The centring was meant to stop a screen-tall box looking broken and instead removed the only loading affordance on the page.
+
+Corrected to `align-items: flex-start`, which is the only position that keeps the text on screen: at 1350×940 it sits at y≈710, at 768×1024 at y≈957. At 375×812 the fallback begins at y=1095 and is below the fold either way — unchanged from before this proposal, not a regression.
+
+**Lesson:** the geometry assertions (`h=940px`, `display=flex`, centred) were all green. Only rendering the page and looking at it caught this. Verify visual changes visually.
+
 ## Origin
 
 Surfaced 2026-07-27 while confirming `chore-web-hardening` on staging with Lighthouse: production scored CLS 0.245 where every earlier report had recorded 0. Those earlier reports measured `/assets/index-CSNSPx3b.js`; production now serves `index-B47hUzKa.js`, so the baseline they established was never current. Root-caused over ~60 instrumented trials.
