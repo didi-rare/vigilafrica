@@ -414,6 +414,40 @@ h2[id],
 .hero__readout-coord { color: var(--coordinate-text); }
 .hero__readout-sep { color: var(--text-muted); }
 
+/*
+  Reserve space for the lazily-loaded EventsDashboard.
+
+  The Suspense fallback is a single line of text (~26px); the mounted dashboard
+  is ~1459px at desktop widths and ~14000px at tablet widths, where the events
+  list stacks instead of scroll-containing. Mounting it therefore pushes
+  everything below — including `#how-it-works`, which sits visible at the bottom
+  of the viewport — entirely off-screen.
+
+  Reserving a full viewport height guarantees nothing after the fallback is
+  visible at load, so nothing the user can see moves when the real dashboard
+  arrives. Deliberately NOT matching the dashboard's true height: 14000px at
+  768px wide would mean a screen-fulls-deep blank placeholder, which is worse
+  than the jump it prevents. Over-reserving is harmless because the content it
+  displaces is already below the fold.
+
+  Verified against production with the lazy chunks delayed 2500ms (n=5-6 per
+  cell): 1350x940 6/6 shifting at 0.2617 -> 0/5; 768x1024 5/5 at 0.0820 -> 0/5;
+  375x812 unaffected either way (the taller mobile hero already pushes the next
+  section below the fold).
+
+  `vh` rather than `svh`: we are intentionally over-reserving, so mobile
+  URL-bar height changes cannot make this too small.
+*/
+.dashboard-fallback {
+  min-height: 100vh;
+  /* Centre the single line of text: without this it clings to the top of a
+     now screen-tall box and reads as a broken layout rather than a load state. */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+}
+
 .signal-dot {
   position: relative;
   /* Contains the ring's z-index: -1 so it sits behind the dot but cannot
