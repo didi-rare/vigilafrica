@@ -20,12 +20,28 @@ The same class of problem — **our own activity generating signal we then have 
 
 Umami's documented opt-out is `localStorage.setItem('umami.disabled', 1)`, set per browser **and** per device. It suppresses the tracker's *automatic pageviews*.
 
-**It does not stop explicit `umami.track()` calls** ([umami-software/umami#3031](https://github.com/umami-software/umami/issues/3031)) — and `track()` is how this app sends all six of its custom events ([`analytics.ts`](../../web/src/analytics.ts)). Umami's own docs do not state this either way, which is exactly how it goes unnoticed: setting the flag looks like it worked, because pageviews stop, while events keep recording. The observed session bears this out — 8 views **and** 7 events from one visitor.
+> ### ⚠️ Corrected 2026-07-27 — the original justification for this section was FALSE
+>
+> This section originally claimed: *"It does not stop explicit `umami.track()` calls ([umami-software/umami#3031])"*, and that claim was the entire reason for adding `isExcluded()`.
+>
+> **It is wrong.** An independent review fetched the tracker actually served from `analytics.vigilafrica.org` (`Last-Modified: 2026-04-16`, i.e. live months before this proposal) and found the exported `track` routes through the same sender as automatic pageviews, whose first statement returns early when the flag is set. Re-verified directly against the live script:
+>
+> ```js
+> W = () => … || g?.getItem("umami.disabled") || …     // g = localStorage
+> C = async (e, a = "event") => { if (W()) return … }  // the shared sender
+> q = (t, e) => C({ …B(), name: t, data: e })          // window.umami.track
+> ```
+>
+> So the deployed tracker **already suppresses custom events** under `umami.disabled`.
+>
+> **How the error happened:** the cited issue's *title* matches the claim, but its thread contains the Umami maintainer stating the send method checks the flag and `track()` simply no-ops. The title was read; the thread was not, and the deployed artifact was never inspected. This is the exact failure mode of the project's own "verify before claiming" rule, committed while citing that rule.
+>
+> **What this does and does not change:** the shipped code is *not* wrong — the flag branch is redundant, not harmful. The **synthetic-user-agent branch is the part that adds real capability**, and it stands on its own merits. The section below is corrected accordingly.
 
-Add an `isExcluded()` guard to `track()` covering both noise sources:
+Add an `isExcluded()` guard to `track()` covering the one gap the tracker does not close, plus a redundant belt-and-braces check:
 
-- **`umami.disabled` present in `localStorage`** — keyed on *presence*, not truthiness, so a stray `"0"` cannot read as "tracking enabled". Reusing Umami's own key means one console command now excludes both halves consistently instead of half-working.
-- **A synthetic user agent** (`Chrome-Lighthouse`, `HeadlessChrome`, `PageSpeed`) — Lighthouse uses a fresh browser profile per run, so a localStorage flag can *never* persist for it. The user agent is the only usable signal.
+- **A synthetic user agent** (`Chrome-Lighthouse`, `HeadlessChrome`, `PageSpeed`) — **the load-bearing branch.** Lighthouse uses a fresh browser profile per run, so a localStorage flag can *never* persist for it, and the tracker has no user-agent filter of its own. Without this, every audit run pollutes the dataset. ⚠️ Unanchored substring match, so a real agent containing one of these tokens would be silently dropped; unquantified, flagged rather than resolved.
+- **`umami.disabled` present in `localStorage`** — **redundant** (see the correction above); retained as defence in depth and to make the intent explicit at the call site. Keyed on *presence*, not truthiness, so a stray `"0"` cannot read as "tracking enabled". ⚠️ Consequence worth documenting: re-enabling requires `localStorage.removeItem('umami.disabled')`. Setting it to `'0'` or `'false'` leaves tracking **off**.
 
 Evaluated per call, not memoised, so setting the flag takes effect without a reload. `localStorage` access is wrapped: private modes and sandboxed iframes throw, and an unreadable store must **not** be treated as excluded — that would silently drop real traffic, inverting the intent.
 
