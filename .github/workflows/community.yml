@@ -9,6 +9,14 @@ on:
 jobs:
   welcome:
     runs-on: ubuntu-latest
+    # Skip the maintainer's own issues/PRs. `actions/first-interaction` only
+    # comments for genuine first-time contributors, so on our own PRs this job
+    # built a Docker image (it is a Docker action, `FROM node:20.10-buster-slim`),
+    # greeted nobody, and cost ~2 minutes — while occasionally failing outright
+    # on a Docker Hub registry timeout and turning the PR's checks red (1 of the
+    # last 12 runs). Gating on the actor removes 100% of that cost today and
+    # keeps the greeting intact for the external contributor it is meant for.
+    if: github.actor != github.repository_owner
     permissions:
       issues: write
       pull-requests: write
@@ -24,6 +32,14 @@ jobs:
   label-issues:
     runs-on: ubuntu-latest
     if: github.event_name == 'issues'
+    # Required: the repository's default workflow token is read-only
+    # (`default_workflow_permissions: read`), and neither this workflow nor this
+    # job previously declared any permissions — so the labeler could not write.
+    # Latent rather than observed: this job has never executed, because every
+    # recorded run of this workflow has been a `pull_request` event and the `if`
+    # above skips those. It would have failed on the first issue ever opened.
+    permissions:
+      issues: write
     steps:
       - name: Auto-label based on keywords
         uses: andymckay/labeler@e6c4322d0397f3240f0e7e30a33b5c5df2d39e90

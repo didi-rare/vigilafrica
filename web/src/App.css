@@ -414,13 +414,89 @@ h2[id],
 .hero__readout-coord { color: var(--coordinate-text); }
 .hero__readout-sep { color: var(--text-muted); }
 
+/*
+  Reserve space for the lazily-loaded EventsDashboard.
+
+  The Suspense fallback is a single line of text (~26px); the mounted dashboard
+  is ~1459px at desktop widths and ~14000px at tablet widths, where the events
+  list stacks instead of scroll-containing. Mounting it therefore pushes
+  everything below — including `#how-it-works`, which sits visible at the bottom
+  of the viewport — entirely off-screen.
+
+  Reserving a viewport height guarantees nothing after the fallback is visible
+  at load, so nothing the user can see moves when the real dashboard arrives.
+  Deliberately NOT matching the dashboard's true height: 14000px at 768px wide
+  would mean a screen-fulls-deep blank placeholder, which is worse than the jump
+  it prevents.
+
+  ⚠️ Amended 2026-07-27 after independent review. This block previously asserted
+  "over-reserving is harmless because the content it displaces is already below
+  the fold". That is true of CLS but NOT of the user: an uncapped 100vh reserves
+  a full screen of blank space on every cold load, and above 768px the dashboard
+  mounts at a FIXED ~1459px (.dashboard-layout is `height: 800px`, not
+  viewport-relative), so on a tall display the reservation exceeds what the
+  dashboard will ever fill. Measured at 1350x2000: ~540px of band the content
+  never reaches. Hence the min() cap below.
+
+  Verified against production with the lazy chunks delayed 2500ms (n=5-6 per
+  cell): 1350x940 6/6 shifting at 0.2617 -> 0/5; 768x1024 5/5 at 0.0820 -> 0/5;
+  375x812 unaffected either way (the taller mobile hero already pushes the next
+  section below the fold).
+
+  `vh` rather than `svh`: we are intentionally over-reserving, so mobile
+  URL-bar height changes cannot make this too small.
+*/
+.dashboard-fallback {
+  /*
+    Cap at the dashboard's real mounted height above 768px (~1459px, rounded up).
+    Below a ~1460px-tall viewport min() resolves to 100vh, i.e. exactly the
+    behaviour verified as fixing the shift — the cap only engages on displays
+    tall enough for 100vh to over-reserve, which is precisely where it was waste.
+  */
+  min-height: min(100vh, 1460px);
+  /*
+    Top-aligned, NOT centred. The reserved box starts near the bottom of the
+    fold (y≈710 at 1350x940), so centring pushed the loading text to y≈1180 —
+    below the fold, leaving the user staring at an empty band where they
+    previously saw "Loading dashboard telemetry...". Keeping the text at the top
+    of the reservation is the only position that stays on screen.
+  */
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  color: var(--text-secondary);
+}
+
+/*
+  Phone widths: no reservation at all.
+
+  Measured on production with the lazy chunks delayed (n=5 per arm): 375x812 was
+  0/5 shifting BOTH with and without the reservation — the taller mobile hero
+  already pushes the next section off-screen, so there is nothing left to
+  stabilise. The reservation therefore bought nothing here while costing a
+  near-empty screen-height band containing one line of grey text, which on a slow
+  connection reads as a broken page rather than a loading one.
+
+  480px rather than 768px: at 768 the reservation IS load-bearing (5/5 shifting
+  at 0.0410 without it, 0/5 with it), because there the dashboard goes
+  `height: auto` and stacks to ~14000px while the hero is still short enough to
+  leave the next section on screen.
+*/
+@media (max-width: 480px) {
+  .dashboard-fallback {
+    min-height: 0;
+  }
+}
+
 .signal-dot {
+  position: relative;
+  /* Contains the ring's z-index: -1 so it sits behind the dot but cannot
+     escape into the surrounding stacking context. */
+  isolation: isolate;
   width: 8px;
   height: 8px;
   border-radius: 50%;
   background: var(--signal-live);
-  box-shadow: 0 0 0 0 var(--signal-live-glow);
-  animation: signal-ping 2.4s ease-out infinite;
   flex-shrink: 0;
 }
 
@@ -429,10 +505,38 @@ h2[id],
   height: 6px;
 }
 
+/*
+  The pulsing ring, moved onto a pseudo-element.
+
+  Previously `.signal-dot` itself animated `box-shadow` spread (0 → 7px), which
+  cannot run on the compositor: Lighthouse flagged both instances in every run
+  ("Avoid non-composited animations — Unsupported CSS Property: box-shadow"), and
+  a box-shadow animation repaints each frame. Animating `transform` + `opacity`
+  on a ring pseudo-element is compositor-driven and visually equivalent.
+
+  Geometry: the old ring reached a 7px spread around an 8px dot — a 22px outer
+  diameter, i.e. 2.75×. Because `transform: scale()` is relative, the ring now
+  scales *proportionally* for `.signal-dot--sm` (6px → 16.5px) where the old
+  fixed 7px spread gave the smaller dot a proportionally larger 20px ring. This
+  is the one intended visual difference; it reads as more consistent, not less.
+
+  `inset: 0` means the ring grows from the dot's own footprint, so scaling has no
+  layout effect — CLS stays 0.
+*/
+.signal-dot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 50%;
+  background: var(--signal-live-glow);
+  animation: signal-ping 2.4s ease-out infinite;
+}
+
 @keyframes signal-ping {
-  0%   { box-shadow: 0 0 0 0 var(--signal-live-glow); }
-  70%  { box-shadow: 0 0 0 7px transparent; }
-  100% { box-shadow: 0 0 0 0 transparent; }
+  0%   { transform: scale(1);    opacity: 1; }
+  70%  { transform: scale(2.75); opacity: 0; }
+  100% { transform: scale(2.75); opacity: 0; }
 }
 
 /* Telemetry panel — instrument readout that breaks the centred single column */
@@ -576,7 +680,12 @@ h2[id],
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .signal-dot,
+  /* `.signal-dot::after`, not `.signal-dot` — the ping animation moved onto the
+     ring pseudo-element to become compositor-driven, and this rule has to follow
+     it or reduced-motion users keep the pulse. The catch-all `*::after` block at
+     the end of this file would also neuter it, but relying on that alone would
+     leave a dead selector here and an implicit dependency on rule order. */
+  .signal-dot::after,
   .brand-mark__point,
   .hero__graticule,
   .hero__lead > *,

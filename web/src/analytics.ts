@@ -39,8 +39,68 @@ declare global {
   }
 }
 
+// Synthetic/headless agents whose traffic is our own measurement, not a user.
+// Lighthouse sets `Chrome-Lighthouse`; PageSpeed Insights and plain headless
+// Chrome runs are matched for the same reason.
+const SYNTHETIC_USER_AGENT = /Chrome-Lighthouse|HeadlessChrome|PageSpeed/i
+
+// Umami's own documented opt-out key. Set it per browser, per device:
+//   localStorage.setItem('umami.disabled', 1)
+const UMAMI_DISABLED_KEY = 'umami.disabled'
+
 /**
- * Fire a custom analytics event. No-ops silently when the tracker is absent.
+ * isExcluded reports whether this client's activity is our own and should not
+ * be recorded. Two distinct sources of self-inflicted noise, both confirmed
+ * dominant in the live data (2026-07-26: ~5 sessions in 7 days, nearly all
+ * ours):
+ *
+ *  1. **Maintainer browsing** — REDUNDANT, kept as defence in depth. Umami's
+ *     documented opt-out is the `umami.disabled` localStorage key. An earlier
+ *     revision of this comment claimed the flag does not stop explicit
+ *     `umami.track()` calls, citing umami-software/umami#3031. **That was
+ *     wrong.** The deployed tracker at analytics.vigilafrica.org routes the
+ *     exported `track` through the same sender as automatic pageviews, and that
+ *     sender's first statement is a `return` when the flag is set — so the
+ *     tracker already suppresses our events. (The cited issue's *title* says
+ *     otherwise; its thread has the maintainer confirming the send method
+ *     checks the flag. The title was read; the thread was not.) Kept because it
+ *     is free and makes the intent explicit at the call site.
+ *  2. **Synthetic audit runs** — THIS is the branch that adds real capability.
+ *     Lighthouse uses a fresh browser profile per run, so a localStorage flag
+ *     can never persist for it, and the tracker has no user-agent filter of its
+ *     own. Without this check, every audit run pollutes the dataset.
+ *
+ * Deliberately NOT implemented via Umami's `data-before-send` hook, which
+ * would also cover auto-pageviews: that requires a global function resolvable
+ * by the deferred tracker script, and the `script-src` directive in
+ * `web/vercel.json` has already silently broken analytics once (shipped broken
+ * in v1.3.0, fixed in v1.3.1). Auto-pageviews from audit runs therefore still
+ * land — they are infrequent and identifiable. See
+ * `openspec/proposals/chore-analytics-self-exclusion.md` for the tradeoff.
+ *
+ * Evaluated per call, not memoised, so setting the flag takes effect without a
+ * reload.
+ */
+function isExcluded(): boolean {
+  try {
+    // `?.` because localStorage is not merely restricted but *absent* in some
+    // environments — including this project's own jsdom test env, where jsdom 29
+    // delegates storage to Node and Node disables it without
+    // `--localstorage-file`. The try/catch then covers the separate case of a
+    // present-but-throwing store (private modes, sandboxed iframes).
+    // `!= null` treats a stored "0" as set: presence is the signal, not truthiness.
+    if (window.localStorage?.getItem(UMAMI_DISABLED_KEY) != null) return true
+  } catch {
+    // An unreadable store is NOT grounds to suppress — that would silently drop
+    // real traffic, inverting the intent. Fall through to the user-agent check.
+  }
+
+  return SYNTHETIC_USER_AGENT.test(window.navigator.userAgent)
+}
+
+/**
+ * Fire a custom analytics event. No-ops silently when the tracker is absent,
+ * or when this client is excluded as our own traffic (see `isExcluded`).
  *
  * @example track('state_filter_selected', { state: 'Lagos' })
  */
@@ -48,6 +108,8 @@ export function track<E extends AnalyticsEventName>(
   eventName: E,
   data: AnalyticsEventMap[E],
 ): void {
+  if (isExcluded()) return
+
   // Guard the whole call: window.umami may be undefined, and even when present
   // we never want a tracker bug to bubble into React render or a click handler.
   try {
