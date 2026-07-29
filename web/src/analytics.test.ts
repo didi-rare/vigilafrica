@@ -74,9 +74,12 @@ describe('track', () => {
 })
 
 describe('track — self-exclusion', () => {
-  // Umami's `umami.disabled` key suppresses the tracker's automatic pageviews
-  // but not explicit track() calls (umami-software/umami#3031). These cases pin
-  // the wrapper honouring the same key, so one console command excludes both.
+  // The deployed Umami tracker already honours `umami.disabled` for explicit
+  // track() calls as well as automatic pageviews, so this wrapper's flag check
+  // is redundant defence in depth rather than a gap-filler (an earlier comment
+  // here claimed otherwise and was wrong — see analytics.ts). These cases still
+  // pin the behaviour: if the wrapper ever becomes the only gate, or the
+  // tracker changes, the contract is asserted here rather than assumed.
   it('suppresses events when the umami.disabled flag is set', () => {
     installStorage({ 'umami.disabled': '1' })
 

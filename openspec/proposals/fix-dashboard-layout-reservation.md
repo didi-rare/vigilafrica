@@ -35,9 +35,25 @@ Two edits.
 
 ### Why a viewport-relative reservation, not the dashboard's real height
 
-Matching the true height would mean reserving **~14000px at 768px wide** — screens-deep of blank placeholder, worse than the jump it prevents. Reserving one viewport height is sufficient because **CLS only counts, and users only see, movement of on-screen content**: after the reservation nothing below the fallback is visible at load, so nothing visible moves when the dashboard arrives. Over-reserving is harmless — the displaced content is already below the fold.
+Matching the true height would mean reserving **~14000px at 768px wide** — screens-deep of blank placeholder, worse than the jump it prevents. Reserving one viewport height is sufficient because **CLS only counts, and users only see, movement of on-screen content**: after the reservation nothing below the fallback is visible at load, so nothing visible moves when the dashboard arrives.
 
-`vh` rather than `svh` deliberately: we are intentionally over-reserving, so mobile URL-bar height changes cannot make the reservation too small.
+`vh` rather than `svh` deliberately: mobile URL-bar height changes must not make the reservation too small.
+
+### ⚠️ Amended 2026-07-27 after independent review — the reservation was the right idea at the wrong size
+
+This section originally ended *"Over-reserving is harmless — the displaced content is already below the fold."* **That is true of CLS but false of the user.** Two independent reviewers reached the same conclusion from opposite directions:
+
+- **Above 768px the dashboard mounts at a FIXED height.** [`EventsDashboard.css`](../../web/src/components/EventsDashboard.css) sets `.dashboard-layout { height: 800px }` — not viewport-relative — so the section measures ~1459px regardless of viewport height, while `100vh` scales. On a tall display the reservation exceeds anything the dashboard will ever fill. Measured at 1350×2000: ~540px of band the content never reaches. (The predicted *upward* CLS jump did **not** materialise — measured 0.0111, ~40× below the bug it fixes — because the displaced content is off-screen before and after. The waste is visual, not metric.)
+- **At phone widths the reservation buys nothing.** 375×812 measured **0/5 shifting both with and without it** — the taller mobile hero already pushes the next section off-screen — yet it still imposed a near-empty screen-height band on the audience least able to tolerate ambiguity about whether a page is loading or broken.
+
+**Amended shape:**
+
+```css
+.dashboard-fallback { min-height: min(100vh, 1460px); }
+@media (max-width: 480px) { .dashboard-fallback { min-height: 0; } }
+```
+
+`min()` engages only on viewports taller than ~1460px — precisely where `100vh` was waste — so every verified-working case is unchanged. The 480px cut-off is deliberate and not 768px: **at 768 the reservation is load-bearing** (5/5 shifting at 0.0410 without it, 0/5 with it), because there `.dashboard-layout` becomes `height: auto` and stacks to ~14000px while the hero is still short enough to leave the next section on screen.
 
 ## Out of Scope
 
