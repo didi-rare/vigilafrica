@@ -14,10 +14,21 @@ Component CSS today has literal `font-size: 0.875rem`, `font-weight: 600`, `line
 
 ## ⚠️ Corrected 2026-07-26 — this proposal was written against a superseded font stack
 
-This proposal was authored 2026-05-22, **before the Ground Truth rebrand (ADR-015) replaced the system stack with self-hosted web fonts.** Two claims below were stale and are corrected here:
+Two claims below were false and are corrected here:
 
 - ~~"the project already loads system stacks"~~ (What Changes §2) — **false.** The project self-hosts **IBM Plex Sans, IBM Plex Mono and Space Grotesk via `@fontsource`**, imported at [`web/src/main.tsx:7-13`](../../web/src/main.tsx).
 - ~~"Custom web fonts (still rejected — system stack only)"~~ (Out of Scope) — **false and inverted.** Custom web fonts were *adopted*, not rejected.
+
+**⚠️ Re-corrected 2026-07-27 — the first correction misattributed the cause.** It said this proposal predated "the Ground Truth rebrand (ADR-015) replac[ing] **the system stack** with self-hosted web fonts", implying the claims were merely *stale* — true when written, overtaken later. They were not. Checked out at `b8c4444` (2026-05-22, the day this proposal was authored), `web/index.html` carried:
+
+```html
+<!-- Typography: Inter from Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+```
+
+with `--font-sans: 'Inter', system-ui, -apple-system, sans-serif` in `App.css`. That is a **Google-Fonts-hosted custom web font**, not a system stack — and ADR-015 itself describes replacing the prior *Inter-only* stack, not a system stack.
+
+So "the project already loads system stacks" and "custom web fonts still rejected" were **wrong on the day they were written**, not invalidated by a later rebrand. The distinction matters: a stale claim implies the process worked and time moved on; a claim false at authorship means it was never checked against the code. This one was never checked.
 
 **The family half of this proposal is also already DONE**, incidentally, as part of the rebrand: [`tokens.css:88-92`](../../web/src/styles/tokens.css) already defines `--font-display`, `--font-body`, `--font-mono` and a `--font-sans` legacy alias. What remains unbuilt is the **size / weight / line-height / tracking** scale.
 

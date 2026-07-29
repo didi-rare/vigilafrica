@@ -54,15 +54,21 @@ const UMAMI_DISABLED_KEY = 'umami.disabled'
  * dominant in the live data (2026-07-26: ~5 sessions in 7 days, nearly all
  * ours):
  *
- *  1. **Maintainer browsing.** Umami's documented opt-out is the
- *     `umami.disabled` localStorage key, which suppresses the tracker's
- *     *automatic pageviews* — but per umami-software/umami#3031 it does not
- *     stop explicit `umami.track()` calls, which is every event this module
- *     sends. Honouring the same key here closes that half, so one console
- *     command now excludes both halves consistently.
- *  2. **Synthetic audit runs.** Lighthouse uses a fresh browser profile per
- *     run, so a localStorage flag can never persist for it. The user agent is
- *     the only usable signal.
+ *  1. **Maintainer browsing** — REDUNDANT, kept as defence in depth. Umami's
+ *     documented opt-out is the `umami.disabled` localStorage key. An earlier
+ *     revision of this comment claimed the flag does not stop explicit
+ *     `umami.track()` calls, citing umami-software/umami#3031. **That was
+ *     wrong.** The deployed tracker at analytics.vigilafrica.org routes the
+ *     exported `track` through the same sender as automatic pageviews, and that
+ *     sender's first statement is a `return` when the flag is set — so the
+ *     tracker already suppresses our events. (The cited issue's *title* says
+ *     otherwise; its thread has the maintainer confirming the send method
+ *     checks the flag. The title was read; the thread was not.) Kept because it
+ *     is free and makes the intent explicit at the call site.
+ *  2. **Synthetic audit runs** — THIS is the branch that adds real capability.
+ *     Lighthouse uses a fresh browser profile per run, so a localStorage flag
+ *     can never persist for it, and the tracker has no user-agent filter of its
+ *     own. Without this check, every audit run pollutes the dataset.
  *
  * Deliberately NOT implemented via Umami's `data-before-send` hook, which
  * would also cover auto-pageviews: that requires a global function resolvable

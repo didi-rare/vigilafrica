@@ -25,7 +25,15 @@ Five independent edits. Each can be reviewed and reverted alone.
 
 ### 1. Make the MapLibre attribution link distinguishable (a11y 97 → 100)
 
-`web/src/` CSS: give `.maplibregl-ctrl-attrib-inner a` a non-colour affordance (`text-decoration: underline`). This is the **only** failing accessibility audit on the site; both failing elements (`a`, `div.maplibregl-ctrl-attrib-inner`) are the same control.
+`web/src/` CSS: give the attribution links a non-colour affordance (`text-decoration: underline`). This is the **only** failing accessibility audit on the site; both failing elements (`a`, `div.maplibregl-ctrl-attrib-inner`) are the same control.
+
+**Corrected 2026-07-27 (doc/code drift, found in independent review).** This section originally specified `.maplibregl-ctrl-attrib-inner a`. What shipped is the *outer* selector — [`Map.css`](../../web/src/components/Map.css):
+
+```css
+.maplibregl-ctrl-attrib a { text-decoration: underline !important; }
+```
+
+The implementation is deliberate and better: the outer selector also reaches the **compact/collapsed control** used at narrow viewports, which `-inner` would miss. `!important` is required because MapLibre's own `.maplibregl-ctrl-attrib a{…text-decoration:none}` has *identical* specificity (one class + one element), so precedence would otherwise depend on stylesheet order. The proposal text simply was not updated to match the code.
 
 > Note for `feat-dark-mode-toggle`: its step 7 promises to re-verify **contrast ratio** under a light theme. That would **not** catch this, which is a use-of-colour failure. Widen that step to cover link-distinguishability so a light theme cannot reintroduce it.
 
@@ -43,7 +51,7 @@ Re-implement as a pseudo-element ring animating `transform: scale()` + `opacity`
 
 [`web/vercel.json`](../../web/vercel.json) — the existing CSP, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` and `Permissions-Policy` stay as they are. Add:
 
-- `Cross-Origin-Opener-Policy: same-origin` — currently **no COOP header at all** (Lighthouse: `High`). Low risk: the app opens no cross-origin popups.
+- `Cross-Origin-Opener-Policy: same-origin` — currently **no COOP header at all** (Lighthouse: `High`). Low risk, but ⚠️ **corrected 2026-07-27**: this originally read *"the app opens no cross-origin popups"*, which is false. `web/src/` contains **15** `target="_blank"` anchors to cross-origin destinations (GitHub, the API host, the Apache licence, upstream `event.source_url`). The conclusion survives the corrected premise, for a reason the original did not state: COOP `same-origin` only severs the `window.opener` relationship, **all 15 already carry `rel="noopener noreferrer"`** (verified across multi-line JSX, 15/15), and the codebase contains **zero** uses of `window.open`, `postMessage`, or `<iframe>`. So nothing depends on the relationship COOP breaks.
 - `Strict-Transport-Security: max-age=63072000; includeSubDomains` — Vercel sends a default HSTS header, but without `includeSubDomains` (Lighthouse: `Medium`). **This is newly correct**: `www.vigilafrica.org` was NXDOMAIN until 2026-07-23 and now resolves and serves `308 → apex` (re-verified live 2026-07-26), and `api.` / `analytics.` already send `includeSubDomains` from Caddy ([`deploy/Caddyfile.example`](../../deploy/Caddyfile.example)). The subdomains are consistent, so the directive is safe.
 
 ⚠️ **Do not touch the `script-src` directive in this PR.** Lighthouse flags its host allowlist as `High` and recommends nonces; a static Vite build on Vercel has no per-request nonce mechanism, so that finding is accepted rather than fixed. `script-src` has already silently broken Umami analytics once (shipped broken in v1.3.0, fixed in v1.3.1) — it is the single most regression-prone line in this file.
