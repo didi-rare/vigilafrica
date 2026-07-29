@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.6](https://github.com/didi-rare/vigilafrica/compare/v1.3.5...v1.3.6) (2026-07-29)
+
+
+### Bug Fixes
+
+* **web:** keep the dashboard loading text on screen inside the reservation ([#195](https://github.com/didi-rare/vigilafrica/issues/195)) ([24ae84a](https://github.com/didi-rare/vigilafrica/commit/24ae84a02d8aad19d4344e1580f2842731013a55))
+* **web:** reserve viewport height for the lazy dashboard so visible content stops jumping ([#193](https://github.com/didi-rare/vigilafrica/issues/193)) ([30b2338](https://github.com/didi-rare/vigilafrica/commit/30b2338b93629648c58a560924be6a78b1cb3c3c))
+
 ## [1.3.5](https://github.com/didi-rare/vigilafrica/compare/v1.3.4...v1.3.5) (2026-07-26)
 
 
