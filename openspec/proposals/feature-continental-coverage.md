@@ -37,6 +37,49 @@ Investigated against the tree, not assumed:
 
 The architecture was built for this. The cost is concentrated in **data volume** and **two design decisions**, not in rewriting the pipeline.
 
+## ✅ HDX COD survey — RESOLVED 2026-08-02 (was open question #1)
+
+Surveyed all **54 African states** against the HDX CKAN API (`package_show?id=cod-ab-{iso3}`), the same source `000010` already uses:
+
+| finding | result |
+|---|---|
+| **COD-AB dataset exists** | **54 / 54 (100%)** |
+| Has a GeoJSON resource | **45 / 54 (83%)** |
+| Data vintage 2024 or newer | **50 / 54** (35× 2025, 12× 2024, 3× 2026) |
+| Vintage older than 2023 | **4** — MDG **2010**, TZA 2018, BWA 2021, DJI 2022 |
+
+**The plan's central assumption holds.** Boundary data exists for every African country.
+
+**The 9 without GeoJSON — a clean, self-explaining pattern.** They are `BWA, DJI, GAB, LSO, MDG, MUS, RWA, SYC, TZA`. That set is **exactly identical** to the set of records HDX has not refreshed since 2026 (metadata last touched 2020–2023; the other 45 were all touched in 2026). HDX is adding GeoJSON exports as it refreshes records — so this gap is shrinking on its own, and it doubles as a *least-maintained* flag. **All 9 publish SHP**, so they are convertible (`ogr2ogr`), not blocked.
+
+⚠️ **Madagascar's boundaries are from 2010** — 15 years stale. For a safety-adjacent product that needs an explicit call: use with a provenance warning, source elsewhere, or exclude.
+
+### This settles Decision 1 empirically
+
+Sampled actual resource sizes from HDX (8 countries):
+
+| | Nigeria | Ghana | Togo | Kenya | Ethiopia | DR Congo | Cabo Verde | **South Africa** |
+|---|---|---|---|---|---|---|---|---|
+| GeoJSON | 10.9 MB | 3.3 MB | 1.8 MB | 6.8 MB | 22.7 MB | 24.3 MB | 18.6 MB | **89.2 MB** |
+
+Mean **22 MB**; naive 54-country projection **≈ 1.2 GB** of source GeoJSON. (These files carry *all* admin levels — we need only ADM1 — but the order of magnitude is decisive.)
+
+**Option (a) "keep migrations, one per country" is now ruled out on evidence, not preference.** Recommendation (b), the seed loader, stands and is no longer a judgement call.
+
+### New requirement this survey surfaced: geometry simplification
+
+Nigeria's **37 ADM1 units** occupy **2.3 MB** as full-resolution WKT (`000010`) ≈ 62 KB/unit. Extrapolating to ~700–800 African ADM1 units gives **tens of MB of geometry**, dominated by outliers like South Africa. Complexity varies ~50× between countries (Togo 1.8 MB vs South Africa 89.2 MB), so any mean-based estimate is unreliable — plan for a range.
+
+For our use — *point-in-polygon to name a state* — full coastline resolution is unnecessary. **Simplification tolerance becomes an explicit design parameter**, plausibly worth 10–50× on storage and index size with no practical accuracy loss. There is precedent in the codebase: `000012` already loaded *"geoBoundaries gbOpen ADM0 (simplified), further reduced"*.
+
+⚠️ But simplification must not be applied blindly: over-simplifying shared borders creates **gaps or overlaps between adjacent states**, which would make the enrichment trigger mis-assign or drop points. Use topology-preserving simplification (`ST_SimplifyPreserveTopology` or a shared-edge-aware tool like mapshaper), and validate against known coordinates before and after.
+
+### Consequent scope additions
+
+- **The generator takes GeoJSON only.** Either add SHP input or add an `ogr2ogr` pre-step for the 9 countries.
+- **Per-country vintage must be recorded and surfaced** (work item 9), given the 2010–2026 spread.
+- **Simplification + validation** is a work item in its own right, not a detail.
+
 ## Decision 1 — how are boundaries loaded? (blocking)
 
 `000010_replace_boundary_data.up.sql` is **2.3 MB** for **53 ADM1 units** (Nigeria 37, Ghana 16). Africa has roughly **700–800 ADM1 units** (**estimate — needs per-country verification against HDX availability**). Naive extrapolation: **~30–40 MB of migration SQL**.
@@ -105,10 +148,12 @@ The two performance proposals are currently **held pending traffic** ([[project-
 
 ## Open questions
 
-1. **Is HDX COD ADM1 actually available and current for all ~54 countries?** The whole plan rests on this and it is unverified. Survey before committing.
-2. What are EONET's published rate limits? Decision 2's pacing depends on it.
-3. Do we widen to all of Africa at once, or in tranches (e.g. West Africa first)? Tranches de-risk items 1 and 4 and give an earlier checkpoint.
-4. Does "VigilAfrica" still position as Nigeria/Ghana-focused with continental data, or reposition entirely? Affects item 8 and the partnership narrative.
+1. ~~**Is HDX COD ADM1 available and current for all ~54 countries?**~~ **✅ ANSWERED 2026-08-02 — yes, 54/54.** See the survey section above. Residual sub-questions: what to do about **Madagascar (2010 boundaries)**, and whether to add SHP support to the generator or an `ogr2ogr` pre-step for the 9 non-GeoJSON countries.
+2. **What simplification tolerance?** New, and now the biggest open technical question — it drives storage, index size and enrichment latency, and mis-set it breaks border adjacency. Needs an accuracy/size experiment against known coordinates.
+3. **How many ADM1 units are there in Africa, exactly?** Still estimated at ~700–800, unverified. Requires counting features in the downloaded files. Determines the real geometry volume alongside (2).
+4. What are EONET's published rate limits? Decision 2's pacing depends on it.
+5. Do we widen to all of Africa at once, or in tranches (e.g. West Africa first)? Tranches de-risk the loader and the simplification tuning, and give an earlier checkpoint. **South Africa alone is 89 MB — a natural candidate to sequence late.**
+6. Does "VigilAfrica" still position as Nigeria/Ghana-focused with continental data, or reposition entirely? Affects item 8 and the partnership narrative.
 
 ## Origin
 
