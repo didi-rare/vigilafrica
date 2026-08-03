@@ -66,6 +66,44 @@ Mean **22 MB**; naive 54-country projection **≈ 1.2 GB** of source GeoJSON. (T
 
 **Option (a) "keep migrations, one per country" is now ruled out on evidence, not preference.** Recommendation (b), the seed loader, stands and is no longer a judgement call.
 
+### 🔬 MEASURED 2026-08-03 — simplification experiment (run against real data in PostGIS 3.4)
+
+Loaded the actual production boundaries (`000002` + `000010`) into a throwaway PostGIS 15-3.4 container, generated **10,600 ground-truth points** (200 random inside each of the 53 ADM1 units, of which **1,133 lie within 2 km of a border** — where simplification does its damage), and swept `ST_SimplifyPreserveTopology` using **the production trigger's exact matching logic** (`ST_Intersects` + `ORDER BY ST_Area ASC LIMIT 1`).
+
+| tolerance | vertices kept | size | misassigned | misassigned **near border** | **unassigned** |
+|---|---|---|---|---|---|
+| none (baseline) | 100% | 984 kB | 0% | 0% | **0%** |
+| **0.001° (~110 m)** | **45.1%** | **445 kB** | **0.066%** | **0.618%** | **0.000%** |
+| 0.005° (~550 m) | 16.1% | 161 kB | 0.396% | 3.707% | 0.170% |
+| 0.01° (~1.1 km) | 9.6% | 96 kB | 0.811% | 7.590% | 0.245% |
+| 0.02° (~2.2 km) | 5.5% | 57 kB | 1.594% | 14.916% | 0.519% |
+| 0.05° (~5.5 km) | 2.6% | 27 kB | 3.585% | 28.067% | 1.509% |
+
+**Recommendation: 0.001°.** It halves vertex count at 0.066% error and — decisively — **zero unassigned points**.
+
+⚠️ **Watch the `unassigned` column, not the error rate.** From 0.005° upward, points begin matching *no polygon at all*, so enrichment silently yields `NULL state_name`. For a product whose entire proposition is admin-name-first, a **silent enrichment failure is worse than a slightly-wrong name**. That column, not accuracy, is what rules out the aggressive tolerances.
+
+### ✏️ Corrections to this proposal's own earlier estimates
+
+- ~~"plausibly 10–50× on storage"~~ — **wrong.** Measured **2.2×** at the safe tolerance. Simplification is a modest win, not a transformative one.
+- ~~"tens of MB of geometry… dominated by outliers"~~ — **overstated.** Scaled to **742 ADM1 polygons** (real geometry, replicated and translated) the table is **13 MB / 879k vertices**. That is nothing for Postgres. **Geometry volume is not a real constraint.**
+- The **~1.2 GB figure is *source download*** — zipped GeoJSON containing *all* admin levels. The ADM1-only subset that lands in the database is ~13 MB. These were being conflated.
+- Decision 1's case therefore rests on **repo hygiene** (~33 MB of migration SQL at 750 units), **not** database capacity. Still a valid argument for the loader — a narrower one.
+
+### 🔬 MEASURED — enrichment performance at continental scale (work item 4)
+
+Same 742-polygon table, 2,000 lookups, production trigger logic:
+
+| variant | total | per lookup | |
+|---|---|---|---|
+| A — current production (`ORDER BY ST_Area(geom::geography)`) | 4,811 ms | 2.41 ms | baseline |
+| **B — precomputed `area_m2` column** | **260 ms** | 0.13 ms | **18.5× faster** |
+| C — B + 0.001° simplification | 144 ms | 0.07 ms | 33× faster |
+
+**Work item 4 is the single highest-leverage change in this proposal, and it is nearly free** — add a stored column, change one `ORDER BY`. The bottleneck is `ST_Area` being recomputed per candidate row on every insert, **not** geometry size. Simplification contributes a further 1.8× on top, but ~95% of the win is the column.
+
+Neither variant is catastrophic in absolute terms (2,000 events ≈ 4.8 s even unoptimised), so **performance was never going to block this** — but an 18× win for a stored column is worth taking regardless.
+
 ### New requirement this survey surfaced: geometry simplification
 
 Nigeria's **37 ADM1 units** occupy **2.3 MB** as full-resolution WKT (`000010`) ≈ 62 KB/unit. Extrapolating to ~700–800 African ADM1 units gives **tens of MB of geometry**, dominated by outliers like South Africa. Complexity varies ~50× between countries (Togo 1.8 MB vs South Africa 89.2 MB), so any mean-based estimate is unreliable — plan for a range.
