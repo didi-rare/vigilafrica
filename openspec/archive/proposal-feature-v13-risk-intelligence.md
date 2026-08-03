@@ -1,3 +1,32 @@
+---
+id: feature-v13-risk-intelligence
+status: archived
+branch: n/a — never implemented
+archived_on: 2026-08-03
+archived_reason: >
+  Not viable. Measured 2026-08-03: both proposed categories yield effectively
+  no events. `drought` returns 0 events GLOBALLY over 22 months; `severeStorms`
+  returns 0 for Nigeria+Ghana and 3 Africa-wide. Both are valid EONET category
+  IDs — EONET publishes the definitions but no longer populates them.
+---
+
+> ## 🗄️ ARCHIVED 2026-08-03 — NOT VIABLE, DO NOT IMPLEMENT
+>
+> Measured against EONET (`status=all`, 2024-10-01 → 2026-08-03), this proposal's two categories carry effectively no data:
+>
+> | category | NG+GH | Africa | **GLOBAL** |
+> |---|---|---|---|
+> | `drought` | 0 | 0 | **0** |
+> | `severeStorms` | **0** | 3 | 164 |
+>
+> Both are **valid** EONET category IDs (verified against `/api/v3/categories`) — EONET publishes the definitions and no longer populates `drought` at all, while `severeStorms` simply does not occur in this geography. Implementing either would add UI, API validation, DB constraints and ingestion for **zero events**.
+>
+> The companion `feature-impact-categories` is affected the same way: its `landslides` and `tempExtremes` are **also 0 globally**. Its *category registry* remains useful; its *category choices* do not.
+>
+> ⚠️ **Lesson recorded:** three proposals were authored against EONET categories that produce zero events, and none of them checked the counts first. **Measure a category's actual event volume before proposing it.** Same error class as assuming GDACS would fix event density — it returns 0 for Nigeria and Ghana. See `project-flood-data-source-gap` and `feature-continental-coverage`.
+>
+> Real event density is a **geography-scope** problem, not a category problem: the two categories already ingested yield 291 events for NG+GH and ≥2,000 Africa-wide over the same window.
+
 # Proposal: v1.3 Risk Intelligence Categories (feature-v13-risk-intelligence)
 
 **Status:** Proposed — v1.3. Lands **second** in the v1.3 cycle, after the
