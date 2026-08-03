@@ -13,6 +13,31 @@ branch: tbd
 > in the current ingestion pipeline, and is scoped for a phased implementation
 > **after** v1.3. It changes no application code.
 
+> ## 🛑 STOP — MEASURED 2026-08-02: BOTH GOALS FAIL AT CURRENT GEOGRAPHY
+>
+> **Do not implement this proposal against the current Nigeria + Ghana scope.** It will not deliver either of its two goals, for a reason that was never measured when it was written.
+>
+> **GDACS returns ZERO events for Nigeria and Ghana.** Measured against GDACS's live feed (`https://www.gdacs.org/xml/rss.xml`, 350 events spanning 2025-07-01 → 2026-08-02):
+>
+> | scope | GDACS events |
+> |---|---|
+> | **Nigeria** | **0** |
+> | **Ghana** | **0** |
+> | Africa-wide | ~150 (145 wildfire, 5 drought) |
+> | Global | 350 |
+>
+> GDACS is threshold-based — it alerts on events crossing *global humanitarian-impact* thresholds. West African floods and wildfires largely do not cross them. This is the same reason EONET shows 1 flood for NG+GH while showing 80 Africa-wide.
+>
+> **Consequences for this proposal as written:**
+>
+> - **Goal 1 (availability) does not hold.** "If either source is down, the other keeps the product live" is false today. If EONET went dark, GDACS would supply **zero** events for our covered geography. The fallback does not fall back.
+> - **Goal 2 (corroboration) does not hold.** GDACS cannot corroborate events it does not carry. "Confirmed by N independent sources" would be N=1 for every event we serve.
+> - The **R-01 credibility argument survives** — "we have a second oracle wired in" is still a real due-diligence answer, and the plumbing is genuinely reusable. But shipping it today buys *architecture*, not *resilience*, and the proposal should not be sold internally as the latter.
+>
+> **Precondition:** this proposal becomes genuinely valuable once ingestion covers Africa rather than two countries — at continental scope GDACS contributes ~150 events/13 months and real redundancy. See `feature-continental-coverage`. **Sequence that first.**
+>
+> ⚠️ Also note: this proposal must **never** be justified as a fix for low event density. It adds ~0 events at current scope, and even Africa-wide it is an order of magnitude thinner than EONET (~150/13mo vs ≥2,000/22mo). Density is a *geography-scope* problem, not a source problem — see [[project-flood-data-source-gap]].
+
 ## Why
 
 VigilAfrica ingests every event from a **single upstream source — NASA EONET**
