@@ -1,5 +1,25 @@
 # Proposal: Impact Category Expansion (feature-impact-categories)
 
+> ## ⚠️ 2026-08-03 — KEEP THE REGISTRY, DROP THE CATEGORIES. Do not implement as written.
+>
+> Measured against EONET (`status=all`, 2024-10-01 → 2026-08-03), **both categories this proposal adds return zero events — worldwide**:
+>
+> | category | NG+GH | Africa | **GLOBAL** |
+> |---|---|---|---|
+> | `landslides` | 0 | 0 | **0** |
+> | `tempExtremes` | 0 | 0 | **0** |
+>
+> Both are **valid** EONET category IDs (verified against `/api/v3/categories`) — EONET publishes the definitions and no longer populates them. Implementing them means shipping UI, API validation, DB constraints, ingestion and seed data for **nothing**.
+>
+> **What survives:** the **category registry** is genuinely useful groundwork and a real prerequisite for any future expansion. Keep it.
+> **What does not:** the specific category choices. Re-decide them *after* continental coverage, from measured counts.
+>
+> The companion `feature-v13-risk-intelligence` (`severeStorms`, `drought`) was **archived 2026-08-03** for the same reason — `drought` is also 0 globally.
+>
+> ⚠️ **Lesson:** three proposals were written against categories producing zero events and none checked the counts. **Measure a category's real event volume before proposing it.** Event density is a *geography-scope* problem — the two categories already ingested yield 291 events for NG+GH and ≥2,000 Africa-wide over the same window. See `feature-continental-coverage`.
+>
+> **Status caveat:** this change is 0/32 tasks and dated 2026-05-29. Its viability question is now answered; whether to revive the registry half is a maintainer decision.
+
 **Status:** Proposed — re-targeted to v1.3. v1.1.0 was a release-please CI infra release and v1.2.0 was the post-v1.1 audit roll-up; neither shipped new EONET categories. This proposal lands **first** in the v1.3 cycle (introducing the category registry), with [feature-v13-risk-intelligence](../../proposals/feature-v13-risk-intelligence.md) landing second on top of it. Both ship before the v1.3.0 tag.
 
 ## Why

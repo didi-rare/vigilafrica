@@ -1,7 +1,9 @@
 ---
 id: fix-reveal-below-fold
-status: proposed
+status: archived
 branch: fix/reveal-below-fold-backstop
+merged_pr: https://github.com/didi-rare/vigilafrica/pull/182
+archived_on: 2026-08-03
 ---
 
 # Proposal: Reveal Backstop So Landing Sections Are Never Blank on Load (fix-reveal-below-fold)
