@@ -14,15 +14,10 @@
 import { execSync } from 'node:child_process'
 
 const ALLOWLIST = [
-  {
-    ghsa: 'GHSA-qwww-vcr4-c8h2',
-    package: 'react-router',
-    reason:
-      'RSC-mode CSRF bypass. VigilAfrica is a static SPA (BrowserRouter + JSX <Routes>, no createBrowserRouter / RSC / server runtime), so the affected code path cannot execute. Unreachable.',
-    whyNotBumped:
-      'No fixed react-router-dom exists: latest published is 7.18.1, inside the vulnerable 7.12.0–8.2.0 range. Downgrading below 7.12.0 reintroduces the reachable open-redirect (GHSA-wrjc-x8rr-h8h6) fixed in #177. Remove this entry when react-router publishes a fix > 8.2.0.',
-    reviewBy: '2026-08-14',
-  },
+  // Empty. The react-router RSC-CSRF entry (GHSA-qwww-vcr4-c8h2) was removed on
+  // 2026-08-03 once its own documented exit condition was met — react-router
+  // published 8.3.0 (2026-07-22), outside the vulnerable 7.12.0–8.2.0 range.
+  // The fix was a react-router-dom -> react-router v8 move; see chore-react-router-8.
 ]
 
 const SEVERITY_RANK = { info: 1, low: 2, moderate: 3, high: 4, critical: 5 }
