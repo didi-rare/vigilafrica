@@ -28,28 +28,111 @@ Concretely — **three distinct flood events inside four days**, all widely repo
 
 That is the gap, evidenced rather than argued. Note also that Lagos recorded **586.4 mm to 3 July 2026 — 12.8% *below* the 2010–2025 average**: this is drainage failure, not exceptional rainfall, so it recurs predictably rather than being a freak event.
 
+## Ground truth — PRE-REGISTERED 2026-08-04, frozen before any retrieval
+
+Assembled by an independent research pass constrained to sources **outside the ingestion channel under test**. Punch, Premium Times and Vanguard were forbidden as evidence (they are what we are testing); TheCable and Daily Trust were excluded entirely on robots.txt AI-crawler grounds.
+
+**This table is frozen. Do not add events after retrieval begins.**
+
+| # | date | areas named | corroboration | tier |
+|---|---|---|---|---|
+| 1 | **~17–18 May 2025** | Lekki Phase 1 | Vanguard, Daily Trust only | ⚠️ **excluded from scoring** |
+| 2 | **3–4 Aug 2025** | Ikorodu: Ijede, Oko Ope, Anjorin, Abule Eko, Odetedo; Agric | Sahara Reporters, Channels TV, The Eagle | domestic non-test-channel |
+| 3 | **20 Sept 2025** | Lagos aggregate (no neighbourhood breakdown) | **ACT Alliance citing NEMA** — 57,951 affected, 3,680 displaced | official/humanitarian |
+| 4 | **25–27 Sept 2025** | Lekki/Ikota — Kusenla Rd, drainage systems 156/157 | Nairametrics, Channels TV, Arise, The Nation | domestic non-test-channel |
+| 5 | **28 Jun 2026** ⚓ | Murtala Muhammed Int'l Airport terminal | **Xinhua** (FAAN spokesman quoted) | international wire |
+| 6 | **30 Jun 2026** ⚓ | Lekki, Victoria Island, Okota, Anthony Village, Oshodi-Apapa, Okokomaiko, Somolu, Ipaja, Ayobo | **AFP + Xinhua + Channels TV** | international wire ×2 |
+| 7 | **14 Jul 2026** | Ikoyi, Lekki, Victoria Island, Oworonshoki | BusinessDay NG | domestic non-test-channel |
+
+**Scoring set = rows 2–7 (six events).** Row 1 is retained for the record but **excluded from scoring**: it is documented only inside the test channel, so scoring against it would be circular. The maintainer confirms it corresponds to their recollection of "flooding around June 2025" — the month was misremembered; the event is real.
+
+⚠️ **Coordinates in the source research are approximate and were not looked up with a mapping tool.** Adequate for coarse retrieval scoring; **not** survey-precision. Geocoding accuracy must be judged against named localities, not against those coordinates.
+
+### What the sourcing itself revealed
+
+- **Both June 2026 anchors are confirmed by international wire**, independently of any Nigerian daily — the strongest corroboration available.
+- **Independent non-domestic sourcing exists ONLY for the June 2026 events.** Every 2025 event rests on domestic Nigerian outlets outside the exclusion list. Those are independent *of the ingestion channel* — which is what the test requires — but they share a media ecosystem, so they are a weaker tier and labelled as such.
+- 🎯 **Evidence FOR the depth thesis:** street-level detail for 28 June (Oshodi, Mushin, Surulere/Fashoro St, Akowonjo Rd) appears **only** in Punch/Premium Times. The international wires covered the same date but reported only *airport, Lekki, VI*. **The ingestion channel carries finer location granularity than international sources** — precisely the capability the product depends on.
+
 ## Pre-registered pass criteria
 
 **These are fixed before the test runs and must not be renegotiated afterwards.** This project has twice produced a result that looked positive only because the bar was set after seeing the data.
 
-| metric | bar |
+### ⚠️ The n=6 problem, and how this design handles it
+
+Six scoring events makes a 75% bar brittle: 5/6 = 83% (pass), 4/6 = 67% (fail). **A single ambiguous case would flip the verdict** — unacceptable for a decision this size. Three changes fix it without inventing events.
+
+**1. The primary metric is per-LOCALITY, not per-event.** Retrieval is not binary. Each event names multiple neighbourhoods, and each `(event, locality)` pair is an independent retrieval-and-geocoding test. The frozen set yields **22 locality mentions**:
+
+| event | localities named | n |
+|---|---|---|
+| 3–4 Aug 2025 | Ijede, Oko Ope, Anjorin, Abule Eko, Odetedo, Agric | 6 |
+| 20 Sept 2025 | *(aggregate — no localities)* | 0 |
+| 25–27 Sept 2025 | Lekki/Ikota, Kusenla Rd | 2 |
+| 28 Jun 2026 | Murtala Muhammed Int'l Airport | 1 |
+| 30 Jun 2026 | Lekki, Victoria Island, Okota, Anthony Village, Oshodi-Apapa, Okokomaiko, Somolu, Ipaja, Ayobo | 9 |
+| 14 Jul 2026 | Ikoyi, Lekki, Victoria Island, Oworonshoki | 4 |
+| | **total** | **22** |
+
+**n = 22 is a workable sample. n = 6 is not.** This costs nothing extra — the same retrieval run produces both — and it measures what the product actually needs: not "did we notice a flood happened somewhere in Lagos," but "did we correctly place it in *your* neighbourhood."
+
+**2. The event-level decision is three-way, not binary.** Its brittleness only bites in the middle band, so the middle band is explicitly declared inconclusive rather than force-resolved:
+
+| event-level retrieval | verdict |
 |---|---|
-| **Retrieval** — events findable in ≥1 permitted source | **> 75%** |
-| **Geocoding** — exact-or-close of retrieved events | **> 80%** |
-| **Wrong** — confidently placed in the wrong area | **< 5%** |
-| **Lag** — median publication delay after event | **< 24 h** |
+| **≤ 3 / 6** | **Depth NOT viable. Stop.** No statistics needed — the channel doesn't carry the events. |
+| **4–5 / 6** | **INCONCLUSIVE.** Expand the ground-truth set before deciding. Do **not** resolve by argument. |
+| **6 / 6** | **Viable.** Proceed on the locality-level metrics. |
+
+**3. Report an interval, not a point estimate.** Clopper-Pearson exact 95% CIs, computed 2026-08-04:
+
+| result | rate | 95% CI | width |
+|---|---|---|---|
+| 4/6 events | 66.7% | 22.3 – 95.7% | 73 pp |
+| 5/6 events | 83.3% | **35.9 – 99.6%** | 64 pp |
+| 6/6 events | 100% | 54.1 – 100% | 46 pp |
+| 17/22 localities | 77.3% | 54.6 – 92.2% | 38 pp |
+| 20/22 localities | 90.9% | 70.8 – 98.9% | 28 pp |
+| 22/22 localities | 100% | 84.6 – 100% | 15 pp |
+
+Quoting "83%" from 5/6 as though it were a measurement would be false precision — the interval spans nearly the whole range.
+
+### ⚠️ Read this before interpreting any result: the test is asymmetric
+
+Even at n=22 the intervals are wide, and this must not be glossed. **To confirm a true rate above 75% at 95% confidence, the lower CI bound must clear 75% — which needs ≈22/22.** Even 20/22 (90.9%) has a lower bound of **70.8%**, below the bar.
+
+**Therefore:**
+
+- **A poor result is decisive.** 8/22 (36.4%) has an upper bound well below 75% → depth confidently rejected.
+- **A good result is *permissive*, not confirmatory.** It means "not disproven — proceed, carefully." It does **not** establish that retrieval genuinely exceeds 75%.
+
+**This spike is far better at killing the depth thesis than at proving it.** That is an acceptable and even desirable property for a one-week, decision-gating test — cheap tests should be good at saying no. But the write-up must not report a pass as though depth were validated. It is a green light to invest further, not evidence the pipeline works.
+
+Anyone tempted to resolve a borderline result by argument should re-read this section.
+
+### The bars
+
+| metric | n | bar |
+|---|---|---|
+| **Locality retrieval** *(primary)* — named localities findable in ≥1 permitted source | 22 | **> 75%** |
+| **Geocoding** — exact-or-close, of retrieved localities | ≤22 | **> 80%** |
+| **Wrong** — confidently placed in the wrong area | ≤22 | **< 5%** |
+| **Lag** — median publication delay after event | 6 | **< 24 h** |
+| *Event retrieval (secondary, coarse)* | 6 | *see three-way rule above* |
 
 Miss any badly → **depth is not viable; recommend breadth.**
+
+**Stopping rule, pre-registered:** if the first three events processed yield **zero** retrieved localities, stop immediately and report not-viable. Do not process the remainder hoping for recovery.
 
 ⚠️ **`wrong` and `failed` are tracked separately and are not equivalent.** Failing to place an event is recoverable — you show it without a location. Confidently placing a flood in the wrong neighbourhood is a *harm* in a safety-adjacent product. This mirrors the enrichment finding where `unassigned`, not raw accuracy, was the deciding column.
 
 ## Method
 
-### Day 1 — ground truth FIRST
+### Day 1 — ✅ DONE 2026-08-04, ground truth frozen
 
-Build the reference set of **12–15 Lagos flood events** (2025 + 2026 rainy seasons) with date, neighbourhood(s), and approximate coordinates. Seed from the table above and the 2025 events (Ijede/Ikorodu submersion; the Aug 2025 relocation warnings for Lekki/Ikorodu/Ajegunle).
+The reference set is in **Ground truth — PRE-REGISTERED** above: 6 scoring events, 22 locality mentions, assembled from sources outside the ingestion channel. **It is frozen. Do not add events after retrieval begins** — grading against whatever the pipeline happens to find is an unfalsifiable result.
 
-**Ground truth is fixed and written down before any retrieval is attempted.** Build the pipeline first and you will grade it against whatever it happens to find — an unfalsifiable result.
+Day 1 also produced a finding worth carrying: independent corroboration for Lagos urban flooding is **thin before June 2026**. Only the two June 2026 events have international-wire sourcing; everything in 2025 rests on domestic outlets. That is adequate for this test (they are independent of the *ingestion channel*) but it caps how strong any conclusion can be.
 
 ### Days 2–3 — retrieval (the real go/no-go)
 
