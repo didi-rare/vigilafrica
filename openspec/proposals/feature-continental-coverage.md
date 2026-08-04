@@ -118,6 +118,42 @@ For our use — *point-in-polygon to name a state* — full coastline resolution
 - **Per-country vintage must be recorded and surfaced** (work item 9), given the 2010–2026 spread.
 - **Simplification + validation** is a work item in its own right, not a detail.
 
+## 🔬 MEASURED 2026-08-04 — where the events actually are (settles open questions 3–5)
+
+Counted live against EONET v3, `status=all`, 2024-10-01 → 2026-08-04, per candidate bbox:
+
+| region | floods | wildfires | storms | total |
+|---|---|---|---|---|
+| West Africa | 17 | 521 | 0 | 538 |
+| Central Africa | 23 | 1,970 | 0 | 1,995 |
+| **East / Horn** | **46** | 1,791 | 2 | 1,842 |
+| Southern Africa | 18 | 577 | 5 | 600 |
+| North Africa | 40 | 22 | 0 | 62 |
+| **Africa (all)** | **159** | **3,079** | 18 | **3,260** |
+| *NG + GH (today)* | *7* | *152* | *0* | *159* |
+
+### ✅ This settles open question 5 — do NOT tranche by region
+
+A West Africa first tranche yields **17 floods in 22 months** — 2.4× today — while still requiring the *entire* loader, simplification and pacing build. **Floods are thinly spread; no region has flood density.** The most flood-rich region (East/Horn, 46) is ~2 floods/month.
+
+The flood payoff only arrives at full continental scale: **7 → 159 floods**, roughly 0.3/month to 7/month. **Recommendation: go continental in one step, and tranche by *engineering* risk instead** — sequence South Africa's 89 MB and the 9 SHP-only countries late.
+
+### ⚠️ The wildfire ratio is worse than this proposal states — and it forces a product decision
+
+The warning above says *"1,917 of ~2,000 are wildfires."* Measured today it is **3,079 of 3,260 — 94.4%**.
+
+**Maintainer decision, 2026-08-04: floods remain the default view; wildfires become opt-in via filter.** Without this, widening the box converts a Nigeria *flood* product into an Africa *wildfire* map, and "VigilAfrica shows floods in your area" stops being true at a glance. This adds filter/default work to items 6–7.
+
+### ✅ Open question 4 answered — EONET publishes no rate limit
+
+The v3 API documentation states **no** rate limit, throttle, quota or usage policy. Decision 2's pacing therefore has no documented constraint to design against; pace conservatively by judgement and treat it as a politeness budget, not a compliance one.
+
+### ⚠️ These counts do not match this proposal's own earlier figures
+
+The table at the top of this proposal records **NG+GH = 43 events / 1 flood** and **Africa ≥ 2,000 / 80 floods**. Measured 2026-08-04 the same geographies give **159 / 7** and **3,260 / 159**.
+
+**Likely:** the 43 was the production *stored* count — depressed by the `closedEventWindowDays = 30` backfill gap — rather than feed availability. The bbox used for the original Africa figure is not recorded, so it cannot be reconciled from here. **Re-measure before either set of numbers drives a decision.** The *direction* is unaffected: widening is worth ~20× on events and ~23× on floods.
+
 ## Decision 1 — how are boundaries loaded? (blocking)
 
 `000010_replace_boundary_data.up.sql` is **2.3 MB** for **53 ADM1 units** (Nigeria 37, Ghana 16). Africa has roughly **700–800 ADM1 units** (**estimate — needs per-country verification against HDX availability**). Naive extrapolation: **~30–40 MB of migration SQL**.
@@ -160,7 +196,7 @@ At 54 countries that becomes **108 sequential requests per tick**.
 | 1 | Boundary acquisition for ~54 countries | HDX COD where available, geoBoundaries fallback. Availability/vintage **varies by country** — must be surveyed, not assumed. |
 | 2 | Implement Decision 1 | Loader or migrations |
 | 3 | Extend `DefaultCountries` + Decision 2 pacing | Mechanical once decided |
-| 4 | Enrichment performance | `ORDER BY ST_Area(geom::geography)` is computed per insert. With ~800 polygons instead of 53, precompute area as a stored column and index it. **Measure before and after.** |
+| 4 | ~~Enrichment performance~~ | ✅ **SHIPPED 2026-08-04** as [`perf-boundary-area-precompute`](../changes/perf-boundary-area-precompute/proposal.md) — migration `000013`. Measured **16.2×** (5,520 ms → 341 ms over 2,226 lookups at 742 polygons), with assignment-by-assignment proof of identical output (2,226/2,226). ⚠️ Two corrections to this row: the column is **`GENERATED ALWAYS ... STORED`**, not a plain stored column, so it cannot drift when `geom` changes; and **do not index it** — `EXPLAIN` shows the planner uses the GIST index then an in-memory quicksort and never reads a btree on `area_m2`. |
 | 5 | **ADM1 name disambiguation** | ~800 names across 54 countries **will** collide (multiple "Central", "Northern", "Eastern"). `/v1/events?state=` filters by `ILIKE` on `state_name` alone (`queries.go:50`) — ambiguous across countries. Needs country qualification in the API and UI. |
 | 6 | API de-hardcoding | `handlers/country.go:15-16` (NG/GH map), its `errUnknownCountry` message, `handlers/context.go:35,53-54` (Nigeria defaults). |
 | 7 | Frontend | `EventsDashboard.tsx:20` `SUPPORTED_COUNTRIES`, `:24-25` `COUNTRY_CENTERS`. A 54-entry dropdown needs a different UX than 2 — grouping or search. |
@@ -188,10 +224,10 @@ The two performance proposals are currently **held pending traffic** ([[project-
 
 1. ~~**Is HDX COD ADM1 available and current for all ~54 countries?**~~ **✅ ANSWERED 2026-08-02 — yes, 54/54.** See the survey section above. Residual sub-questions: what to do about **Madagascar (2010 boundaries)**, and whether to add SHP support to the generator or an `ogr2ogr` pre-step for the 9 non-GeoJSON countries.
 2. **What simplification tolerance?** New, and now the biggest open technical question — it drives storage, index size and enrichment latency, and mis-set it breaks border adjacency. Needs an accuracy/size experiment against known coordinates.
-3. **How many ADM1 units are there in Africa, exactly?** Still estimated at ~700–800, unverified. Requires counting features in the downloaded files. Determines the real geometry volume alongside (2).
-4. What are EONET's published rate limits? Decision 2's pacing depends on it.
-5. Do we widen to all of Africa at once, or in tranches (e.g. West Africa first)? Tranches de-risk the loader and the simplification tuning, and give an earlier checkpoint. **South Africa alone is 89 MB — a natural candidate to sequence late.**
-6. Does "VigilAfrica" still position as Nigeria/Ghana-focused with continental data, or reposition entirely? Affects item 8 and the partnership narrative.
+3. **How many ADM1 units are there in Africa, exactly?** Still estimated at ~700–800, unverified. Requires counting features in the downloaded files. Determines the real geometry volume alongside (2). *(Partially de-risked: a 742-polygon fixture built from real geometry measures **12 MB**, confirming geometry volume is not a constraint — but the true count is still unverified.)*
+4. ~~What are EONET's published rate limits?~~ **✅ ANSWERED 2026-08-04 — there are none published.** Pace by judgement; treat it as a politeness budget, not a compliance one.
+5. ~~Do we widen to all of Africa at once, or in tranches?~~ **✅ ANSWERED 2026-08-04 — do NOT tranche by region.** West Africa alone yields 17 floods/22 months for the full build cost; flood payoff only exists at continental scale. **Tranche by engineering risk instead** — sequence South Africa (89 MB) and the 9 SHP-only countries late.
+6. Does "VigilAfrica" still position as Nigeria/Ghana-focused with continental data, or reposition entirely? Affects item 8 and the partnership narrative. **Still open** — but note the 2026-08-04 category decision (floods default, wildfires opt-in) already commits to *flood-first* positioning regardless of geographic framing.
 
 ## Origin
 
