@@ -176,6 +176,59 @@ Retrieval rate, the four-way geocoding split, median lag. Then answer plainly: *
 - Social-media ingestion — different provenance and verification problem entirely.
 - Deciding breadth-vs-depth. This spike *informs* that decision; it does not make it.
 
+## Findings — Days 2–3 (retrieval), run 2026-08-04
+
+Searched the three permitted outlets (Punch, Premium Times, Vanguard) for each frozen ground-truth event. TheCable and Daily Trust excluded throughout on robots.txt AI-crawler grounds.
+
+### Event-level retrieval: **6 / 6**
+
+| event | found in | corroborating detail recovered |
+|---|---|---|
+| 3–4 Aug 2025 | Vanguard, Punch | Ijede/Ikorodu; "28 houses with fences destroyed"; 13 h rainfall |
+| 20 Sept 2025 | Punch | **57,951 affected, 3,680 displaced, 3,244 houses** — matches the NEMA/ACT ground-truth figures exactly |
+| 25–27 Sept 2025 | Vanguard, Punch | Kusenla Rd; the "1.2 m" drainage-invert misalignment; systems 156/157 |
+| 28 Jun 2026 | Premium Times, Punch | terminal powerhouse shutdown; airlines moved to Terminal 2 |
+| 30 Jun 2026 | Vanguard, Punch, Premium Times | Okota canoe evacuation; Ago Palace Way |
+| 14 Jul 2026 | Punch | "worst-hit areas included Ikoyi, Lekki, Victoria Island and Oworonshoki" |
+
+Per the pre-registered three-way rule: **6/6 → viable, proceed to locality metrics.**
+
+### Locality retrieval (primary metric): **17 / 22 = 77.3%**
+
+| event | n | retrieved | missed |
+|---|---|---|---|
+| 3–4 Aug 2025 | 6 | 5 | Agric |
+| 20 Sept 2025 | 0 | — | *(aggregate event, no localities)* |
+| 25–27 Sept 2025 | 2 | 2 | — |
+| 28 Jun 2026 | 1 | 1 | — |
+| 30 Jun 2026 | 9 | 5 | Victoria Island, Anthony Village, Somolu, Ayobo |
+| 14 Jul 2026 | 4 | 4 | — |
+| **total** | **22** | **17** | **5** |
+
+**Bar was > 75%. Result 77.3% — passes by a single locality.**
+
+⚠️ **95% CI: 54.6 – 92.2%. The lower bound is below the bar.** Per the asymmetry section written *before* any data was seen: **this result is permissive, not confirmatory.** It means "not disproven — proceed carefully." It does **not** establish that true retrieval exceeds 75%. One locality either way flips the point estimate.
+
+*"Somolu" appeared only in a NiMet **forecast**, not an event report — scored as not retrieved, per the warning-vs-event rule.*
+
+### 🎯 The observation that matters more than the score
+
+**The misses cluster almost entirely in one event, for an instructive reason.**
+
+For 30 June the Nigerian dailies covered the flood *extensively* but named a **different and larger** set of localities than AFP/Xinhua: Ago Palace Way, Gbagada, Isashi, Iba, Ojo, Ikorodu Road, Ikeja, Maryland, Mushin, Ogudu, Agege, Alimosho, Obalende, Ajah, Mafoluku.
+
+The ground truth used the **wire's** list. The channel used its own — and it is *richer*, not poorer. So 5/9 is **not** the channel failing to cover Lagos; it is two sources naming different neighbourhoods for the same flood. **The metric understates channel capability.**
+
+**This observation is recorded but the score is NOT adjusted.** Rescoring against localities discovered during retrieval is precisely the goalpost-move this spec forbids. If a future run wants credit for those localities, they must be added to a frozen ground truth *before* that run.
+
+This also reinforces the Day-1 finding: street-level detail (Ago Palace Way, Fashoro Street, Kusenla Road) exists in the ingestion channel and in **no** international or humanitarian source. That is the capability the product depends on.
+
+### ⚠️ Not measured
+
+**Publication lag was not measured.** Search results give article existence and approximate month, not timestamps. The `< 24 h` bar requires fetching each article and reading its publication time — deferred to Days 4–5. Stated rather than estimated.
+
+Status of the four bars: locality retrieval **measured** · event retrieval **measured** · geocoding **pending** · lag **pending**.
+
 ## Deliverable
 
 A one-page result in this proposal's `## Findings` section: the four metrics against their bars, the four-way geocoding split, and a **viable / not viable** verdict with the evidence attached.
