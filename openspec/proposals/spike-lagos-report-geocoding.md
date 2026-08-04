@@ -1,12 +1,20 @@
 ---
 id: spike-lagos-report-geocoding
-status: proposed
-branch: tbd
+status: complete
+branch: docs/spike-days-2-3-findings
 ---
 
 # Spike: Can Lagos Flood Reports Be Reliably Located? (spike-lagos-report-geocoding)
 
 > **Time-boxed spike — one week, no production code.** It answers one question and then stops. A spike that turns into an implementation has failed at its job.
+>
+> ## 🔴 COMPLETE 2026-08-04 — ANSWER: **NO. Depth is not viable as specified; recommend breadth.**
+>
+> Reports are **retrievable** (6/6 events, 77.3% of localities) and **fast** (median ≈ 12 h). They are **not reliably locatable**: **58.8%** exact-or-close against a **> 80%** bar, and **23.5%** placed in the **wrong part of the city** against a **< 5%** bar — a ~5× miss on the metric the spec named in advance as the deciding one.
+>
+> **The bottleneck is the gazetteer, not the journalism.** Both "Lekki" mentions — the product's flagship user — resolve ~39 km east into the wrong LGA, and *both independent gazetteers make the same error*, so cross-source agreement does not catch it. No cheap post-processing rule rescues it; every filter that removes wrong placements removes correct ones too.
+>
+> Full evidence in **[Findings — Day 6: verdict](#findings--day-6-verdict)**. Harness: [`scripts/spike-lagos-geocoding/`](../../scripts/spike-lagos-geocoding/).
 
 ## The question
 
@@ -228,6 +236,147 @@ This also reinforces the Day-1 finding: street-level detail (Ago Palace Way, Fas
 **Publication lag was not measured.** Search results give article existence and approximate month, not timestamps. The `< 24 h` bar requires fetching each article and reading its publication time — deferred to Days 4–5. Stated rather than estimated.
 
 Status of the four bars: locality retrieval **measured** · event retrieval **measured** · geocoding **pending** · lag **pending**.
+
+*(Resolved below — both were measured on 2026-08-04. Lag passed; **geocoding failed both its bars**, which decided the spike.)*
+
+## Findings — Days 4–5 (geocoding + lag), run 2026-08-04
+
+### Method actually used
+
+Each of the **17 retrieved** locality mentions was resolved through **two independent gazetteers** so accuracy could not be self-certified by a single source:
+
+| | gazetteer | query |
+|---|---|---|
+| **A** | Nominatim → **OpenStreetMap** | `"<name>, Lagos, Nigeria"` — the realistic pipeline; the article states the city |
+| **B** | Open-Meteo → **GeoNames** | bare `"<name>"`, Nigerian hit preferred — the ambiguity diagnostic |
+
+Scoring uses **A** (the realistic pipeline). Nominatim was rate-limited to 1 req/s per its usage policy.
+
+**The harness is committed** at [`scripts/spike-lagos-geocoding/`](../../scripts/spike-lagos-geocoding/) — `geocode.mjs`, `score.mjs`, `mitigate.mjs`, and the `geocode-results.json` snapshot these numbers were computed from — so this verdict is reproducible rather than self-certified.
+
+### The four-way split: **FAILS BOTH BARS**
+
+| outcome | n | rate | 95% CI | bar | verdict |
+|---|---|---|---|---|---|
+| **Exact** (correct LGA) | 9 | 52.9% | 27.8 – 77.0% | — | — |
+| **Close** (right area, wrong sub-unit) | 1 | 5.9% | 0.1 – 28.7% | — | — |
+| **Wrong** (different part of the city) | 4 | **23.5%** | 6.8 – 49.9% | **< 5%** | ❌ **FAIL — ≈5× over** |
+| **Failed** (nothing extracted) | 3 | 17.6% | 3.8 – 43.4% | — | — |
+| **Exact-or-close** | 10 | **58.8%** | 32.9 – 81.6% | **> 80%** | ❌ **FAIL** |
+
+**The `wrong` column is the one the spec singled out in advance** as the deciding metric — "confidently placing a flood in the wrong neighbourhood is a *harm*." It missed by roughly five times.
+
+### The four wrong placements, and why they are not flukes
+
+| locality | what the gazetteer returned | error | failure class |
+|---|---|---|---|
+| **Lekki** (×2 — 30 Jun, 14 Jul) | `Ibeju Lekki` LGA boundary, 3.815°E | **~39 km east, wrong LGA** | **name spans two LGAs** |
+| **Oworonshoki** | `Apapa-Oworonshoki Expressway`, Amuwo Odofin | **~11 km, wrong LGA** | **road named after a place** |
+| **Anjorin** | `Anjorin Street, Idimu, Alimosho` | **~32 km from Ikorodu** | **road named after a place** |
+
+Verified by re-querying with the LGA supplied: `"Oworonsoki, Kosofe, Lagos"` returns the real place at `6.5502,3.4022` (Kosofe) — but the pipeline does not know the LGA, that being the thing it is trying to determine.
+
+**The Lekki case is the most serious result in this spike.** Lekki is the single most-mentioned locality in the corpus and the product's flagship user ("would this have told a **Lekki** resident something useful?"). Constraining to Eti-Osa returns the urbanised, flooded Lekki at 3.45–3.53°E; unconstrained, both gazetteers return **Ibeju-Lekki**, a different LGA ~39 km east. **Both independent sources make the same error**, so cross-source agreement — the usual defence — does not catch it.
+
+### The three failures are a different, milder problem
+
+- **Oko Ope**, **Odetedo** — absent from *both* gazetteers even with `Ikorodu` supplied. Small riverine settlements simply are not in OSM or GeoNames.
+- **Murtala Muhammed International Airport** — `"…, Lagos, Nigeria"` returns **nothing**, while the looser `"Murtala Muhammed Airport Lagos"` resolves correctly to Terminal 2 in Ikeja. A brittle exact-string match, not missing data.
+
+These are recoverable: you show the event without a pin. They are **not** equivalent to the wrong placements.
+
+### ⚠️ No cheap post-processing rule rescues this — tested, not assumed
+
+Three of four wrong placements were road matches, so the obvious mitigation is to reject roads. **It was evaluated rather than asserted** ([`mitigate.mjs`](../../scripts/spike-lagos-geocoding/mitigate.mjs)):
+
+| rule | exact-or-close (bar > 80%) | wrong (bar < 5%) |
+|---|---|---|
+| 0. as measured | 58.8% ❌ | 23.5% ❌ |
+| 1. reject every `highway/*` match | **41.2%** ❌ | 11.8% ❌ |
+| 2. reject `highway/*` unless the query names a road | **47.1%** ❌ | 11.8% ❌ |
+| 3. rule 2 + reject LGA-boundary centroids | **47.1%** ❌ | **0.0%** ✅ |
+
+Every rule that removes wrong placements also removes **correct** ones — `Okota` and `Kusenla Road` are genuine road matches that were right. The tension is fundamental: **the failure is name ambiguity, not match type**, so filtering by match type cannot separate them.
+
+**Rule 3 is the honest summary of the whole exercise: you can make this pipeline safe, or useful, but not both, with off-the-shelf gazetteers.** It reaches zero harm only by refusing to place nearly half the localities.
+
+### Sensitivity — the conclusion survives the contestable call
+
+"Lekki" is genuinely ambiguous in ordinary usage (it can mean the whole peninsula, which includes Ibeju-Lekki). Scoring it generously:
+
+| scoring | exact-or-close | wrong |
+|---|---|---|
+| strict (as reported) | 58.8% ❌ | 23.5% ❌ |
+| both Lekki mentions → *Close* | 70.6% ❌ | 11.8% ❌ |
+| **maximally generous** — all 4 wrong → *Close* | 82.4% ✅ (CI 56.6–96.2%) | 0.0% ✅ |
+
+**Both bars still fail under the generous-but-defensible reading.** Only the indefensible one passes — and treating a 39 km, wrong-LGA placement as "close" is not available in a safety-adjacent product. **The verdict does not rest on a judgement call.**
+
+### Publication lag: **PASSES** — median ≈ 12 h
+
+All six events measured from article metadata (`datePublished` / `article:published_time`), not estimated. Lagos is **UTC+1**; times below are converted.
+
+| event | earliest permitted-source article | published (WAT) | lag |
+|---|---|---|---|
+| 3–4 Aug 2025 Ikorodu | Punch | 4 Aug, 17:13 | ~22 h |
+| 20 Sept 2025 NEMA aggregate | Punch | **23 Sept, 05:12** | **~73 h** ❌ |
+| 25–27 Sept 2025 Lekki/Ikota | Punch | 24 Sept, 21:17 | ≤ 0 — *precedes* the truth window |
+| 28 Jun 2026 airport | Punch | 29 Jun, 00:00 | ~14–18 h |
+| 30 Jun 2026 | Vanguard | 30 Jun, 17:34 | same day |
+| 14 Jul 2026 | Punch | 14 Jul, 00:01 | ~0 h |
+
+**5 of 6 within 24 h; median ≈ 12 h. Bar `< 24 h` passes.**
+
+Precision is deliberately limited to hours — **event onset times are not known precisely**, so lag cannot be stated more finely than the inputs justify. Two events demonstrate this directly: the Sept-2025 coverage *predates* the ground-truth window, and a Vanguard Lekki piece ran 12 July for a 14 July event. **Urban flooding is multi-day; "the event date" is fuzzy by ±1–2 days.**
+
+The single miss is the **NEMA aggregate**, which is a different kind of artefact — an official casualty tally, inherently retrospective. Incident reporting is fast; *official* reporting is not.
+
+### ⚠️ Premium Times could not be fetched
+
+`premiumtimesng.com` returns a **1,228-byte anti-bot JavaScript challenge** (`aes.js`), not article HTML, to a plain client. It contributed to Days 2–3 retrieval via search snippets but **no Premium Times timestamp is in the lag table.** Recorded because it is a real constraint on any ingestion build, not a one-off.
+
+## Findings — Day 6: verdict
+
+| metric | n | bar | result | verdict |
+|---|---|---|---|---|
+| Event retrieval *(secondary)* | 6 | three-way rule | **6/6** | ✅ viable |
+| **Locality retrieval** *(primary)* | 22 | > 75% | **77.3%** (CI 54.6–92.2) | ⚠️ **passes, permissive only** |
+| **Geocoding exact-or-close** | 17 | > 80% | **58.8%** (CI 32.9–81.6) | ❌ **FAIL** |
+| **Wrong placements** | 17 | < 5% | **23.5%** (CI 6.8–49.9) | ❌ **FAIL — ≈5×** |
+| Publication lag (median) | 6 | < 24 h | **≈12 h** | ✅ pass |
+
+### 🔴 Verdict: **depth is NOT viable as specified. Recommend breadth.**
+
+This is the pre-registered consequence — *"miss any badly → depth is not viable; recommend breadth"* — and it is the **decisive direction** of an asymmetric test. Per the spec's own warning, a pass would have been merely permissive; **a failure of this size is real evidence.**
+
+### But the failure is precisely located, and it is not where it was expected
+
+Day 2's prediction — *"expect retrieval to be the step that kills it, if anything does"* — was **wrong**, and that is the useful part:
+
+- ✅ The channel **carries** the events — 6/6.
+- ✅ It **names** the neighbourhoods, at street level (Ago Palace Way, Kusenla Road, Fashoro Street) — detail that exists in **no** international or humanitarian feed.
+- ✅ It publishes **fast** — median ~12 h.
+- ❌ **Nothing can reliably turn those names into coordinates.**
+
+**The bottleneck is the gazetteer, not the journalism.** The source material is good; Lagos micro-geography is not represented well enough in OSM or GeoNames to place it safely.
+
+### What would actually be required
+
+Not a tuned prompt or a better matcher — a **Lagos-specific gazetteer** with LGA-disambiguated aliases (`Lekki` → Eti-Osa *and* Ibeju-Lekki, resolved by context), place-vs-road precedence, informal settlement names absent from OSM, and an explicit **"refuse when ambiguous"** rule so failures land in the recoverable column rather than the harmful one. That is a substantially larger build than this spike assumed — **which is exactly what a one-week spike is for discovering.**
+
+### Answering the Day-6 question plainly
+
+> **Would this have told a Lekki resident something useful, in time?**
+
+**In time — yes.** Useful — **no.** For both June-2026 and July-2026 events the pipeline would have placed the Lekki flood **~39 km east, in the wrong LGA**, with full confidence. A resident of Lekki Phase 1 would have seen a pin near the Free Zone and reasonably concluded they were not affected.
+
+**That is worse than showing nothing**, which is the finding that decides it.
+
+### Consequences
+
+1. **`feature-continental-coverage` (breadth) is now the recommended next investment.** It relies on EONET's own coordinates and carries none of this geocoding risk.
+2. **Do not build report-ingestion depth on an off-the-shelf gazetteer.** Retrieval and lag are proven adequate, so the thesis is not dead — but it is gated on a gazetteer build that must be scoped and costed separately.
+3. **The five user conversations remain unrun and are still the cheapest test** — and this result raises their value. They would establish whether residents want *localised pins* (blocked here) or *"is my area flooding right now"* (which retrieval alone already supports).
 
 ## Deliverable
 
