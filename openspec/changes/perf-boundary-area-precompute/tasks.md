@@ -10,14 +10,26 @@
 
 ## 2. Measurement
 
-- [x] 2.1 Build a 742-polygon continental-scale fixture from real production geometry
-- [x] 2.2 Benchmark variant A (current) vs B (stored area) over 2,226 lookups — **5,520 ms → 341 ms, 16.2×**
+- [x] 2.1 Build a continental-scale fixture (795 polygons) from real production geometry
+- [x] 2.2 Benchmark old vs new over 2,385 probe points — **A (LATERAL) 15.4×, B (INSERT through trigger) 13.3×**
 - [x] 2.3 Confirm the btree index on `area_m2` provides no benefit, via timing and `EXPLAIN ANALYZE`
+- [x] 2.4 **Commit the harness** (`scripts/bench-enrichment/bench.sql`) so the numbers are auditable rather than asserted — raised by independent review, which noted the original claim had no reproducible artifact
+- [x] 2.5 Correct the headline from **16.2×** to the **11–13×** production-realistic range; the original was a method-A figure quoted as method B
+
+## 2a. Operational risk (surfaced by independent review, missed originally)
+
+- [x] 2a.1 Verify that `ADD COLUMN ... GENERATED STORED` rewrites the table — `pg_class.relfilenode` changes across the `ALTER`
+- [x] 2a.2 Verify the lock level — `pg_locks` reports `AccessExclusiveLock` granted
+- [x] 2a.3 Document the blocking window in both the migration and this record, including that concurrent ingestion blocks rather than fails
+- [ ] 2a.4 Re-assess before adding any further generated/non-volatile-default column to `admin_boundaries` **after** continental boundaries land — ~1.3 s at 795 rows is a real outage window at scale
 
 ## 3. Correctness
 
-- [x] 3.1 Compare A vs B assignment-by-assignment, not by count — **2,226/2,226 identical, 0 differing**
-- [x] 3.2 Confirm `area_m2` equals `ST_Area(geom::geography)` exactly for all 742 polygons (max diff 0)
+- [x] 3.1 Compare old vs new assignment-by-assignment, not by count — **2,385/2,385 identical, 0 differing**
+- [x] 3.2 Confirm `area_m2` equals `ST_Area(geom::geography)` exactly for all 797 rows (max diff 0)
+- [x] 3.6 Independent adversarial suite — shared-border midpoints via `ST_Intersection`, ADM0-fallback interiors, points matching nothing, all 37 NG exterior-ring vertices: **0/48 differences**
+- [x] 3.7 Run the **integration** suite, not just unit tests — `scripts/test-api.ps1 -Integration` exercises `enrichment_test.go` against a real migrated database. *(Missed in the author's own verification; run by the reviewer.)*
+- [ ] 3.8 Codify the adversarial cases as regression tests — none of the tie-break, shared-border or geometry-update cases are currently covered by CI, so a future change to the matching logic would not be caught. **Pre-existing gap, not introduced here.**
 - [x] 3.3 Re-enrich all real events through the new trigger — **43/43 identical**
 - [x] 3.4 Verify the generated column populates on INSERT and recomputes on `geom` UPDATE
 - [x] 3.5 Verify up → down → up round-trip leaves enrichment working and results identical

@@ -14,17 +14,46 @@
 --   cannot drift out of sync with the geometry -- unlike a plain column kept in
 --   step by a trigger or by the loader remembering to set it.
 --
--- Measured 2026-08-04, PostGIS 15-3.4, 742 ADM1-scale polygons (the real 53
--- production polygons replicated and translated), 2,226 point lookups using the
--- production trigger's exact matching logic:
+-- Measured via the committed harness scripts/bench-enrichment/bench.sql --
+-- PostGIS 15-3.4, 795 ADM1-scale polygons (the real 53 replicated and
+-- translated), 2,385 probe points. The harness deliberately measures the SAME
+-- workload two ways, because they disagree by ~15% and the flattering one is
+-- easy to quote by accident:
 --
---     ORDER BY ST_Area(geom::geography)   5,520 ms   2.48  ms/lookup
---     ORDER BY area_m2 (this migration)     341 ms   0.153 ms/lookup   16.2x
+--   A  LATERAL lookup, isolating the ORDER BY     5,757 ms ->  374 ms   15.4x
+--   B  real INSERTs through the real trigger      5,800 ms ->  435 ms   13.3x
 --
--- Behaviour is preserved, not merely assumed to be: over the same 2,226 probe
+-- QUOTE B. Method A omits plpgsql overhead and the ADM0 fallback branch, so it
+-- overstates the win. An independent reviewer measuring the same change on
+-- different hardware got 15.2x (A) and 11.5x (B) -- so the production-realistic
+-- figure is a RANGE of roughly 11-13x, not a single number. Earlier revisions
+-- of this file claimed 16.2x; that was a method-A measurement quoted as though
+-- it were method B, and it was optimistic even for method A.
+--
+-- Behaviour is preserved, not merely assumed to be: over the same 2,385 probe
 -- points both variants assigned an identical (adm_name, country_name) to every
--- single point -- 2,226/2,226, zero differing -- and the stored area equalled
--- ST_Area(geom::geography) exactly for all 742 polygons (max abs diff 0).
+-- single point -- 2,385/2,385, zero differing -- and the stored area equalled
+-- ST_Area(geom::geography) exactly for all 797 rows (max abs diff 0). An
+-- independent review additionally confirmed 0/48 differences across a hand-built
+-- adversarial suite: real shared-border midpoints from ST_Intersection of
+-- adjacent state pairs, ADM0-fallback interiors, and points matching nothing.
+--
+-- !! OPERATIONAL WARNING -- this migration REWRITES THE TABLE. !!
+--
+-- ADD COLUMN ... GENERATED ALWAYS ... STORED is not a metadata-only change.
+-- Postgres physically rewrites admin_boundaries while holding an
+-- ACCESS EXCLUSIVE lock -- verified here, not assumed: pg_class.relfilenode
+-- changes across the ALTER, and pg_locks reports AccessExclusiveLock granted.
+--
+-- For that window NOTHING can read or write admin_boundaries, which includes
+-- the enrichment trigger firing on every events insert, so concurrent ingestion
+-- will block rather than fail.
+--
+-- At today's 62 rows this is sub-millisecond and harmless. At the ~750-polygon
+-- continental scale this migration exists to serve it was ~1.3 s in testing.
+-- Anyone adding further generated or non-volatile-default columns to this table
+-- AFTER continental boundaries are loaded should expect a real outage window and
+-- schedule it against the ingestion cadence.
 --
 -- Deliberately NO btree index on area_m2. EXPLAIN ANALYZE confirms the planner
 -- satisfies ST_Intersects from the GIST index on geom and then sorts the

@@ -30,24 +30,45 @@ The parent proposal assumed a plain column. `GENERATED ALWAYS ... STORED` is str
 
 Verified directly: inserting a boundary populates `area_m2` correctly, and updating its `geom` recomputes it.
 
-## Measured, not assumed
+## Measured, not assumed — and reproducible
 
-PostGIS 15-3.4, **742 ADM1-scale polygons** (the real 53 production polygons replicated and translated — the parent proposal's method), **2,226 point lookups** using the production trigger's exact matching logic:
+Harness committed at [`scripts/bench-enrichment/bench.sql`](../../../scripts/bench-enrichment/bench.sql). PostGIS 15-3.4, **795 ADM1-scale polygons** (the real 53 replicated and translated), **2,385 probe points**.
 
-| variant | total | per lookup | |
+It deliberately measures the **same workload two ways**, because they disagree by ~15% and the flattering one is easy to quote by accident:
+
+| method | old | new | speedup |
 |---|---|---|---|
-| A — production today, `ORDER BY ST_Area(geom::geography)` | 5,520 ms | 2.48 ms | baseline |
-| **B — `ORDER BY area_m2`** | **341 ms** | **0.153 ms** | **16.2×** |
+| A — LATERAL lookup, isolating the `ORDER BY` | 5,757 ms | 374 ms | 15.4× |
+| **B — real `INSERT`s through the real trigger** | **5,800 ms** | **435 ms** | **13.3×** |
 
-Corroborates the parent proposal's independently-measured 18.5×.
+**Quote B.** Method A omits plpgsql overhead and the ADM0 fallback branch, so it overstates the win.
+
+### ⚠️ Correction: this proposal previously claimed 16.2×
+
+That figure was a **method-A measurement quoted as though it were method B**, and it was optimistic even for method A. An **independent reviewer** measuring the same change on different hardware got **15.2× (A)** and **11.5× (B)**.
+
+**The production-realistic figure is a range of roughly 11–13×, not a single number.** The win is large and unambiguous; the precision previously implied was not earned.
 
 ### Behaviour preservation was tested, not asserted
 
 Identical counts can hide different assignments, so results were compared row by row:
 
-- **2,226 / 2,226** probe points received an **identical** `(adm_name, country_name)` under both variants. **Zero differing.**
-- `area_m2` equalled `ST_Area(geom::geography)` **exactly** for all 742 polygons — max absolute difference **0**.
+- **2,385 / 2,385** probe points received an **identical** `(adm_name, country_name)` under both variants. **Zero differing.**
+- `area_m2` equalled `ST_Area(geom::geography)` **exactly** for all 797 rows — max absolute difference **0**.
 - Against real production data (55 boundaries, 43 events), re-enriching every event through the new trigger produced **43 / 43 identical** results, and again after a full down→up round-trip.
+- **Independent review** additionally built a 48-point adversarial suite — real shared-border midpoints derived from `ST_Intersection` of adjacent state pairs, ADM0-fallback interiors in Benin/Chad, points matching nothing, and all 37 Nigerian exterior-ring vertices — and found **0/48 differences**, plus 0/2,385 at scale. It also ran the repo's **integration suite** (testcontainers + `golang-migrate` through `000013`), including `enrichment_test.go`, which passed.
+
+## ⚠️ Operational: this migration rewrites the table
+
+`ADD COLUMN ... GENERATED ALWAYS ... STORED` is **not** a metadata-only change. Postgres physically rewrites `admin_boundaries` under an **`ACCESS EXCLUSIVE`** lock.
+
+Verified directly rather than assumed: `pg_class.relfilenode` changes across the `ALTER` (23400 → 23404), and `pg_locks` reports `AccessExclusiveLock` granted.
+
+For that window **nothing** can read or write `admin_boundaries` — including the enrichment trigger firing on every `events` insert, so concurrent ingestion **blocks** rather than fails.
+
+At today's 62 rows this is sub-millisecond and harmless. At the ~750-polygon continental scale this migration exists to serve, it measured **~1.3 s**. Anyone adding further generated or non-volatile-default columns to this table *after* continental boundaries land should expect a real outage window and schedule it against the ingestion cadence.
+
+**This was missed in the first revision of this record and surfaced by independent review.**
 
 ## ⚠️ Correction to the parent proposal
 
