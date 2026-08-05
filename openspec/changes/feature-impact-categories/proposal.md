@@ -18,9 +18,9 @@
 >
 > ⚠️ **Lesson:** three proposals were written against categories producing zero events and none checked the counts. **Measure a category's real event volume before proposing it.** Event density is a *geography-scope* problem — the two categories already ingested yield 291 events for NG+GH and ≥2,000 Africa-wide over the same window. See `feature-continental-coverage`.
 >
-> **Status caveat:** this change is 0/32 tasks and dated 2026-05-29. Its viability question is now answered; whether to revive the registry half is a maintainer decision.
+> **Status caveat:** this change is 0/32 tasks and dated **2026-05-05** (verified against `.openspec.yaml` and the file's first commit `60d0b9e`; an earlier revision said 2026-05-29, conflating it with the unrelated partnership-readiness sprint). Its viability question is now answered; whether to revive the registry half is a maintainer decision.
 
-**Status:** Proposed — re-targeted to v1.3. v1.1.0 was a release-please CI infra release and v1.2.0 was the post-v1.1 audit roll-up; neither shipped new EONET categories. This proposal lands **first** in the v1.3 cycle (introducing the category registry), with [feature-v13-risk-intelligence](../../proposals/feature-v13-risk-intelligence.md) landing second on top of it. Both ship before the v1.3.0 tag.
+**Status:** Proposed — re-targeted to v1.3. v1.1.0 was a release-please CI infra release and v1.2.0 was the post-v1.1 audit roll-up; neither shipped new EONET categories. This proposal was to land **first** in the v1.3 cycle (introducing the category registry), with `feature-v13-risk-intelligence` landing second on top of it. ⚠️ **That sequencing is void:** the companion was **archived 2026-08-03 as non-viable** (commit `73ebb48`) and now lives at `openspec/archive/proposal-feature-v13-risk-intelligence.md`. Neither ships as written.
 
 ## Why
 
@@ -80,11 +80,11 @@ branches.
 
 - No v1.0 launch-gate changes.
 - No secondary data oracle; NASA EONET remains the only upstream source.
-- No `severeStorms` or `drought` implementation in this proposal — those are
-  the scope of the companion proposal
-  [feature-v13-risk-intelligence](../../proposals/feature-v13-risk-intelligence.md),
-  which lands second in the v1.3 cycle on top of the category registry this
-  proposal introduces.
+- No `severeStorms` or `drought` implementation in this proposal. These were
+  the scope of the companion proposal `feature-v13-risk-intelligence`, which
+  was **archived 2026-08-03 as non-viable** — `drought` returns **0 events
+  globally**, the same defect that stalled this proposal. There is no live
+  companion; do not plan against one.
 - No user accounts, subscriptions, SMS, push notifications, or alert routing.
 - No generic "all NASA categories" support.
 
@@ -95,5 +95,6 @@ ships: landslides and temperature extremes can appear in the API, filters,
 event cards, detail views, and map markers with category-specific labels and
 styling. If live EONET volume is sparse in a supported country, curated
 seed/demo records will still let reviewers understand the intended experience.
-`severeStorms` and `drought` join in the same v1.3 release via the companion
-risk-intelligence proposal.
+~~`severeStorms` and `drought` join in the same v1.3 release via the companion
+risk-intelligence proposal.~~ **Void** — that companion was archived as
+non-viable on 2026-08-03.
