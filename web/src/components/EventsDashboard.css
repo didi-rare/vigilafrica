@@ -4,6 +4,45 @@
   border-top: 1px solid var(--border);
   position: relative;
   overflow: hidden;
+  /*
+    Must stay identical to `.dashboard-fallback` in App.css. The Suspense
+    fallback reserves this height while the lazy chunk loads; if the resolved
+    dashboard does not honour the same floor, the swap changes page height and
+    the reservation has simply moved the shift rather than removed it.
+
+    #198 capped the reservation at the dashboard's real mounted height, which
+    fixed the case where the fallback was TALLER than the dashboard on tall
+    displays. It did not address the mirror case: the dashboard resolving
+    SHORTER than the reservation. That happens whenever the dashboard does not
+    render its full layout — the API error state, an empty result set, or a
+    filtered view with few events — where `.dashboard-layout`'s fixed 800px
+    never applies and the section collapses to a small block. On a viewport
+    taller than the reservation that is a visible upward shift.
+
+    Matching the floor here makes the swap height-neutral by construction, in
+    every dashboard state, instead of only in the state that happens to be
+    ~1459px tall.
+
+    Trade-off, accepted deliberately: on a viewport taller than ~1460px whose
+    dashboard resolves short, this leaves a blank band below the content. That
+    band is exactly what the fallback already reserved, so the user sees no
+    movement — and a static band is preferable to a jump in a product whose
+    dashboard is the reason people scrolled. On typical desktop heights
+    (100vh < 1460px) the real dashboard exceeds this floor and it never binds.
+  */
+  min-height: min(100vh, 1460px);
+}
+
+/*
+  Below 480px the reservation is dropped entirely (see App.css) because the
+  taller mobile hero already pushes the next section below the fold, so there is
+  no shift to prevent and a full-viewport blank band would be pure cost. This
+  mirrors that exemption so the two stay in step.
+*/
+@media (max-width: 480px) {
+  .dashboard.section {
+    min-height: 0;
+  }
 }
 
 /* Subtle dashboard background glow */
