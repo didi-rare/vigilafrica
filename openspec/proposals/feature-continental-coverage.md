@@ -76,18 +76,26 @@ Mean **22 MB**; naive 54-country projection **≈ 1.2 GB** of source GeoJSON. (T
 
 **Option (a) "keep migrations, one per country" is now ruled out on evidence, not preference.** Recommendation (b), the seed loader, stands and is no longer a judgement call.
 
-### 🔬 MEASURED 2026-08-03 — simplification experiment (run against real data in PostGIS 3.4)
+### 🔬 MEASURED — simplification experiment, RE-RUN AND REPRODUCED 2026-08-04
 
-Loaded the actual production boundaries (`000002` + `000010`) into a throwaway PostGIS 15-3.4 container, generated **10,600 ground-truth points** (200 random inside each of the 53 ADM1 units, of which **1,133 lie within 2 km of a border** — where simplification does its damage), and swept `ST_SimplifyPreserveTopology` using **the production trigger's exact matching logic** (`ST_Intersects` + `ORDER BY ST_Area ASC LIMIT 1`).
+The original sweep (2026-08-03) was run in a throwaway container with **no committed script**, so independent review could not reproduce any of it. It has now been re-run from a committed harness — [`scripts/bench-simplification/sweep.sql`](../../scripts/bench-simplification/sweep.sql).
+
+**10,600 ground-truth points** (200 inside each of the 53 ADM1 units; **1,081** within 2 km of a border — where simplification does its damage), swept through **the production matcher** (`ST_Intersects` + smallest-area tie-break + `LIMIT 1`). The baseline assignment is that same matcher on *unsimplified* geometry, so overlapping polygons behave as they do in production.
 
 | tolerance | vertices kept | size | misassigned | misassigned **near border** | **unassigned** |
 |---|---|---|---|---|---|
-| none (baseline) | 100% | 984 kB | 0% | 0% | **0%** |
-| **0.001° (~110 m)** | **45.1%** | **445 kB** | **0.066%** | **0.618%** | **0.000%** |
-| 0.005° (~550 m) | 16.1% | 161 kB | 0.396% | 3.707% | 0.170% |
-| 0.01° (~1.1 km) | 9.6% | 96 kB | 0.811% | 7.590% | 0.245% |
-| 0.02° (~2.2 km) | 5.5% | 57 kB | 1.594% | 14.916% | 0.519% |
-| 0.05° (~5.5 km) | 2.6% | 27 kB | 3.585% | 28.067% | 1.509% |
+| none (baseline) | 100% | 828 kB | 0% | 0% | **0%** |
+| **0.001° (~110 m)** | **45.1%** | **388 kB** | **0.066%** | **0.648%** | **0.000%** |
+| 0.005° (~550 m) | 16.1% | 155 kB | 0.255% | 2.498% | 0.075% |
+| 0.01° (~1.1 km) | 9.6% | 97 kB | 0.538% | 5.273% | 0.255% |
+| 0.02° (~2.2 km) | 5.5% | 57 kB | 0.925% | 9.066% | 0.566% |
+| 0.05° (~5.5 km) | 2.6% | 28 kB | 1.972% | 16.466% | 1.264% |
+
+**✅ The recommendation reproduces exactly.** Vertex retention matches the original at **every** tolerance (it is deterministic geometry), and the decisive `0.001°` row matches on both columns that matter: **0.066% misassigned, 0.000% unassigned**.
+
+At aggressive tolerances the new run reports **lower** error than the original (0.255% vs 0.396% at `0.005°`). That is random point sampling — 1,081 near-border points here against 1,133 originally — and it runs in the conservative direction: **the original overstated the error**, so no conclusion is weakened.
+
+*Size figures use `sum(pg_column_size(geom))`, a different basis from the original's; the ratio is what matters, and storage saving at the safe tolerance is **~2.1×**, consistent with the 2.2× recorded below.*
 
 **Recommendation: 0.001°.** It halves vertex count at 0.066% error and — decisively — **zero unassigned points**.
 
@@ -235,7 +243,7 @@ The two performance proposals are currently **held pending traffic** ([[project-
 ## Open questions
 
 1. ~~**Is HDX COD ADM1 available and current for all ~54 countries?**~~ **✅ ANSWERED 2026-08-02 — yes, 54/54.** See the survey section above. Residual sub-questions: what to do about **Madagascar (2010 boundaries)**, and whether to add SHP support to the generator or an `ogr2ogr` pre-step for the 9 non-GeoJSON countries.
-2. ~~**What simplification tolerance?**~~ **✅ ANSWERED 2026-08-03 — `0.001°`.** The accuracy/size sweep this question asked for is in the *simplification experiment* section above: 45.1% of vertices retained, 0.066% misassignment, and decisively **zero unassigned points**. *(This question was left open in error after the experiment ran — flagged by independent review as a correction applied in one place and not propagated.)* ⚠️ Residual: those sweep figures have **no committed harness** and are not independently reproducible — re-run before relying on the exact percentages.
+2. ~~**What simplification tolerance?**~~ **✅ ANSWERED 2026-08-03 — `0.001°`.** The accuracy/size sweep this question asked for is in the *simplification experiment* section above: 45.1% of vertices retained, 0.066% misassignment, and decisively **zero unassigned points**. *(This question was left open in error after the experiment ran — flagged by independent review as a correction applied in one place and not propagated.)* ✅ **And now reproducible** — re-run 2026-08-04 from the committed [`scripts/bench-simplification/sweep.sql`](../../scripts/bench-simplification/sweep.sql). Vertex retention matched at every tolerance and the `0.001°` recommendation matched exactly (0.066% misassigned, 0.000% unassigned). The auditability gap raised by review is closed.
 3. **How many ADM1 units are there in Africa, exactly?** Still estimated at ~700–800, **unverified**. Requires counting features in the downloaded files. *(Partially de-risked: a 795-polygon fixture built from real geometry occupies ~13 MB, confirming geometry volume is not a constraint — but the true count remains unverified.)*
 4. ~~What are EONET's published rate limits?~~ **✅ ANSWERED 2026-08-04 — there are none published.** Pace by judgement; a politeness budget, not a compliance one.
 5. ~~Do we widen to all of Africa at once, or in tranches?~~ **✅ ANSWERED 2026-08-04 — do NOT tranche by region.** West Africa alone yields 17 floods/22 months for the full build cost; the flood payoff exists only at continental scale. **Tranche by engineering risk instead** — sequence South Africa (89 MB) and the 9 SHP-only countries late.
