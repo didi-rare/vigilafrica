@@ -2,10 +2,10 @@
 
 ## 1. API — deterministic ordering (correctness, do this first)
 
-- [ ] 1.1 Add `id DESC` as the final `ORDER BY` term in `ListEvents` (`queries.go:109`)
+- [ ] 1.1 Order by `event_date DESC NULLS LAST, id DESC` in `ListEvents` (`queries.go:109`) — **remove** the mutable `ingested_at` from the sort rather than appending after it
 - [ ] 1.2 Test that events tying on `event_date` return in a stable order across repeated identical queries
-- [ ] 1.3 Test that walking a result set by `offset` yields each event exactly once — no duplicates, no gaps
-- [ ] 1.4 Test the same while rows are being re-upserted (which resets `ingested_at`), the case that motivates the tiebreaker
+- [ ] 1.3 Test that walking a result set by `offset` yields each event exactly once while existing events are re-upserted (which resets `ingested_at`) — the case the previous ordering failed
+- [ ] 1.4 Document the residual limit honestly: a genuinely NEW event with a recent `event_date` still shifts later rows by one. Only keyset pagination or a snapshot removes that, and both are out of scope.
 - [ ] 1.5 Confirm `GetNearbyEvents` needs no change — it takes `LIMIT` but no `OFFSET`, so it is not paginated
 - [ ] 1.6 Measure whether a composite index on `(event_date DESC, ingested_at DESC, id DESC)` is warranted, or whether the existing `idx_events_event_date` suffices. **Measure before adding — the `area_m2` work showed an index that `EXPLAIN` never reads.**
 

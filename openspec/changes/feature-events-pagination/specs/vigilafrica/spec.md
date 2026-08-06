@@ -4,7 +4,9 @@
 
 The system SHALL expose a paginated, filterable REST API for accessing enriched natural event data.
 
-Listing results SHALL be returned in a **deterministic total order**, so that a client walking the collection page by page observes every matching event exactly once. Ordering SHALL NOT depend on values that change during ingestion without a stable final tiebreaker.
+Listing results SHALL be returned in a **deterministic total order** built only from values that are stable under ingestion. Ordering SHALL NOT include a column that routine ingestion rewrites, and SHALL terminate in a unique immutable identifier.
+
+⚠️ This requires that re-ingesting existing events does not reorder results. It does **not** claim exactly-once paging under arbitrary concurrent writes: a genuinely new event can still shift later rows by one position. Removing that too would require keyset pagination or a consistent snapshot, neither of which is in scope.
 
 #### Scenario: Listing events by category
 
@@ -18,18 +20,25 @@ Listing results SHALL be returned in a **deterministic total order**, so that a 
 - **THEN** the API SHALL return HTTP 200 with `{"data":[],"meta":{"total":0,...}}`
 - **AND** SHALL NOT return a 404 or 500 response
 
-#### Scenario: Paging returns each event exactly once
+#### Scenario: Paging a static result set returns each event exactly once
 
-- **WHEN** a client walks a filtered result set by increasing `offset` in steps of `limit`
+- **WHEN** a client walks a filtered result set by increasing `offset` in steps of `limit`, with no events added in the meantime
 - **THEN** every matching event SHALL appear in exactly one page
 - **AND** no event SHALL appear in two pages
 - **AND** this SHALL hold even when events tie on `event_date`
 
-#### Scenario: Ordering is stable while ingestion is running
+#### Scenario: Re-ingesting existing events does not reorder results
 
-- **WHEN** an ingestion run updates events, resetting their `ingested_at`, while a client is paging
-- **THEN** the relative order of already-returned events SHALL remain determined by a unique tiebreaker
-- **AND** the client SHALL NOT observe a duplicate or a skipped event caused by ties reordering
+- **WHEN** an ingestion run re-upserts events that are already stored, updating their ingestion timestamp
+- **THEN** the order of results SHALL be unchanged
+- **AND** a client paging through the collection SHALL NOT see a duplicate or a skipped event as a result
+- **AND** this SHALL hold because the ingestion timestamp is not part of the ordering, not merely because ties are broken
+
+#### Scenario: The residual limit is acknowledged, not concealed
+
+- **WHEN** a genuinely new event is stored that sorts ahead of a client's current page
+- **THEN** later rows may shift by one position, and the client may see one event twice or miss one
+- **AND** this limitation SHALL be documented rather than claimed to be solved
 
 #### Scenario: Offset beyond the end of the collection
 

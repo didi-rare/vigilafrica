@@ -8,7 +8,7 @@
 
 So the dashboard shows **at most 50 events and never says there are more.**
 
-Today that is invisible: production holds 43 events, so nothing is hidden. **At continental scale it shows 50 of 3,260 and tells the user nothing.** A resident filtering to their country would reasonably conclude they are seeing every event near them.
+Today that is invisible: production holds 43 events, so nothing is hidden. **At continental scale it shows 50 of ~3,268 and tells the user nothing.** A resident filtering to their country would reasonably conclude they are seeing every event near them.
 
 ⚠️ **This is a trust defect, not a performance one.** In a safety-adjacent product, silently withholding 98% of the data is worse than being slow. It is the reason this must ship *before* the ingestion box widens.
 
@@ -20,7 +20,7 @@ That has never been true since the 50-item default existed. The spec is amended 
 
 ## ⚠️ This supersedes the scope of `perf-mobile-first-render`
 
-That proposal (referenced in three archived documents, **never actually written**) was premised on the events list growing unbounded — *"~14,000px stacked at 768px"*, *"2,000 markers on a mid-range Android"*. **Both premises are false.** The list and the marker set derive from the same `limit`-capped array, so they go from 43 items to 50, not to 3,260.
+That proposal (referenced in three archived documents, **never actually written**) was premised on the events list growing unbounded — *"~14,000px stacked at 768px"*, *"2,000 markers on a mid-range Android"*. **Both premises are false.** The list and the marker set derive from the same `limit`-capped array, so they go from 43 items to 50, not to thousands.
 
 Virtualising a 50-item list buys nothing. The real work is pagination. Mobile TBT remains a separate, **currently unverified** question — see Out of Scope.
 
@@ -29,7 +29,7 @@ Virtualising a 50-item list buys nothing. The real work is pagination. Mobile TB
 | | offset (chosen) | cursor / keyset |
 |---|---|---|
 | already in the contract | ✅ `limit`/`offset` parsed and validated; `meta` returned | ❌ breaking change |
-| supports "showing 1–50 of 3,260" | ✅ natural | ⚠️ awkward; totals need a separate count |
+| supports "showing 1–50 of ~3,268" | ✅ natural | ⚠️ awkward; totals need a separate count |
 | stable under concurrent writes | ⚠️ needs a deterministic order (fixed below) | ✅ inherently |
 | deep-page cost | ⚠️ degrades at high offsets | ✅ constant |
 
@@ -51,11 +51,19 @@ Measured against real data:
 
 So a user paging through during an ingestion run can legitimately see a duplicate or skip an event. Invisible at 43 events on one page; a real defect once pages exist.
 
-**Fix: append the primary key as a final tiebreaker** — `id` is a `UUID PRIMARY KEY`, so the ordering becomes total and deterministic:
+### ⚠️ A tiebreaker alone is NOT enough — corrected after independent review
+
+An earlier revision of this proposal claimed appending `id` made paging exactly-once. **It does not.** `id` only resolves rows whose sort keys are *equal*; it cannot stop a row from **moving**. Because `ingested_at` is reset on every re-upsert, a re-ingested event jumps to the top of its `event_date` group — so a client on page 2 can see an event it already saw on page 1, and miss the one that moved. Offset pagination is only exactly-once over an ordering that does not change under it.
+
+**Fix: order by columns that do not move, and drop the one that does.**
 
 ```sql
-ORDER BY event_date DESC NULLS LAST, ingested_at DESC, id DESC
+ORDER BY event_date DESC NULLS LAST, id DESC
 ```
+
+`id` is a `UUID PRIMARY KEY` — immutable. `event_date` comes from the source event and is stable in practice (an upsert may revise it, but that is a genuine data correction, not routine churn). Removing `ingested_at` from the sort removes the only term that changes on every ingestion tick.
+
+⚠️ **This is a real, if reduced, weakening of the guarantee, and it is stated rather than hidden.** Offset pagination over a live table cannot be exactly-once in the strict sense: a newly-inserted event with a recent `event_date` still shifts later rows by one. Eliminating that entirely needs keyset pagination or a snapshot, both rejected above as disproportionate here. What this achieves is that the ordering no longer churns on **every ingestion tick** — it changes only when events are genuinely added or re-dated. The spec is written to require that, not perfection.
 
 Only `ListEvents` needs this. `GetNearbyEvents` takes a `LIMIT` but no `OFFSET`, so it is not paginated.
 
@@ -63,13 +71,13 @@ Only `ListEvents` needs this. `GetNearbyEvents` takes a `LIMIT` but no `OFFSET`,
 
 ### API
 
-1. Add `id DESC` as the final `ORDER BY` term in `ListEvents`, making pagination deterministic.
+1. Order by `event_date DESC NULLS LAST, id DESC` in `ListEvents` — **removing** the mutable `ingested_at` from the sort, not merely appending to it.
 2. No contract change. `limit` (default 50, max 200), `offset`, and the `meta` block already exist and are already validated.
 
 ### Frontend
 
 3. Send `limit` and `offset` from `fetchEvents`; carry `offset` in the query key so pages cache independently.
-4. Render pagination controls and an explicit **"Showing 1–50 of 3,260"** count — the truncation must be *visible*, which is the point of the change.
+4. Render pagination controls and an explicit **"Showing 1–50 of ~3,268"** count — the truncation must be *visible*, which is the point of the change.
 5. **Reset `offset` to 0 whenever a filter changes.** Otherwise changing country while on page 5 lands on an empty page.
 6. Keep the map showing the **current page's** markers, consistent with the list.
 
@@ -82,8 +90,8 @@ Only `ListEvents` needs this. `GetNearbyEvents` takes a `LIMIT` but no `OFFSET`,
 
 ## Verification
 
-- [ ] Paging through a filtered result set returns each event exactly once, with no duplicates or gaps, **while an ingestion run is in progress**
-- [ ] `meta.total` matches the count of a full unpaginated fetch for the same filters
+- [ ] Paging through a filtered result set returns each event exactly once **while an ingestion run re-upserts existing events** — the case the old ordering failed, since `ingested_at` churn no longer moves rows
+- [ ] `meta.total` matches a direct database `COUNT(*)` for the same filters — *not* an "unpaginated fetch", which the API has no mode for (`limit` is capped at 200)
 - [ ] Changing any filter resets to page 1
 - [ ] Requesting an offset beyond `total` returns `200` with an empty `data` array, not an error
 - [ ] The visible count reflects the real total, not the page size
