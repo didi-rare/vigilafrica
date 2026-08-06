@@ -66,6 +66,18 @@ ALTER TABLE admin_boundaries
     ADD COLUMN area_m2 double precision
     GENERATED ALWAYS AS (ST_Area(geom::geography)) STORED;
 
+-- The ordering also gains `id` as a final tie-breaker. Area alone is not a total
+-- order: two intersecting polygons with exactly equal computed area have no
+-- defined relative order, so the row LIMIT 1 returns could change when the sort
+-- expression or the query plan changes -- which is precisely what this migration
+-- does. Without the tie-break, "enrichment resolves identically" is an
+-- assumption about the data rather than a guarantee. `id` is the UUID primary
+-- key, so appending it makes the ordering total and the guarantee real.
+--
+-- This is a deliberate strengthening relative to 000012, not a preservation of
+-- it: for equal-area overlaps 000012's result was undefined, and this one is
+-- defined. Raised by independent review.
+
 -- Same logic as 000012, ordering by the stored column instead of recomputing.
 CREATE OR REPLACE FUNCTION trg_enrich_event_location()
 RETURNS TRIGGER AS $$
@@ -77,7 +89,7 @@ BEGIN
         FROM admin_boundaries
         WHERE adm_level = 1
           AND ST_Intersects(NEW.geom, geom)
-        ORDER BY area_m2 ASC
+        ORDER BY area_m2 ASC, id ASC
         LIMIT 1;
 
         -- Fall back to country (ADM0) when no state matched. Labels border
@@ -90,7 +102,7 @@ BEGIN
             FROM admin_boundaries
             WHERE adm_level = 0
               AND ST_Intersects(NEW.geom, geom)
-            ORDER BY area_m2 ASC
+            ORDER BY area_m2 ASC, id ASC
             LIMIT 1;
         END IF;
     END IF;

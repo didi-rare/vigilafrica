@@ -12,6 +12,15 @@
 -- use source 'bench-enrichment'; both are removed at the end, and the production
 -- trigger is restored.
 --
+-- Crash-safety: the whole script runs in ONE transaction and ends with ROLLBACK.
+-- Method B has to swap the trigger to its pre-000013 form to time the old path,
+-- and an error in between would otherwise leave the database running the OLD
+-- trigger -- a benchmark silently mutating the thing it exists to measure.
+-- Wrapping in a transaction means any failure, including ON_ERROR_STOP aborting
+-- midway, discards every change: the fixture, the synthetic events AND the
+-- trigger swap. Timings are unaffected; the work is still executed.
+-- Raised by independent review.
+--
 -- Run:  docker compose start postgres
 --       docker exec -i vigilafrica-db psql -U vigilafrica -d vigilafrica -q -v ON_ERROR_STOP=1 < scripts/bench-enrichment/bench.sql
 
@@ -28,6 +37,8 @@ BEGIN
         RAISE EXCEPTION 'migration 000013 is not applied -- nothing to compare';
     END IF;
 END $$;
+
+BEGIN;
 
 -- 1. Scale admin_boundaries to continental size ------------------------------
 -- 53 real ADM1 rows + 14 translated copies each = 795, approximating the ~750
@@ -159,8 +170,18 @@ SELECT count(*) AS polygons,
 FROM admin_boundaries;
 
 -- 6. Cleanup -----------------------------------------------------------------
-DELETE FROM events WHERE source = 'bench-enrichment';
-DELETE FROM admin_boundaries WHERE country_code = 'ZZ';
-DROP TABLE IF EXISTS bench_probe;
-ANALYZE admin_boundaries;
-\echo '--- cleaned up; production trigger (000013 form) left in place ---'
+-- ROLLBACK, not DELETE. It undoes the fixture, the synthetic events and the
+-- trigger swap in one step, and it is the same path taken on failure -- so the
+-- cleanup is exercised on every run rather than only on the happy path.
+ROLLBACK;
+
+-- Confirm the database really is back to where it started.
+SELECT count(*) FILTER (WHERE country_code = 'ZZ')            AS leftover_zz_boundaries,
+       (SELECT count(*) FROM events WHERE source = 'bench-enrichment') AS leftover_bench_events
+FROM admin_boundaries;
+
+SELECT CASE WHEN prosrc LIKE '%area_m2%' THEN 'OK - 000013 trigger in place'
+            ELSE 'WARNING - trigger is NOT the 000013 form' END AS trigger_state
+FROM pg_proc WHERE proname = 'trg_enrich_event_location';
+
+\echo '--- rolled back; nothing persisted ---'

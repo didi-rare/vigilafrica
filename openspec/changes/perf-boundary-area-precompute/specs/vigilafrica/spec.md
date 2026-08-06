@@ -12,8 +12,16 @@ state-level boundary is loaded for that country.
 The smallest-matching-polygon tie-break SHALL be resolved using a **persisted**
 boundary area rather than recomputing it per candidate row on every insert. The
 persisted area SHALL be maintained by the database itself so that it cannot
-diverge from the geometry it describes. This is a performance and integrity
-change only: it SHALL NOT alter which boundary any event resolves to.
+diverge from the geometry it describes.
+
+Candidate ordering SHALL be a **total order**: area alone does not distinguish
+polygons of equal area, so a stable unique identifier SHALL be applied as the
+final ordering term. Without it the selected boundary is undefined whenever two
+intersecting candidates have equal area, and no preservation guarantee can hold.
+
+This is a performance and integrity change only: it SHALL NOT alter which
+boundary any event resolves to, except that cases previously left undefined by
+equal areas SHALL become deterministic.
 
 #### Scenario: Point event enriched with state
 
@@ -45,6 +53,12 @@ change only: it SHALL NOT alter which boundary any event resolves to.
 - **AND WHEN** that row's `geom` is subsequently updated
 - **THEN** the database SHALL recompute the persisted area automatically
 - **AND** the persisted area SHALL equal the area computed directly from the geometry
+
+#### Scenario: Equal-area candidates resolve deterministically
+
+- **WHEN** an event's geometry intersects two or more boundaries of exactly equal area
+- **THEN** the enricher SHALL select the same boundary every time
+- **AND** the selection SHALL NOT depend on the query plan or on physical row order
 
 #### Scenario: Precomputing area does not change enrichment results
 

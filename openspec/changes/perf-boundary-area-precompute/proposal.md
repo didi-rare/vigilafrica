@@ -32,16 +32,20 @@ Verified directly: inserting a boundary populates `area_m2` correctly, and updat
 
 ## Measured, not assumed — and reproducible
 
-Harness committed at [`scripts/bench-enrichment/bench.sql`](../../../scripts/bench-enrichment/bench.sql). PostGIS 15-3.4, **795 ADM1-scale polygons** (the real 53 replicated and translated), **2,385 probe points**.
+Harness committed at [`scripts/bench-enrichment/bench.sql`](../../../scripts/bench-enrichment/bench.sql). PostGIS 15-3.4, **795 ADM1-scale polygons** (the real 53 replicated and translated), **2,385 probe points**, on a database rebuilt from scratch through **all** migrations — 62 boundary rows (53 ADM1 + 9 ADM0), 804 rows once the fixture is loaded.
+
+⚠️ **An earlier revision of this record reported 55 boundary rows and 797 fixture rows.** Those came from a local database where `000012`'s data section had never been applied, so the **7 neighbour ADM0 rows were missing** and the ADM0 fallback path was under-exercised. Caught by independent review; the figures above are from a fully migrated database.
 
 It deliberately measures the **same workload two ways**, because they disagree by ~15% and the flattering one is easy to quote by accident:
 
 | method | old | new | speedup |
 |---|---|---|---|
-| A — LATERAL lookup, isolating the `ORDER BY` | 5,757 ms | 374 ms | 15.4× |
-| **B — real `INSERT`s through the real trigger** | **5,800 ms** | **435 ms** | **13.3×** |
+| A — LATERAL lookup, isolating the `ORDER BY` | 3,607 ms | 243 ms | 14.8× |
+| **B — real `INSERT`s through the real trigger** | **3,642 ms** | **277 ms** | **13.2×** |
 
 **Quote B.** Method A omits plpgsql overhead and the ADM0 fallback branch, so it overstates the win.
+
+The harness runs inside a **single transaction ending in `ROLLBACK`**. Method B must swap the trigger to its pre-`000013` form to time the old path, and an error in between would otherwise leave the database running the **old trigger** — a benchmark silently mutating what it exists to measure. Rollback also means the cleanup path is exercised on every run, not only on success, and the script asserts afterwards that no fixture rows survive and the `000013` trigger is in place. Raised by independent review.
 
 ### ⚠️ Correction: this proposal previously claimed 16.2×
 
@@ -54,9 +58,21 @@ That figure was a **method-A measurement quoted as though it were method B**, an
 Identical counts can hide different assignments, so results were compared row by row:
 
 - **2,385 / 2,385** probe points received an **identical** `(adm_name, country_name)` under both variants. **Zero differing.**
-- `area_m2` equalled `ST_Area(geom::geography)` **exactly** for all 797 rows — max absolute difference **0**.
+- `area_m2` equalled `ST_Area(geom::geography)` **exactly** for all 804 rows — max absolute difference **0**.
 - Against real production data (55 boundaries, 43 events), re-enriching every event through the new trigger produced **43 / 43 identical** results, and again after a full down→up round-trip.
 - **Independent review** additionally built a 48-point adversarial suite — real shared-border midpoints derived from `ST_Intersection` of adjacent state pairs, ADM0-fallback interiors in Benin/Chad, points matching nothing, and all 37 Nigerian exterior-ring vertices — and found **0/48 differences**, plus 0/2,385 at scale. It also ran the repo's **integration suite** (testcontainers + `golang-migrate` through `000013`), including `enrichment_test.go`, which passed.
+
+## The ordering is now a total order — `id` as final tie-break
+
+Both branches order by `area_m2 ASC, id ASC`, not `area_m2` alone.
+
+**Area is not a total order.** Two intersecting polygons with exactly equal computed area have no defined relative order, so the row `LIMIT 1` returns may change when the sort expression or the query plan changes — which is precisely what this migration does. Without a tie-break, "enrichment resolves identically" was an assumption about the data, not a guarantee.
+
+Demonstrated rather than argued: two overlapping polygons with byte-identical area (`11548563398.86789`), one point inside both, inserted five times — **all five resolved to the same boundary**.
+
+⚠️ **This is a deliberate strengthening relative to `000012`, not a preservation of it.** For equal-area overlaps `000012`'s result was *undefined*; this one is defined. The down migration **keeps** the tie-break for the same reason — reverting the stored column is the point, reverting a correctness fix alongside it is not.
+
+Raised by independent review, which correctly noted the spec delta promised a guarantee the SQL could not deliver.
 
 ## ⚠️ Operational: this migration rewrites the table
 

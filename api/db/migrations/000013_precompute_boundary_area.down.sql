@@ -1,6 +1,13 @@
 -- Revert to recomputing ST_Area per candidate row (the 000012 trigger), then
 -- drop the generated column.
 --
+-- NOT a byte-for-byte revert to 000012, deliberately: the `id` tie-breaker is
+-- kept. Area alone is not a total order, so 000012's behaviour for equal-area
+-- overlapping polygons was undefined. Reverting the stored column is the point
+-- of this migration; reverting a correctness fix with it is not, and would
+-- leave the rollback path with a known non-determinism. The tie-break costs
+-- nothing and no later migration depends on 000012's exact function body.
+--
 -- Order matters: the function must stop referencing area_m2 before the column
 -- is dropped, otherwise the trigger breaks for the window between the two
 -- statements. Restoring the function first keeps every intermediate state valid.
@@ -15,7 +22,7 @@ BEGIN
         FROM admin_boundaries
         WHERE adm_level = 1
           AND ST_Intersects(NEW.geom, geom)
-        ORDER BY ST_Area(geom::geography) ASC
+        ORDER BY ST_Area(geom::geography) ASC, id ASC
         LIMIT 1;
 
         -- Fall back to country (ADM0) when no state matched. Labels border
@@ -28,7 +35,7 @@ BEGIN
             FROM admin_boundaries
             WHERE adm_level = 0
               AND ST_Intersects(NEW.geom, geom)
-            ORDER BY ST_Area(geom::geography) ASC
+            ORDER BY ST_Area(geom::geography) ASC, id ASC
             LIMIT 1;
         END IF;
     END IF;

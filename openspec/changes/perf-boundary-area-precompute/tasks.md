@@ -7,12 +7,16 @@
 - [x] 1.3 Preserve matching semantics exactly — `adm_level` filter, smallest-polygon tie-break, ADM0 fallback, `state_name` left NULL on fallback
 - [x] 1.4 Add the down migration, restoring the `000012` trigger **before** dropping the column so no intermediate state is broken
 - [x] 1.5 Deliberately omit a btree index on `area_m2` — `EXPLAIN` shows it is never used
+- [x] 1.6 Add `id` as the final `ORDER BY` term in **both** branches and **both** migration directions, making candidate ordering a total order
+- [x] 1.7 Verify equal-area determinism directly — two overlapping polygons of byte-identical area, one point inside both, five inserts, one label
 
 ## 2. Measurement
 
 - [x] 2.1 Build a continental-scale fixture (795 polygons) from real production geometry
 - [x] 2.2 Benchmark old vs new over 2,385 probe points — **A (LATERAL) 15.4×, B (INSERT through trigger) 13.3×**
 - [x] 2.3 Confirm the btree index on `area_m2` provides no benefit, via timing and `EXPLAIN ANALYZE`
+- [x] 2.4a Re-run on a database rebuilt through **all** migrations (62 boundary rows, not the 55 of an under-migrated local DB) — **A 14.8×, B 13.2×**
+- [x] 2.4b Wrap the harness in a transaction ending in `ROLLBACK` so a mid-run failure cannot leave the old trigger installed; assert clean state afterwards
 - [x] 2.4 **Commit the harness** (`scripts/bench-enrichment/bench.sql`) so the numbers are auditable rather than asserted — raised by independent review, which noted the original claim had no reproducible artifact
 - [x] 2.5 Correct the headline from **16.2×** to the **11–13×** production-realistic range; the original was a method-A figure quoted as method B
 
