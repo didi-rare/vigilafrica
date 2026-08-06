@@ -25,10 +25,18 @@
 DROP TABLE IF EXISTS bench_simp_pts, bench_simp_res, bench_simp_edges;
 
 -- 1. Ground-truth points: 200 inside each real ADM1 unit --------------------
+-- Seeded so re-runs are bit-identical. Without a seed the sweep can be re-run
+-- but its numbers cannot be reproduced, which is most of the point.
+--
+-- NOTE: setseed() alone does NOT do this. ST_GeneratePoints takes its own seed
+-- argument and ignores the session RNG state, so a script using setseed() still
+-- produces a different sample every run -- verified by running it twice and
+-- diffing. The seed must be passed to ST_GeneratePoints itself.
+-- Change the seed deliberately if you want an independent sample.
 CREATE TABLE bench_simp_pts AS
 SELECT row_number() OVER () AS n, s.geom
 FROM (
-    SELECT (ST_Dump(ST_GeneratePoints(geom, 200))).geom::geometry(Point, 4326) AS geom
+    SELECT (ST_Dump(ST_GeneratePoints(geom, 200, 42))).geom::geometry(Point, 4326) AS geom
     FROM admin_boundaries WHERE adm_level = 1 AND country_code <> 'ZZ'
 ) s;
 CREATE INDEX ON bench_simp_pts USING GIST(geom);

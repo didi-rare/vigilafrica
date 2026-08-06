@@ -39,7 +39,9 @@ Reference: https://eonet.gsfc.nasa.gov/api/v3/categories
 
 ## What Changes
 
-v1.3 expands the supported category set from:
+⚠️ **VOID — see the banner at the top of this file.** Both categories below return **zero events worldwide**, so this expansion is not implemented as written. The text is retained to show what was proposed and why it was dropped.
+
+v1.3 was to expand the supported category set from:
 
 - `floods`
 - `wildfires`
@@ -90,11 +92,14 @@ branches.
 
 ## User Impact
 
-Users will see a broader, more meaningful set of natural hazards once v1.3
+⚠️ **VOID.** No user-visible change follows from this proposal as written — both categories are empty at source, so there is nothing to show.
+Retained for the record:
+
+~~Users will see a broader, more meaningful set of natural hazards once v1.3
 ships: landslides and temperature extremes can appear in the API, filters,
 event cards, detail views, and map markers with category-specific labels and
 styling. If live EONET volume is sparse in a supported country, curated
 seed/demo records will still let reviewers understand the intended experience.
 ~~`severeStorms` and `drought` join in the same v1.3 release via the companion
 risk-intelligence proposal.~~ **Void** — that companion was archived as
-non-viable on 2026-08-03.
+non-viable on 2026-08-03, and the two categories above are empty at source.

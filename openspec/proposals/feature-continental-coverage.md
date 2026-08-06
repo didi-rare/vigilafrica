@@ -16,7 +16,11 @@ branch: tbd
 >
 > **The multiplier is ~11×, not ~46×.** The case for widening survives, at roughly a quarter of the strength originally claimed.
 >
-> Measurement is now a committed script — [`scripts/eonet-density/measure.mjs`](../../scripts/eonet-density/measure.mjs) — which reads the **production bounding boxes** from `eonet.go` and applies the real `withinBBox` guard, rather than hand-rolling a box. Re-run it rather than trusting any number quoted here.
+> Measurement is now a committed script — [`scripts/eonet-density/measure.mjs`](../../scripts/eonet-density/measure.mjs) — which **mirrors** the production bounding boxes from `eonet.go` (copied, not imported — they must be kept in sync by hand) and applies the same `withinBBox` guard, rather than hand-rolling a box. Re-run it rather than trusting any number quoted here.
+>
+> ⚠️ **This measures feed AVAILABILITY at a geography, not what production currently stores.** Production polls unwindowed `status=open` plus `status=closed&days=30`; the script queries `status=all` across the full window, so the stored count is lower than 290. The **ratio** is what this proposal rests on and both sides are measured identically, so it holds — but do not read 290 as a database count.
+>
+> ⚠️ **The Africa box is a rectangle, not the continent.** It admits parts of southern Europe and the Middle East, so the Africa-wide figure is an **over**-count. An earlier note called that "the conservative direction" — backwards: overstating Africa **inflates** the multiplier and flatters the case for widening. Treat **11.3× as an upper bound**.
 
 Measured 2026-08-04, same 22-month window (2024-10-01 → 2026-08-04), production bboxes + guard:
 
@@ -84,22 +88,34 @@ The original sweep (2026-08-03) was run in a throwaway container with **no commi
 
 | tolerance | vertices kept | size | misassigned | misassigned **near border** | **unassigned** |
 |---|---|---|---|---|---|
-| none (baseline) | 100% | 828 kB | 0% | 0% | **0%** |
-| **0.001° (~110 m)** | **45.1%** | **388 kB** | **0.066%** | **0.648%** | **0.000%** |
-| 0.005° (~550 m) | 16.1% | 155 kB | 0.255% | 2.498% | 0.075% |
-| 0.01° (~1.1 km) | 9.6% | 97 kB | 0.538% | 5.273% | 0.255% |
-| 0.02° (~2.2 km) | 5.5% | 57 kB | 0.925% | 9.066% | 0.566% |
-| 0.05° (~5.5 km) | 2.6% | 28 kB | 1.972% | 16.466% | 1.264% |
+| **none (baseline)** | 100% | 828 kB | **0.000%** | **0.000%** | **0.000%** |
+| 0.001° (~110 m) | 45.1% | 388 kB | 0.057% | 0.538% | **0.038%** |
+| 0.005° (~550 m) | 16.1% | 155 kB | 0.349% | 3.315% | 0.085% |
+| 0.01° (~1.1 km) | 9.6% | 97 kB | 0.462% | 4.391% | 0.245% |
+| 0.02° (~2.2 km) | 5.5% | 57 kB | 0.925% | 8.781% | 0.472% |
+| 0.05° (~5.5 km) | 2.6% | 28 kB | 1.915% | 16.219% | 1.340% |
 
-**✅ The recommendation reproduces exactly.** Vertex retention matches the original at **every** tolerance (it is deterministic geometry), and the decisive `0.001°` row matches on both columns that matter: **0.066% misassigned, 0.000% unassigned**.
+*Fixed seed (`ST_GeneratePoints(geom, 200, 42)`); two consecutive runs are byte-identical.*
 
-At aggressive tolerances the new run reports **lower** error than the original (0.255% vs 0.396% at `0.005°`). That is random point sampling — 1,081 near-border points here against 1,133 originally — and it runs in the conservative direction: **the original overstated the error**, so no conclusion is weakened.
+### ⚠️ RECOMMENDATION CHANGED — do not simplify
 
-*Size figures use `sum(pg_column_size(geom))`, a different basis from the original's; the ratio is what matters, and storage saving at the safe tolerance is **~2.1×**, consistent with the 2.2× recorded below.*
+Earlier revisions recommended `0.001°` on the grounds that it *"halves vertex count at 0.066% error and — decisively — **zero unassigned points**."*
 
-**Recommendation: 0.001°.** It halves vertex count at 0.066% error and — decisively — **zero unassigned points**.
+**The zero was a sampling artefact.** The sweep was unseeded, so every run drew a different point set. Three samples gave three different answers for that cell (0.000%, 0.009%, 0.038%). Seeded, `0.001°` yields **0.038% unassigned — about 4 points in 10,600 that match no polygon at all.**
 
-⚠️ **Watch the `unassigned` column, not the error rate.** From 0.005° upward, points begin matching *no polygon at all*, so enrichment silently yields `NULL state_name`. For a product whose entire proposition is admin-name-first, a **silent enrichment failure is worse than a slightly-wrong name**. That column, not accuracy, is what rules out the aggressive tolerances.
+Only the **vertices kept** column is deterministic; it is pure geometry and matched across every run. The error columns never did, and they are the ones the decision rested on.
+
+**That removes the argument for simplifying, because this proposal already established the thing simplification was meant to buy is not needed:**
+
+- Geometry volume is **not a constraint** — 795 ADM1 polygons measure **13 MB**. (See the corrections below.)
+- The saving at `0.001°` is **~2.1×** — 828 kB → 388 kB. Trivial against a database that holds far more elsewhere.
+- Enrichment speed is **not** the motivation either: the 11–13× win came from the stored-area column, not from simplification.
+
+So the trade is: save ~440 kB, and accept a **non-zero rate of silent enrichment failure**. This proposal's own rule says that is the wrong side of the trade — *"a silent enrichment failure is worse than a slightly-wrong name."* At baseline both error columns are exactly **0.000%**, and it costs nothing we need.
+
+**Recommendation: load boundaries at full resolution.** Revisit only if geometry volume becomes a measured constraint, in which case `0.001°` remains the best non-zero tolerance by a clear margin — roughly 6× lower misassignment and 2× lower unassigned than `0.005°`.
+
+⚠️ **Watch the `unassigned` column, not the error rate.** At **every** non-zero tolerance — including `0.001°` — some points match *no polygon at all*, so enrichment silently yields `NULL state_name`. An earlier revision claimed this only began at `0.005°`; that was the unseeded sample talking. For a product whose entire proposition is admin-name-first, a **silent enrichment failure is worse than a slightly-wrong name**. That column, not accuracy, is what rules out the aggressive tolerances.
 
 ### ✏️ Corrections to this proposal's own earlier estimates
 
@@ -134,7 +150,7 @@ Nothing here is catastrophic in absolute terms (2,000 events ≈ 4.8 s even unop
 
 ⚠️ **Corrected 2026-08-04:** that 2.3 MB file holds **53** ADM1 units (Nigeria 37 + Ghana 16), not Nigeria's 37 alone, so the real figure is **≈ 43 KB/unit**, not 62. The 62 came from dividing the whole file by Nigeria's share. The ~30–40 MB extrapolation in Decision 1 was computed from the correct 43 KB/unit and is unaffected. Extrapolating to ~700–800 African ADM1 units still gives tens of MB of geometry, dominated by outliers like South Africa. Complexity varies ~50× between countries (Togo 1.8 MB vs South Africa 89.2 MB), so any mean-based estimate is unreliable — plan for a range.
 
-For our use — *point-in-polygon to name a state* — full coastline resolution is unnecessary. **Simplification tolerance becomes an explicit design parameter**, plausibly worth 10–50× on storage and index size with no practical accuracy loss. There is precedent in the codebase: `000012` already loaded *"geoBoundaries gbOpen ADM0 (simplified), further reduced"*.
+For our use — *point-in-polygon to name a state* — full coastline resolution looked unnecessary. ⚠️ **Superseded — see the recommendation change above: do not simplify.** An earlier draft of this sentence claimed simplification was *"plausibly worth 10–50× on storage and index size with no practical accuracy loss"*. Both halves are retracted. The measured saving at `0.001°` is **~2.1×** (828 kB → 388 kB), not 10–50× — and against a 13 MB table that is not worth having. "No practical accuracy loss" is false: seeded, `0.001°` misassigns **0.057%** of points and leaves **0.038% unassigned**, i.e. silently unnamed. Baseline is 0.000% on both. There is precedent in the codebase — `000012` loaded *"geoBoundaries gbOpen ADM0 (simplified), further reduced"* — but that was ADM0 outlines for country labelling, a far coarser use than naming a state.
 
 ⚠️ But simplification must not be applied blindly: over-simplifying shared borders creates **gaps or overlaps between adjacent states**, which would make the enrichment trigger mis-assign or drop points. Use topology-preserving simplification (`ST_SimplifyPreserveTopology` or a shared-edge-aware tool like mapshaper), and validate against known coordinates before and after.
 
@@ -223,15 +239,23 @@ At 54 countries that becomes **108 sequential requests per tick**.
 | 8 | Copy + metadata | "Nigeria and Ghana live" appears in `App.tsx` (×4), `ForPartners.tsx`, `index.html` meta description, and the generated `llms.txt`. |
 | 9 | Provenance | Record per-country source + vintage. Mixed HDX/geoBoundaries provenance must be visible, not silent — this is a safety-adjacent product. |
 
-## ⚠️ Coupling: this makes the deferred performance work mandatory
+## ⚠️ Coupling: what continental coverage actually requires first
 
-The two performance proposals are currently **held pending traffic** ([[project-traction-data-gap]]). Continental coverage removes that justification and turns them into prerequisites:
+> ### ⚠️ CORRECTED — this section's premise was wrong
+>
+> It claimed the events list and the map marker set grow with the feed. **They do not.** `GET /v1/events` defaults to `limit = 50` (`handlers/events.go:76`) and the web client sends no `limit` or `offset` (`web/src/api/events.ts`), so the list and the markers are capped at **50** — today and at continental scale. Widening the feed takes them from 43 items to 50, not to thousands.
+>
+> The two bullets below about 14,000px stacking and 2,000 markers are **retracted**. `perf-mobile-first-render` was never written, and the version described here solves a problem that does not exist. See [`feature-events-pagination`](../changes/feature-events-pagination/proposal.md), which supersedes it.
 
-- `div.events-list` already stacks to **~14,000px at tablet width with 43 events**. At ~2,000 it is unusable — and the CLS reservation work just shipped (#193/#198) is sized against today's dashboard height.
-- The map renders a marker per event. 2,000 markers on a mid-range Android over Slow 4G is a different problem from 43.
-- `/v1/events` caps `limit` at **200**, so pagination stops being optional.
+**What is genuinely required first is pagination — for correctness, not performance.** The API returns `meta.total`; the dashboard reads none of it. So at continental scale the UI shows **50 of ~3,268 and says nothing about the rest**. A user filtering to their country would reasonably conclude they were seeing every event near them. In a safety-adjacent product that is a trust failure, and it is the real prerequisite.
 
-**`perf-mobile-first-render` must ship with or before continental coverage**, not after. Widening the feed without it converts a fast, empty site into a slow, full one.
+Retained for the record, now known to be wrong:
+
+- ~~`div.events-list` already stacks to ~14,000px at tablet width with 43 events. At ~2,000 it is unusable.~~ — capped at 50.
+- ~~The map renders a marker per event. 2,000 markers on a mid-range Android is a different problem from 43.~~ — capped at 50.
+- `/v1/events` caps `limit` at **200** — still true, and it is why pagination, not a bigger page, is the answer.
+
+Mobile TBT remains a separate and **currently unverified** question: the inherited 1,140 ms figure has not been reproduced, and `map-vendor` is already off the critical path (`lazy(Map)` inside `lazy(EventsDashboard)`; `index.html` modulepreloads only `rolldown-runtime` and `react-vendor`). Re-measure on staging before proposing bundle work.
 
 ## Out of Scope
 
@@ -243,7 +267,7 @@ The two performance proposals are currently **held pending traffic** ([[project-
 ## Open questions
 
 1. ~~**Is HDX COD ADM1 available and current for all ~54 countries?**~~ **✅ ANSWERED 2026-08-02 — yes, 54/54.** See the survey section above. Residual sub-questions: what to do about **Madagascar (2010 boundaries)**, and whether to add SHP support to the generator or an `ogr2ogr` pre-step for the 9 non-GeoJSON countries.
-2. ~~**What simplification tolerance?**~~ **✅ ANSWERED 2026-08-03 — `0.001°`.** The accuracy/size sweep this question asked for is in the *simplification experiment* section above: 45.1% of vertices retained, 0.066% misassignment, and decisively **zero unassigned points**. *(This question was left open in error after the experiment ran — flagged by independent review as a correction applied in one place and not propagated.)* ✅ **And now reproducible** — re-run 2026-08-04 from the committed [`scripts/bench-simplification/sweep.sql`](../../scripts/bench-simplification/sweep.sql). Vertex retention matched at every tolerance and the `0.001°` recommendation matched exactly (0.066% misassigned, 0.000% unassigned). The auditability gap raised by review is closed.
+2. ~~**What simplification tolerance?**~~ **✅ ANSWERED — none. Do not simplify.** The sweep was re-run from a committed, **seeded** harness ([`scripts/bench-simplification/sweep.sql`](../../scripts/bench-simplification/sweep.sql)) and overturned the earlier `0.001°` recommendation: its headline "zero unassigned points" was an artefact of unseeded sampling, and the real figure is **0.038%**. Since geometry volume was separately measured as *not* a constraint (13 MB at 795 polygons), simplification buys ~440 kB in exchange for a non-zero rate of silent enrichment failure. Load at full resolution; revisit only if volume ever becomes a measured constraint.
 3. **How many ADM1 units are there in Africa, exactly?** Still estimated at ~700–800, **unverified**. Requires counting features in the downloaded files. *(Partially de-risked: a 795-polygon fixture built from real geometry occupies ~13 MB, confirming geometry volume is not a constraint — but the true count remains unverified.)*
 4. ~~What are EONET's published rate limits?~~ **✅ ANSWERED 2026-08-04 — there are none published.** Pace by judgement; a politeness budget, not a compliance one.
 5. ~~Do we widen to all of Africa at once, or in tranches?~~ **✅ ANSWERED 2026-08-04 — do NOT tranche by region.** West Africa alone yields 17 floods/22 months for the full build cost; the flood payoff exists only at continental scale. **Tranche by engineering risk instead** — sequence South Africa (89 MB) and the 9 SHP-only countries late.
