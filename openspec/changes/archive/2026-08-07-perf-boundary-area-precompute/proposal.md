@@ -1,6 +1,6 @@
 # Proposal: Precompute Boundary Area for Enrichment (perf-boundary-area-precompute)
 
-**Status:** Implemented — work item 4 of [feature-continental-coverage](../../proposals/feature-continental-coverage.md), extracted and shipped separately because it is independent of that proposal's two blocking decisions.
+**Status:** Implemented — work item 4 of [feature-continental-coverage](../../../proposals/feature-continental-coverage.md), extracted and shipped separately because it is independent of that proposal's two blocking decisions.
 
 ## Why
 
@@ -32,7 +32,7 @@ Verified directly: inserting a boundary populates `area_m2` correctly, and updat
 
 ## Measured, not assumed — and reproducible
 
-Harness committed at [`scripts/bench-enrichment/bench.sql`](../../../scripts/bench-enrichment/bench.sql). PostGIS 15-3.4, **795 ADM1-scale polygons** (the real 53 replicated and translated), **2,385 probe points**, on a database rebuilt from scratch through **all** migrations — 62 boundary rows (53 ADM1 + 9 ADM0), 804 rows once the fixture is loaded.
+Harness committed at [`scripts/bench-enrichment/bench.sql`](../../../../scripts/bench-enrichment/bench.sql). PostGIS 15-3.4, **795 ADM1-scale polygons** (the real 53 replicated and translated), **2,385 probe points**, on a database rebuilt from scratch through **all** migrations — 62 boundary rows (53 ADM1 + 9 ADM0), 804 rows once the fixture is loaded.
 
 ⚠️ **An earlier revision of this record reported 55 boundary rows and 797 fixture rows.** Those came from a local database where `000012`'s data section had never been applied, so the **7 neighbour ADM0 rows were missing** and the ADM0 fallback path was under-exercised. Caught by independent review; the figures above are from a fully migrated database.
 

@@ -322,24 +322,46 @@ These are blockers that must be resolved before v0.1 development begins. They ar
 
 ## v1.3 — Category Expansion + Design-System Tokens
 
-**Goal**: Broaden hazard coverage with four new NASA EONET categories, close out the design-system token gap on the frontend, and instrument the production deployment with privacy-respecting analytics so partnership and grant conversations can cite real data. All seven proposals below ship before the v1.3.0 tag.
+> ## ⚠️ CORRECTED 2026-08-07 — v1.3 SHIPPED, but not with this scope
+>
+> This section still read **"Status: Proposed (planning)"** while **v1.3.7 was live in
+> production**. It is corrected rather than deleted, because what happened to the plan is
+> more useful than the plan.
+>
+> - **The category expansion was archived UNIMPLEMENTED, on evidence.** `landslides` and
+>   `tempExtremes` are valid EONET category IDs that returned **zero events worldwide**
+>   (measured 2026-08-03). Building for them would have shipped nothing. The **category
+>   registry** — the genuinely useful part — survives in
+>   [`chore-deferred-work-register`](../../proposals/chore-deferred-work-register.md) §C1.
+>   `feature-v13-risk-intelligence` layered `severeStorms` + `drought` on top of that
+>   registry, so it inherits the same open question and its own zero-event check.
+> - **The four token chores were collapsed** into one proposal,
+>   [`chore-design-tokens`](../../proposals/chore-design-tokens.md), 2026-08-07 — they were
+>   slices of one job touching the same two files.
+> - **`chore-analytics-and-feedback` shipped.** Umami is live on the VPS.
+> - **What v1.3 actually delivered** across v1.3.0–v1.3.7: the Ground Truth rebrand and SPA
+>   rewrite, border-event enrichment, EONET closed-event ingestion, the web-audit batch
+>   (Accessibility 97→100, CLS 0.245→0), the enrichment `area_m2` optimisation, react-router 8
+>   with the audit allowlist emptied, and events pagination.
+>
+> **The acceptance criteria below are superseded** and are retained only as the record of
+> what was once intended. Do not treat them as a gate.
 
-**Status**: Proposed (planning).
+**Original goal (superseded)**: Broaden hazard coverage with four new NASA EONET categories, close out the design-system token gap on the frontend, and instrument the production deployment with privacy-respecting analytics so partnership and grant conversations can cite real data.
 
-**Feature scope** (sequenced — feature-impact-categories lands first, feature-v13-risk-intelligence lands second on top of it):
+**Status**: **Shipped** as v1.3.0–v1.3.7, with the scope changes recorded above.
 
-- **`feature-impact-categories`** ([changes/feature-impact-categories](../../changes/feature-impact-categories/proposal.md)) — introduces the shared category registry and adds `landslides` + `tempExtremes`.
-- **`feature-v13-risk-intelligence`** ([proposals/feature-v13-risk-intelligence.md](../../proposals/feature-v13-risk-intelligence.md)) — extends the registry with `severeStorms` + `drought`.
+**Feature scope** (both superseded — see the banner):
 
-**Hygiene scope** (parallel design-system tokens — order between these is flexible, can ship before or after the feature pair):
+- ~~**`feature-impact-categories`**~~ ([archived unimplemented](../../changes/archive/2026-08-07-feature-impact-categories/proposal.md)) — the shared category registry survives; the two categories do not.
+- ~~**`feature-v13-risk-intelligence`**~~ ([archive/proposal-feature-v13-risk-intelligence.md](../../archive/proposal-feature-v13-risk-intelligence.md)) — extended the registry with `severeStorms` + `drought`. Blocked on the same registry, and needs its own zero-event check before revival.
 
-- **`chore-type-tokens`** ([proposals/chore-type-tokens.md](../../proposals/chore-type-tokens.md)) — extract hardcoded typography values into design tokens.
-- **`chore-spacing-tokens`** ([proposals/chore-spacing-tokens.md](../../proposals/chore-spacing-tokens.md)) — extract hardcoded spacing values into design tokens.
-- **`chore-z-index-tokens`** ([proposals/chore-z-index-tokens.md](../../proposals/chore-z-index-tokens.md)) — extract hardcoded z-index values into design tokens.
-- **`chore-stylelint-suppressions-review`** ([proposals/chore-stylelint-suppressions-review.md](../../proposals/chore-stylelint-suppressions-review.md)) — periodic audit of stylelint rule suppressions; rides alongside the token chores since most suppressions trace back to the same drift.
-- **`chore-analytics-and-feedback`** ([proposals/chore-analytics-and-feedback.md](../../proposals/chore-analytics-and-feedback.md)) — self-hosted Umami analytics on the existing VPS plus a 1-click "Was this useful?" feedback widget. Closes the traction-data gap surfaced in the 2026-05-27 business / market review. Lands first within v1.3 because every downstream partnership / grant conversation benefits from having real numbers.
+**Hygiene scope**:
 
-**Acceptance criteria** (all must pass before v1.3 is tagged):
+- **`chore-design-tokens`** ([proposals/chore-design-tokens.md](../../proposals/chore-design-tokens.md)) — **open.** Replaces the four separate `chore-{type,spacing,z-index}-tokens` and `chore-stylelint-suppressions-review` proposals, all archived 2026-08-07.
+- ~~**`chore-analytics-and-feedback`**~~ ([archive/proposal-chore-analytics-and-feedback.md](../../archive/proposal-chore-analytics-and-feedback.md)) — **shipped.** Self-hosted Umami on the VPS.
+
+**Acceptance criteria** (⚠️ **superseded** — retained as the record of original intent, not as a gate):
 
 - [ ] EONET ingestion requests `floods`, `wildfires`, `landslides`, `tempExtremes`, `severeStorms`, and `drought`.
 - [ ] Normalization maps each supported category explicitly; unsupported categories do not silently default to floods.
