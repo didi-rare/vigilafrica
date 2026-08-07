@@ -24,7 +24,7 @@ import {
   Loader,
 } from 'lucide-react'
 
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Link } from 'react-router'
 import { ErrorBoundary, type FallbackProps } from 'react-error-boundary'
 import { BrandMark } from './components/BrandMark'
 import { useReveal } from './hooks/useReveal'

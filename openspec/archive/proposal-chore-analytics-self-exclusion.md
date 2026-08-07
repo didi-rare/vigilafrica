@@ -1,7 +1,9 @@
 ---
 id: chore-analytics-self-exclusion
-status: proposed
+status: archived
 branch: chore/analytics-self-exclusion-and-ci-noise
+merged_pr: https://github.com/didi-rare/vigilafrica/pull/190
+archived_on: 2026-08-03
 ---
 
 # Proposal: Stop Recording Our Own Activity in Umami and CI (chore-analytics-self-exclusion)

@@ -1,7 +1,9 @@
 ---
 id: fix-dashboard-layout-reservation
-status: proposed
+status: archived
 branch: fix/dashboard-layout-reservation
+merged_pr: https://github.com/didi-rare/vigilafrica/pull/193
+archived_on: 2026-08-03
 ---
 
 # Proposal: Reserve Viewport Height for the Lazy Dashboard So Visible Content Stops Jumping (fix-dashboard-layout-reservation)
