@@ -133,9 +133,26 @@ INSERT INTO bench_q VALUES
       FROM events ORDER BY event_date DESC NULLS LAST, id DESC LIMIT 50 OFFSET 3200'),
   (3, 'page 1, country=Nigeria (the real access pattern)',
    'SELECT id, source_id, source, title, category, status, geom_type, latitude, longitude, country_name, state_name, event_date, source_url, ingested_at, enriched_at
-      FROM events WHERE country_name ILIKE ''Nigeria'' ORDER BY event_date DESC NULLS LAST, id DESC LIMIT 50 OFFSET 0');
+      FROM events WHERE country_name ILIKE ''Nigeria'' ORDER BY event_date DESC NULLS LAST, id DESC LIMIT 50 OFFSET 0'),
+  -- The handler issues TWO statements per request. Timing only the list one and
+  -- then asserting "the COUNT is the dominant cost" would be a claim this
+  -- harness never measured -- exactly the gap independent review flagged. Both
+  -- count shapes are timed here so the comparison is produced, not assumed.
+  (4, 'COUNT(*), no filter (issued on every request)',
+   'SELECT COUNT(*) FROM events'),
+  (5, 'COUNT(*), country=Nigeria (issued on every filtered request)',
+   'SELECT COUNT(*) FROM events WHERE country_name ILIKE ''Nigeria''');
 
 -- 3. WITHOUT the candidate index ---------------------------------------------
+-- ⚠️ Drop the candidate first. Once migration 000014 has been applied, this
+-- index EXISTS in the schema -- so without this, arm A silently measures the
+-- indexed plan and calls it the baseline, and the CREATE below then aborts with
+-- "relation already exists". Both were reproduced by independent review; the
+-- script previously only worked on a database predating the migration. The drop
+-- is inside the transaction, so the real index is restored by the ROLLBACK.
+DROP INDEX IF EXISTS idx_events_event_date_id;
+ANALYZE events;
+
 \echo ''
 \echo '=== A. existing indexes only (no composite) ==='
 CREATE TEMP TABLE bench_a AS

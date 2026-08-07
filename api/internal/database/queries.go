@@ -100,19 +100,32 @@ func (r *pgRepo) ListEvents(ctx context.Context, filters EventFilters) ([]models
 
 	// Second query: fetch actual data.
 	//
-	// Ordering is a total order built only from columns that ingestion does not
-	// rewrite (feature-events-pagination). `ingested_at` was deliberately REMOVED
-	// rather than merely supplemented: `ON CONFLICT DO UPDATE SET ingested_at =
-	// NOW()` (db.go) resets it on every re-upsert, so a re-ingested event used to
-	// jump to the top of its event_date group and a paging client could see it
-	// twice or miss the row it displaced. A tiebreaker resolves ties; it cannot
-	// stop a row from moving.
+	// A TOTAL order (feature-events-pagination). `ingested_at` was deliberately
+	// REMOVED rather than merely supplemented: `ON CONFLICT DO UPDATE SET
+	// ingested_at = NOW()` (db.go) resets it on EVERY re-upsert, so a re-ingested
+	// event used to jump to the top of its event_date group and a paging client
+	// could see it twice or miss the row it displaced. A tiebreaker resolves ties;
+	// it cannot stop a row from moving. `id` is a UUID PRIMARY KEY — unique and
+	// immutable — so this is a total order, not merely a tiebreak.
 	//
-	// `id` is a UUID PRIMARY KEY — unique and immutable — so this is a total
-	// order, not merely a tiebreak. Residual limit, stated rather than hidden: a
-	// genuinely NEW event sorting ahead of the client's current page still shifts
-	// later rows by one. Removing that requires keyset pagination or a snapshot,
-	// both out of scope.
+	// ⚠️ What this DOES and DOES NOT guarantee. It is tempting to write "ordered
+	// only by columns ingestion does not rewrite"; that would be FALSE, and an
+	// independent review caught it. The same ON CONFLICT clause also sets
+	// `event_date = EXCLUDED.event_date`. So the guarantee is narrower:
+	//
+	//   ✅ Re-ingesting an unchanged event no longer reorders anything. That is
+	//      the routine case — every ingestion tick re-upserts every live event —
+	//      and it is what used to churn the order on every single tick.
+	//   ❌ NOT exactly-once under arbitrary writes. A row still moves if its
+	//      event_date is revised (a NULL date becoming known, or an upstream
+	//      correction), if a genuinely new event sorts ahead of the current page,
+	//      or if re-ingestion changes a FILTERED column — category, status, or
+	//      the geometry behind country_name/state_name — so the row leaves or
+	//      joins the filtered set ahead of the client's offset.
+	//
+	// Those are properties of offset pagination over a live table, not of this
+	// ordering. Eliminating them needs keyset pagination or a consistent
+	// snapshot, both rejected as disproportionate in the proposal.
 	query := fmt.Sprintf(`
 		SELECT
 			id, source_id, source, title, category, status,

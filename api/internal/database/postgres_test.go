@@ -666,6 +666,55 @@ func TestListEventsPagingIsExactlyOnceDuringReIngestion(t *testing.T) {
 	}
 }
 
+// TestListEventsReDatingMovesARow pins the known LIMIT of the ordering rather
+// than the guarantee. An independent review noted that the upsert also sets
+// `event_date = EXCLUDED.event_date`, so re-ingestion CAN move a row after all —
+// just not on every routine tick, which is what removing `ingested_at` fixed.
+//
+// This test asserts the limitation is real and reproducible. If a future change
+// makes re-dating stop moving rows (keyset pagination, a snapshot), this test
+// SHOULD fail — that is the signal to update the spec's residual-limits
+// scenario, not to delete the assertion.
+func TestListEventsReDatingMovesARow(t *testing.T) {
+	ctx := context.Background()
+
+	eventDate := orderingWindowStart.Add(144 * time.Hour)
+	windowEnd := eventDate.Add(48 * time.Hour)
+	const n = 4
+	seedTiedEvents(t, ctx, "TEST_ORDER_REDATE", n, eventDate)
+
+	filters := database.EventFilters{DateFrom: &eventDate, DateTo: &windowEnd, Limit: 200}
+
+	before, _, err := testRepo.ListEvents(ctx, filters)
+	if err != nil {
+		t.Fatalf("ListEvents failed: %v", err)
+	}
+	// The last row in the current order is the one to re-date forward; under
+	// event_date DESC it must then jump to the front.
+	last := before[len(before)-1].SourceID
+
+	// Re-ingest that event with a LATER event_date — a genuine upstream
+	// correction, not routine churn.
+	reUpsert(t, ctx, []string{last}, eventDate.Add(24*time.Hour))
+
+	after, _, err := testRepo.ListEvents(ctx, filters)
+	if err != nil {
+		t.Fatalf("ListEvents after re-dating failed: %v", err)
+	}
+	if len(after) != n {
+		t.Fatalf("expected %d events after re-dating, got %d", n, len(after))
+	}
+	if after[0].SourceID != last {
+		t.Errorf("expected the re-dated event %s to move to the front, got %s — "+
+			"if re-dating no longer moves rows, the spec's residual-limits scenario is now understated",
+			last, after[0].SourceID)
+	}
+	if before[0].SourceID == after[0].SourceID {
+		t.Errorf("the order did not change at all after re-dating (%s stayed first); "+
+			"this test is meant to demonstrate that it does", before[0].SourceID)
+	}
+}
+
 // TestListEventsOffsetBeyondTotal covers task 4.3 at the repository layer: an
 // offset past the end is an empty page, not an error, and total stays truthful.
 func TestListEventsOffsetBeyondTotal(t *testing.T) {

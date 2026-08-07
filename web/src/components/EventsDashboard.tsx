@@ -163,12 +163,24 @@ function DashboardDisclaimer() {
   )
 }
 
+// MAX_PAGE bounds what the URL may request. `offset` must stay a plain integer
+// the API will accept: beyond ~1e21 `String(offset)` produces exponential
+// notation ("5e+22"), which the Go handler rejects with a 400.
+const MAX_PAGE = 1_000_000
+
 // parsePage reads the 1-based `page` URL parameter defensively. The value is
-// user-editable, so anything that is not a positive integer falls back to page 1
-// rather than producing a NaN offset the API would reject with a 400.
+// user-editable, so anything that is not a plain positive integer within range
+// falls back to page 1 rather than reaching the API as an offset it will reject.
+//
+// `Number.parseInt` alone is NOT enough, and both gaps were found by review:
+// it accepts trailing junk ("2junk" → 2, silently treated as page 2) and it
+// happily returns 1e21 for a long digit string, which is `Number.isFinite` and
+// positive yet unusable as an offset. Match the whole string, then bound it.
 function parsePage(raw: string | null): number {
-  const parsed = Number.parseInt(raw ?? '', 10)
-  return Number.isFinite(parsed) && parsed >= 1 ? parsed : 1
+  if (raw === null || !/^\d+$/.test(raw)) return 1
+  const parsed = Number(raw)
+  if (!Number.isSafeInteger(parsed) || parsed < 1) return 1
+  return Math.min(parsed, MAX_PAGE)
 }
 
 export function EventsDashboard() {
@@ -305,22 +317,36 @@ export function EventsDashboard() {
         : COUNTRY_CENTERS['Nigeria']
 
   // ── Pagination arithmetic ──────────────────────────────────────────────────
-  // Derived from `meta` as the server actually applied it, not from what the
-  // client asked for. If the two ever disagree the user is told the truth.
+  // EVERY value here derives from `meta` as the server applied it to the rows
+  // currently rendered — never from the offset the URL is asking for.
+  //
+  // ⚠️ That distinction is load-bearing, and getting it wrong was caught by
+  // review. `keepPreviousData` means that during a page change `eventsData` is
+  // still the PREVIOUS page while `offset` has already advanced. Computing the
+  // range from `offset` made the label read "Showing 51–100 / Page 2" over
+  // page-1 rows — the interface asserting something false about what is on
+  // screen, which is precisely the failure mode this whole change exists to
+  // remove. `meta.offset` describes the rows in hand, so the label cannot lie.
   const total       = eventsData?.meta?.total ?? 0
   const pageSize    = eventsData?.meta?.limit || EVENTS_PAGE_SIZE
+  const shownOffset = eventsData?.meta?.offset ?? 0
   const shownCount  = eventsData?.data?.length ?? 0
-  const rangeStart  = shownCount > 0 ? offset + 1 : 0
-  const rangeEnd    = offset + shownCount
+  const rangeStart  = shownCount > 0 ? shownOffset + 1 : 0
+  const rangeEnd    = shownOffset + shownCount
   const totalPages  = total > 0 ? Math.ceil(total / pageSize) : 1
+  // The page the user is actually LOOKING AT, which during a placeholder render
+  // is the previous one, not `currentPage`.
+  const shownPage   = Math.floor(shownOffset / pageSize) + 1
   // `canNext` is computed from rows actually returned rather than from
-  // currentPage < totalPages, so an out-of-range page (a hand-edited URL, or a
+  // shownPage < totalPages, so an out-of-range page (a hand-edited URL, or a
   // filter that shrank the set) cannot offer a Next that leads nowhere.
-  const canPrev = currentPage > 1
+  const canPrev = shownPage > 1
   const canNext = rangeEnd < total
-  // While placeholder data is on screen the visible list belongs to the PREVIOUS
-  // page, so acting on it would skip or repeat a page. Freeze the controls until
-  // the real page lands.
+  // While placeholder data is on screen the visible list belongs to the previous
+  // page, so acting on the pager would skip or repeat a page. Freeze it until the
+  // real page lands. ⚠️ This freezes the PAGER only — the event links in the list
+  // stay live, and they correctly point at the events actually displayed, which
+  // the range label now also describes.
   const controlsBusy = isPlaceholderData
 
   const availableStates = statesData ?? []
@@ -439,7 +465,7 @@ export function EventsDashboard() {
                 <button
                   type="button"
                   className="dashboard-page-button"
-                  onClick={() => goToPage(currentPage - 1)}
+                  onClick={() => goToPage(shownPage - 1)}
                   disabled={!canPrev || controlsBusy}
                   aria-label="Previous page of events"
                 >
@@ -447,12 +473,12 @@ export function EventsDashboard() {
                   Previous
                 </button>
                 <span className="dashboard-results__page">
-                  Page {currentPage.toLocaleString('en-GB')} of {totalPages.toLocaleString('en-GB')}
+                  Page {shownPage.toLocaleString('en-GB')} of {totalPages.toLocaleString('en-GB')}
                 </span>
                 <button
                   type="button"
                   className="dashboard-page-button"
-                  onClick={() => goToPage(currentPage + 1)}
+                  onClick={() => goToPage(shownPage + 1)}
                   disabled={!canNext || controlsBusy}
                   aria-label="Next page of events"
                 >

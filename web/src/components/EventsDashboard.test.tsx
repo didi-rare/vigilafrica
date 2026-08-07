@@ -414,14 +414,6 @@ describe('EventsDashboard pagination', () => {
     })
   })
 
-  it('falls back to page 1 for a non-numeric page parameter', async () => {
-    renderWithProviders(<EventsDashboard />, ['/?page=banana'])
-
-    await screen.findByRole('status', { name: /result count/i })
-    // NaN would otherwise reach the API as `offset=NaN` and come back a 400.
-    expect(mockFetchEvents).toHaveBeenLastCalledWith(undefined, undefined, undefined, 0)
-  })
-
   it('hides the pager when everything fits on one page but still states the total', async () => {
     mockFetchEvents.mockImplementation(
       (_category, _state, _country, offset = 0) => Promise.resolve(buildPage(offset, 43)),
@@ -454,11 +446,63 @@ describe('EventsDashboard pagination', () => {
     })
   })
 
+  // Explicit 20s timeout. This fixture renders a full 50-card page — 25x the
+  // 2-event fixture the older axe test uses — so the traversal takes ~2s here
+  // and was observed to blow Vitest's 5s default on slower hardware during
+  // independent review. The realistic DOM is the point of the test, so raise the
+  // timeout rather than shrink the page.
   it('has no accessibility violations with the pager rendered', async () => {
     const { container } = renderWithProviders(<EventsDashboard />)
 
     await screen.findByRole('button', { name: /next page/i })
     const results = await axe(container)
     expect(results.violations).toHaveLength(0)
+  }, 20000)
+
+  it('never claims a range the rendered rows do not cover, mid page change', async () => {
+    const user = userEvent.setup()
+    // Hold page 2 open so the placeholder (page 1) is what is actually on screen
+    // while the URL has already advanced to page 2.
+    let releasePage2: (v: EventsResponse) => void = () => {}
+    mockFetchEvents.mockImplementation((_c, _s, _co, offset = 0) =>
+      offset === 0
+        ? Promise.resolve(buildPage(0))
+        : new Promise<EventsResponse>(resolve => { releasePage2 = resolve }))
+
+    renderWithProviders(<EventsDashboard />)
+    await screen.findByRole('status', { name: /result count/i })
+    await user.click(screen.getByRole('button', { name: /next page/i }))
+
+    // Page 2 is in flight. The rows on screen are still page 1, so the label must
+    // still say 1–50. Reading it from the requested offset said "51–100" over
+    // page-1 rows — the interface asserting something false about what is shown.
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /next page/i })).toBeDisabled()
+    })
+    expect(screen.getByRole('status', { name: /result count/i }))
+      .toHaveTextContent('Showing 1–50 of 3,268 matching events')
+    expect(screen.getByText('Page 1 of 66')).toBeInTheDocument()
+
+    releasePage2(buildPage(50))
+    await waitFor(() => {
+      expect(screen.getByRole('status', { name: /result count/i }))
+        .toHaveTextContent('Showing 51–100 of 3,268 matching events')
+    })
+    expect(screen.getByText('Page 2 of 66')).toBeInTheDocument()
+  })
+
+  it.each([
+    ['banana', 'non-numeric'],
+    ['2junk', 'trailing junk — parseInt would silently accept this as page 2'],
+    ['999999999999999999999', 'beyond safe-integer range; would serialise as 5e+22'],
+    ['-3', 'negative'],
+    ['0', 'below the first page'],
+    ['1.5', 'not an integer'],
+    ['', 'empty'],
+  ])('falls back to page 1 for page=%s (%s)', async (value) => {
+    renderWithProviders(<EventsDashboard />, [`/?page=${value}`])
+
+    await screen.findByRole('status', { name: /result count/i })
+    expect(mockFetchEvents).toHaveBeenLastCalledWith(undefined, undefined, undefined, 0)
   })
 })

@@ -12,35 +12,56 @@
 --
 -- Measured via the committed harness scripts/bench-events-ordering/bench.sql,
 -- PostGIS 15-3.4, 3,268 synthetic events (the continental-scale projection from
--- feature-continental-coverage), median of 40 runs. Two independent runs:
+-- feature-continental-coverage), median of 40 runs. FOUR independent runs --
+-- three by the author, one by an independent reviewer on different hardware.
+-- Absolute timings varied ~50% between machines, so this reports RANGES:
 --
---   query shape                      without      with       plan uses index?
---   page 1, no filter                2.11 / 2.15 ms -> 0.09 / 0.15 ms   yes
---   page 1, country=Nigeria          3.31 / 4.16 ms -> 0.22 / 0.36 ms   yes
---   deep page, offset 3200           3.96 / 3.72 ms -> 3.38 / 3.41 ms   NO
+--   query shape              without           with              uses index?
+--   page 1, no filter        1.41 - 2.15 ms -> 0.06 - 0.15 ms    yes  (~15-25x)
+--   page 1, country=Nigeria  2.12 - 4.16 ms -> 0.13 - 0.36 ms    yes  (~12-16x)
+--   deep page, offset 3200   2.20 - 3.96 ms -> 2.21 - 3.41 ms    NO   (no gain)
 --
--- Roughly 15-24x on the two shapes that matter, corroborated by a second,
--- independent signal in the same EXPLAIN output: shared buffer hits for page 1
--- fall from 128 to 51. The plan changes from Seq Scan + top-N heapsort to a
--- plain Index Scan.
+-- Corroborated by a second signal in the same EXPLAIN output: shared buffer hits
+-- for page 1 fall (128 -> 51 on one machine, 64 -> 50 on another; the absolute
+-- figures track table fill, the direction does not). The plan changes from
+-- Seq Scan + top-N heapsort to a plain Index Scan.
 --
--- ⚠️ State the size of the win honestly: this saves roughly 2-4 ms per request
--- at continental scale. That is a large RATIO on a small ABSOLUTE number, and
--- the handler's unavoidable `SELECT COUNT(*)` still seq-scans regardless, so it
--- remains the dominant cost of the endpoint. This is added because it is a real,
--- twice-measured, near-free win -- not because the endpoint was slow.
+-- ⚠️ State the size of the win honestly: this saves roughly 1.3-3.8 ms per
+-- request at continental scale. That is a large RATIO on a small ABSOLUTE
+-- number. Added because it is real, repeatedly measured and near-free -- not
+-- because the endpoint was slow.
 --
--- ⚠️ Deep pagination is NOT helped. Past ~offset 3200 the planner correctly
--- reverts to Seq Scan + quicksort, and the index goes unread. Deep pages remain
--- an offset-pagination cost that only keyset pagination removes; that trade was
--- made deliberately in the proposal, and this index does not change it.
+-- ⚠️ Deep pagination is NOT helped, and on two of the four runs it was
+-- marginally SLOWER with the index present (within noise). The planner correctly
+-- declines the index past ~offset 3200 and reverts to Seq Scan + quicksort. Deep
+-- pages remain an offset-pagination cost that only keyset pagination removes;
+-- that trade was made deliberately in the proposal.
+--
+-- ⚠️ On the COUNT(*) the handler also issues per request: an earlier revision of
+-- this file claimed it "remains the dominant cost", which the harness had never
+-- measured. It now does, and the answer is conditional -- 0.17 ms unfiltered
+-- (cheap), but 1.61 ms for country=Nigeria, i.e. ~12x the indexed list query.
+-- After this index a FILTERED request is dominated by its count; an unfiltered
+-- one is not. Do not generalise either case to the other.
 --
 -- Locking: CREATE INDEX (not CONCURRENTLY) takes a ShareLock on `events` --
 -- verified by reading pg_locks inside a transaction holding it, not assumed.
 -- Reads continue; writes (i.e. ingestion upserts) block for the duration. At
--- 3,268 rows the build is milliseconds. CONCURRENTLY is deliberately NOT used:
--- golang-migrate runs each migration inside a transaction, and CREATE INDEX
--- CONCURRENTLY cannot run in one.
+-- 3,268 rows the build is milliseconds.
+--
+-- ⚠️ CONCURRENTLY is NOT used, and the reason matters because an earlier
+-- revision of this file gave a FALSE one, caught by independent review. It
+-- claimed golang-migrate wraps each migration in a transaction, which would rule
+-- CONCURRENTLY out. It does not: in the pinned v4.19.1 postgres driver,
+-- Run -> runStatement -> conn.ExecContext with no Begin (the only BeginTx in
+-- that file is in SetVersion, for the version bookkeeping). CONCURRENTLY would
+-- in fact work here.
+--
+-- The real reason is proportionality. On a 3,268-row table the plain build holds
+-- its ShareLock for milliseconds, while CONCURRENTLY costs two table scans and
+-- can leave an INVALID index behind on failure that a later migration run will
+-- not repair. Blocking ingestion for milliseconds is the cheaper failure mode.
+-- Revisit if `events` ever grows by orders of magnitude.
 
 CREATE INDEX IF NOT EXISTS idx_events_event_date_id
     ON events (event_date DESC NULLS LAST, id DESC);
