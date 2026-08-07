@@ -1,6 +1,11 @@
 # Proposal: Paginate the Events List (feature-events-pagination)
 
-**Status:** Proposed — prerequisite for [feature-continental-coverage](../../proposals/feature-continental-coverage.md).
+**Status:** Implemented (22/22 tasks) — prerequisite for [feature-continental-coverage](../../proposals/feature-continental-coverage.md), which is now unblocked.
+
+⚠️ Two things changed against what this document predicted, both recorded in [tasks.md](tasks.md) rather than quietly reconciled:
+
+1. **A composite index turned out to be warranted**, contrary to the "measure, expect nothing" prior — and the working form is `(event_date DESC NULLS LAST, id DESC)`, because `idx_events_event_date` is NULLS FIRST and cannot serve this ordering at all. Migration `000014`, harness at `scripts/bench-events-ordering/`.
+2. **The pagination bar introduced a layout shift of its own** (CLS 0.0059 → 0.0122) by rendering only once data arrived. Caught by the task 4.6 re-check, fixed, re-measured to 0.0054 — at or below baseline.
 
 ## Why
 

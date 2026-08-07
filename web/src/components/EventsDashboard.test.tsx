@@ -165,7 +165,8 @@ describe('EventsDashboard', () => {
     await user.click(screen.getByRole('option', { name: 'Ghana' }))
 
     await waitFor(() => {
-      expect(mockFetchEvents).toHaveBeenLastCalledWith(undefined, undefined, 'Ghana')
+      // Trailing 0 is the pagination offset — every fetch now names its page.
+      expect(mockFetchEvents).toHaveBeenLastCalledWith(undefined, undefined, 'Ghana', 0)
     })
     expect(mockFetchStates).toHaveBeenLastCalledWith('Ghana')
   })
@@ -254,7 +255,8 @@ describe('EventsDashboard', () => {
     renderWithProviders(<EventsDashboard />)
 
     await screen.findByRole("heading", { level: 3, name: /Lagos Flood 42/i })
-    expect(screen.getByRole('status')).toHaveTextContent(/last updated/i)
+    // Named explicitly: the result count is a second polite live region now.
+    expect(screen.getByRole('status', { name: /data freshness/i })).toHaveTextContent(/last updated/i)
   })
 
   it('renders a placeholder freshness state when last_ingestion is absent', async () => {
@@ -267,6 +269,196 @@ describe('EventsDashboard', () => {
     renderWithProviders(<EventsDashboard />)
 
     await screen.findByRole("heading", { level: 3, name: /Lagos Flood 42/i })
-    expect(screen.getByRole('status')).toHaveTextContent(/data freshness unknown/i)
+    expect(screen.getByRole('status', { name: /data freshness/i })).toHaveTextContent(/data freshness unknown/i)
+  })
+})
+
+// ── Pagination (feature-events-pagination) ───────────────────────────────────
+
+const PAGE_SIZE = 50
+// Deliberately not a round multiple of PAGE_SIZE: 3,268 is the continental-scale
+// projection this change exists to serve, and a ragged last page (18 rows) is
+// where off-by-one range arithmetic shows up.
+const CONTINENTAL_TOTAL = 3268
+
+// buildPage returns what the API would return for a given offset: a full page
+// until the tail, then the remainder, and `meta` echoing the applied values.
+function buildPage(offset: number, total = CONTINENTAL_TOTAL): EventsResponse {
+  const count = Math.max(0, Math.min(PAGE_SIZE, total - offset))
+  return {
+    data: Array.from({ length: count }, (_, i) => ({
+      ...eventsResponse.data[0],
+      id: `event-${offset + i}`,
+      source_id: `EONET_${offset + i}`,
+      title: `Flood ${offset + i}`,
+    })),
+    meta: { total, limit: PAGE_SIZE, offset },
+  }
+}
+
+describe('EventsDashboard pagination', () => {
+  beforeEach(() => {
+    // Serve whichever page the component asks for, so the offset the UI computes
+    // is the thing under test rather than something the mock hard-codes.
+    mockFetchEvents.mockImplementation(
+      (_category, _state, _country, offset = 0) => Promise.resolve(buildPage(offset)),
+    )
+    mockFetchStates.mockResolvedValue(['Lagos', 'Greater Accra'])
+    mockFetchContext.mockResolvedValue(contextResponse)
+    mockFetchHealth.mockResolvedValue(okHealth)
+  })
+
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('discloses the true total rather than presenting the page as complete', async () => {
+    renderWithProviders(<EventsDashboard />)
+
+    const count = await screen.findByRole('status', { name: /result count/i })
+    expect(count).toHaveTextContent('Showing 1–50 of 3,268 matching events')
+  })
+
+  it('requests the first page with offset 0 and an explicit limit', async () => {
+    renderWithProviders(<EventsDashboard />)
+
+    await screen.findByRole('status', { name: /result count/i })
+    expect(mockFetchEvents).toHaveBeenLastCalledWith(undefined, undefined, undefined, 0)
+  })
+
+  it('advances to the next page and updates the visible range', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<EventsDashboard />)
+
+    await screen.findByRole('status', { name: /result count/i })
+    await user.click(screen.getByRole('button', { name: /next page/i }))
+
+    await waitFor(() => {
+      expect(mockFetchEvents).toHaveBeenLastCalledWith(undefined, undefined, undefined, 50)
+    })
+    await waitFor(() => {
+      expect(screen.getByRole('status', { name: /result count/i }))
+        .toHaveTextContent('Showing 51–100 of 3,268 matching events')
+    })
+    expect(screen.getByText('Page 2 of 66')).toBeInTheDocument()
+  })
+
+  it('disables Previous on the first page and Next on the last', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<EventsDashboard />)
+
+    await screen.findByRole('status', { name: /result count/i })
+    expect(screen.getByRole('button', { name: /previous page/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /next page/i })).toBeEnabled()
+
+    await user.click(screen.getByRole('button', { name: /next page/i }))
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /previous page/i })).toBeEnabled()
+    })
+  })
+
+  it('disables Next on the ragged final page', async () => {
+    // 3,268 / 50 = 65 full pages + 18. Page 66 starts at offset 3,250.
+    renderWithProviders(<EventsDashboard />, ['/?page=66'])
+
+    await waitFor(() => {
+      expect(screen.getByRole('status', { name: /result count/i }))
+        .toHaveTextContent('Showing 3,251–3,268 of 3,268 matching events')
+    })
+    expect(screen.getByRole('button', { name: /next page/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /previous page/i })).toBeEnabled()
+  })
+
+  it('returns to the first page when a filter changes', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<EventsDashboard />, ['/?page=4'])
+
+    await waitFor(() => {
+      expect(mockFetchEvents).toHaveBeenLastCalledWith(undefined, undefined, undefined, 150)
+    })
+
+    await user.click(screen.getByRole('combobox', { name: /filter by country/i }))
+    await user.click(screen.getByRole('option', { name: 'Ghana' }))
+
+    // Offset 0, not 150 — carrying the offset forward would land the user on an
+    // empty page of a smaller result set and read as "no events in Ghana".
+    await waitFor(() => {
+      expect(mockFetchEvents).toHaveBeenLastCalledWith(undefined, undefined, 'Ghana', 0)
+    })
+  })
+
+  it('keeps the map markers in step with the current page', async () => {
+    renderWithProviders(<EventsDashboard />, ['/?page=2'])
+
+    const map = await screen.findByRole('img', { name: /event locations map/i })
+    await waitFor(() => {
+      expect(map).toHaveTextContent('Flood 50')
+    })
+    // Page 1's markers must be gone, not merged in.
+    expect(map).not.toHaveTextContent('Flood 0,')
+  })
+
+  it('treats a page past the end as empty, not as an error, and offers a way back', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<EventsDashboard />, ['/?page=999'])
+
+    const count = await screen.findByRole('status', { name: /result count/i })
+    await waitFor(() => {
+      expect(count).toHaveTextContent('That page is past the end of 3,268 matching events')
+    })
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /first page/i }))
+    await waitFor(() => {
+      expect(mockFetchEvents).toHaveBeenLastCalledWith(undefined, undefined, undefined, 0)
+    })
+  })
+
+  it('falls back to page 1 for a non-numeric page parameter', async () => {
+    renderWithProviders(<EventsDashboard />, ['/?page=banana'])
+
+    await screen.findByRole('status', { name: /result count/i })
+    // NaN would otherwise reach the API as `offset=NaN` and come back a 400.
+    expect(mockFetchEvents).toHaveBeenLastCalledWith(undefined, undefined, undefined, 0)
+  })
+
+  it('hides the pager when everything fits on one page but still states the total', async () => {
+    mockFetchEvents.mockImplementation(
+      (_category, _state, _country, offset = 0) => Promise.resolve(buildPage(offset, 43)),
+    )
+    renderWithProviders(<EventsDashboard />)
+
+    const count = await screen.findByRole('status', { name: /result count/i })
+    expect(count).toHaveTextContent('Showing 1–43 of 43 matching events')
+    expect(screen.queryByRole('button', { name: /next page/i })).not.toBeInTheDocument()
+  })
+
+  it('exposes the page controls to the keyboard', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<EventsDashboard />)
+
+    await screen.findByRole('status', { name: /result count/i })
+    const next = screen.getByRole('button', { name: /next page/i })
+
+    // Native <button>, so it is in the tab order by default; assert nothing has
+    // removed it, then drive it with the keyboard rather than a click.
+    expect(next.tagName).toBe('BUTTON')
+    expect(next).not.toHaveAttribute('tabindex', '-1')
+
+    next.focus()
+    expect(next).toHaveFocus()
+    await user.keyboard('{Enter}')
+
+    await waitFor(() => {
+      expect(mockFetchEvents).toHaveBeenLastCalledWith(undefined, undefined, undefined, 50)
+    })
+  })
+
+  it('has no accessibility violations with the pager rendered', async () => {
+    const { container } = renderWithProviders(<EventsDashboard />)
+
+    await screen.findByRole('button', { name: /next page/i })
+    const results = await axe(container)
+    expect(results.violations).toHaveLength(0)
   })
 })

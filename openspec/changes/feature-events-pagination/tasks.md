@@ -2,35 +2,41 @@
 
 ## 1. API — deterministic ordering (correctness, do this first)
 
-- [ ] 1.1 Order by `event_date DESC NULLS LAST, id DESC` in `ListEvents` (`queries.go:109`) — **remove** the mutable `ingested_at` from the sort rather than appending after it
-- [ ] 1.2 Test that events tying on `event_date` return in a stable order across repeated identical queries
-- [ ] 1.3 Test that walking a result set by `offset` yields each event exactly once while existing events are re-upserted (which resets `ingested_at`) — the case the previous ordering failed
-- [ ] 1.4 Document the residual limit honestly: a genuinely NEW event with a recent `event_date` still shifts later rows by one. Only keyset pagination or a snapshot removes that, and both are out of scope.
-- [ ] 1.5 Confirm `GetNearbyEvents` needs no change — it takes `LIMIT` but no `OFFSET`, so it is not paginated
-- [ ] 1.6 Measure whether a composite index on `(event_date DESC, ingested_at DESC, id DESC)` is warranted, or whether the existing `idx_events_event_date` suffices. **Measure before adding — the `area_m2` work showed an index that `EXPLAIN` never reads.**
+- [x] 1.1 Order by `event_date DESC NULLS LAST, id DESC` in `ListEvents` (`queries.go:109`) — **remove** the mutable `ingested_at` from the sort rather than appending after it
+- [x] 1.2 Test that events tying on `event_date` return in a stable order across repeated identical queries — `TestListEventsOrderingIsStableAcrossIdenticalQueries`. ⚠️ **This test passes on the OLD ordering too**: with 6 tied rows Postgres happened to be deterministic anyway. It is a guard, not the regression detector. 1.3 is the detector.
+- [x] 1.3 Test that walking a result set by `offset` yields each event exactly once while existing events are re-upserted (which resets `ingested_at`) — `TestListEventsPagingIsExactlyOnceDuringReIngestion`. **Verified to fail on the old ordering before the fix landed**: 2 duplicates and 2 skipped events out of 6. Passes on the new ordering.
+- [x] 1.4 Document the residual limit honestly: a genuinely NEW event with a recent `event_date` still shifts later rows by one. Only keyset pagination or a snapshot removes that, and both are out of scope. — stated in the `ListEvents` comment and the spec delta.
+- [x] 1.5 Confirm `GetNearbyEvents` needs no change — confirmed at `queries.go:189-206`: it takes `LIMIT $4` and no `OFFSET`, so it is not paginated. Unchanged.
+- [x] 1.6 Measure whether a composite index is warranted. **Measured — and the answer is yes, which overturned the prior.** Harness committed at `scripts/bench-events-ordering/bench.sql`; migration `000014` adds it.
+  - ⚠️ The candidate is **not** the one this task guessed. `ingested_at` is gone from the sort, and `idx_events_event_date` cannot serve the ordering at all: it is `(event_date DESC)`, which Postgres defaults to **NULLS FIRST**, while the query asks **NULLS LAST**. The working form is `(event_date DESC NULLS LAST, id DESC)`.
+  - Median of 40 runs at 3,268 rows, two independent runs: page 1 **2.11/2.15 ms → 0.09/0.15 ms**; `country=Nigeria` **3.31/4.16 ms → 0.22/0.36 ms**. Plan goes `Seq Scan` + top-N heapsort → `Index Scan`; buffer hits 128 → 51 (a second, independent signal).
+  - ⚠️ Deep pages (`offset 3200`) do **not** use it — the planner correctly reverts to `Seq Scan` + quicksort. And the absolute saving is only ~2–4 ms; the handler's `COUNT(*)` still seq-scans and remains the dominant cost.
 
 ## 2. Frontend — data layer
 
-- [ ] 2.1 Add `limit` and `offset` parameters to `fetchEvents` (`web/src/api/events.ts`)
-- [ ] 2.2 Include `offset` in the TanStack query key so pages cache independently
-- [ ] 2.3 Consider `placeholderData` to avoid a full loading state on page change (evaluate; do not assume it improves the experience)
+- [x] 2.1 Add `limit` and `offset` parameters to `fetchEvents` (`web/src/api/events.ts`) — both always sent, with `offset` clamped at 0 so a bad value cannot surface as a 400.
+- [x] 2.2 Include `offset` in the TanStack query key so pages cache independently — `eventKeys.list(country, category, state, offset)`.
+- [x] 2.3 Evaluated `placeholderData`, and **adopted** (`keepPreviousData`). The reason is specific to this dashboard, not a general preference: without it, changing page empties the list for a round trip, and on mobile — where `.dashboard-layout` is `height: auto` — the section collapses and re-expands, the exact shift class #193/#198 removed. The cost is a briefly stale list, which `isPlaceholderData` surfaces by freezing the pager so it cannot be acted on.
 
 ## 3. Frontend — interface
 
-- [ ] 3.1 Surface `meta.total` as an explicit "Showing X–Y of Z" count
-- [ ] 3.2 Add previous/next page controls, disabled correctly at both ends
-- [ ] 3.3 Reset `offset` to 0 whenever country, state, or category changes
-- [ ] 3.4 Keep map markers in sync with the current page
-- [ ] 3.5 Ensure controls are keyboard reachable and announce page changes to assistive technology — the site is at Accessibility 100 and must stay there
+- [x] 3.1 Surface `meta.total` as an explicit "Showing X–Y of Z" count — "Showing 1–50 of 3,268 matching events", derived from `meta` **as the server applied it**, not from what the client requested.
+- [x] 3.2 Add previous/next page controls, disabled correctly at both ends. `canNext` is computed from rows actually returned rather than `currentPage < totalPages`, so an out-of-range page cannot offer a Next that leads nowhere. A past-the-end page gets a **First page** button, because stepping back one page from `?page=999` lands on another empty page.
+- [x] 3.3 Reset to page 1 whenever country, state, or category changes — each filter handler drops `page` from the URL.
+- [x] 3.4 Keep map markers in sync with the current page — `mapEvents` already derives from `eventsData.data`, so this holds by construction; covered by a test that asserts page 2's markers replace page 1's rather than merging.
+- [x] 3.5 Keyboard reachable and announced. Native `<button>`s (tested: still in the tab order, and Enter drives them). The count is a `role="status"` live region, so the range announces on every page change. ⚠️ That makes **two** polite live regions on the page, so both it and the freshness banner gained an `aria-label` to stay individually addressable. **axe reports 0 violations with the pager rendered** (new test).
 
 ## 4. Verification
 
-- [ ] 4.1 Paging returns each event exactly once during an active ingestion run
-- [ ] 4.2 `meta.total` equals the count from an unpaginated fetch with the same filters
-- [ ] 4.3 Offset beyond `total` returns 200 with empty `data`, not an error
-- [ ] 4.4 Filter change returns to page 1
-- [ ] 4.5 Existing web tests and the API suite pass
-- [ ] 4.6 Re-check CLS — the dashboard height reservation (`#193`/`#198`) is sized against today's list; a page-size change may need it re-measured
+- [x] 4.1 Paging returns each event exactly once during an active ingestion run — `TestListEventsPagingIsExactlyOnceDuringReIngestion` against real PostGIS. **Confirmed to fail before the fix** (2 duplicates, 2 skips out of 6) and pass after.
+- [x] 4.2 `meta.total` equals a direct count for the same filters — asserted at every offset in the same test (`total != n` fails the run), including on the past-the-end page. Note the proposal's correction: the API has no unpaginated mode (`limit` caps at 200), so this is checked against the known seeded count, not against a second fetch.
+- [x] 4.3 Offset beyond `total` returns 200 with empty `data`, not an error — `TestListEventsOffsetBeyondTotal` at the repository layer, plus a UI test asserting no `alert` role appears and a way back is offered.
+- [x] 4.4 Filter change returns to page 1 — UI test starts at `?page=4` (offset 150), changes country, asserts the next fetch uses offset **0**.
+- [x] 4.5 Existing web tests and the API suite pass — web **82/82** (was 70; 12 new), API `go test ./...` all packages, database integration suite green. `npm run type-check`, `lint`, `lint:styles` and `audit:ci` all clean locally.
+- [x] 4.6 Re-checked CLS, and it **caught a regression this change introduced**. Measured at 1920x1600 with the dashboard chunk delayed 1,200 ms, n=8 per arm, against a build of `origin/development` as a real control:
+  - The mounted `#dashboard` grows **1459px → 1523px** (+64px, identical at 43 and 3,268 events — the bar's height is fixed, not row-dependent). `.dashboard-fallback`'s cap raised 1460px → 1530px to keep it at the real mounted height. ⚠️ **That cap change was measured to affect CLS by nothing** — at any realistic viewport the content below the reservation is already off-screen. It is invariant maintenance; the comment says so rather than implying a fix.
+  - **The real regression:** gating the results bar on `eventsData` meant it appeared when the fetch resolved and shoved the 800px layout down 64px — **CLS 0.0059 → 0.0122, 5/5 runs**. Fixed by rendering the container unconditionally so `min-height` reserves the space from mount. **Re-measured: 0.0054 vs baseline 0.0059, 8/8 stable — at or below baseline.**
+  - ⚠️ **Pre-existing and NOT fixed here:** the residual ~0.0054 is the freshness banner appearing and pushing `.dashboard-filters`. It is present identically on `origin/development` and is out of scope for this change.
 
 ## 5. Explicitly not in this change
 
