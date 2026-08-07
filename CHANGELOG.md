@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.3.7](https://github.com/didi-rare/vigilafrica/compare/v1.3.6...v1.3.7) (2026-08-07)
+
+
+### Bug Fixes
+
+* **ci:** clear the brace-expansion advisory blocking every PR [trivial] ([#206](https://github.com/didi-rare/vigilafrica/issues/206)) ([e505526](https://github.com/didi-rare/vigilafrica/commit/e50552601e3242614d3a86e6f6b7e9e11fd8bd6c))
+* **ci:** clear the js-yaml advisory blocking the promotion [trivial] ([#216](https://github.com/didi-rare/vigilafrica/issues/216)) ([cd0108f](https://github.com/didi-rare/vigilafrica/commit/cd0108fcdfc263cab032408c22b1378cd4d6af57))
+* **ci:** clear the undici + fast-uri advisory batch [trivial] ([#207](https://github.com/didi-rare/vigilafrica/issues/207)) ([cb85df8](https://github.com/didi-rare/vigilafrica/commit/cb85df8a201eafcb12dc2d789a23ed4fbee995f7))
+
+
+### Performance Improvements
+
+* **api:** precompute admin boundary area for enrichment ([#211](https://github.com/didi-rare/vigilafrica/issues/211)) ([64ffd81](https://github.com/didi-rare/vigilafrica/commit/64ffd81906b3d0c6d2be41bdce6dd9d70af7a7c0))
+
 ## [1.3.6](https://github.com/didi-rare/vigilafrica/compare/v1.3.5...v1.3.6) (2026-07-29)
 
 
