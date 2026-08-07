@@ -11,7 +11,7 @@
 // is captured automatically; the six v1 custom events are intentionally a
 // closed set — see analytics.ts).
 import { useEffect, type ReactNode } from 'react'
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import {
   Satellite,
   Newspaper,

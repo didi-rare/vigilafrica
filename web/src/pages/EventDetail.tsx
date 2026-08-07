@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { fetchEventById, eventKeys } from '../api/events'
 import { track } from '../analytics'

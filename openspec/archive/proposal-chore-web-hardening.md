@@ -1,7 +1,9 @@
 ---
 id: chore-web-hardening
-status: in-progress
+status: archived
 branch: chore/web-hardening
+merged_pr: https://github.com/didi-rare/vigilafrica/pull/191
+archived_on: 2026-08-03
 ---
 
 # Proposal: Close the Cheap Findings From the 2026-07-26 Production Web Audit (chore-web-hardening)
