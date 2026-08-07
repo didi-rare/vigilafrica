@@ -1,8 +1,12 @@
 # Proposal: Harden the VPS Deploy Path (chore-vps-access-hardening)
 
-**Status:** Proposed (0/20 tasks)
+**Status:** Proposed (0/21 tasks)
 
-⚠️ **Revised after independent review.** The first revision of this document was reviewed by an independent model (`gpt-5.6-sol`) which found **7 P1 defects**, including a false code-path claim, two task-ordering defects that would have broken deployment, and an internal contradiction about network isolation. Every external runtime claim has since been checked against primary documentation, and **four of them were simply wrong** — corrections are marked ⚠️ inline. What survived is recorded here; what did not is recorded as a correction rather than silently deleted.
+⚠️ **Revised twice after independent review.** Two adversarial review passes (`gpt-5.6-sol`) found **7 P1 defects** in the first revision and **6 more** in the second. Corrections are marked ⚠️ inline rather than silently applied, because two of them were themselves wrong the first time.
+
+**The most instructive:** revision 2 "corrected" the source-IP claim to say pasta preserves client addresses. That over-corrected — pasta is the default *network mode* for rootless containers, but Compose creates **bridge** networks, and rootless bridge publishing still defaults to `rootlessport`, which does **not** preserve source IPs. Revision 1 was closer to right. See the Podman section.
+
+Every external runtime claim here has been checked against primary documentation. Where a claim could not be verified without host access, it is marked unverified rather than asserted.
 
 ## Why
 
@@ -34,10 +38,10 @@ credential, not the container runtime, is the weakest link.**
    creates a single user owning both `/opt/vigilafrica/staging` and `/opt/vigilafrica/production`.
    **This is the highest-ranked exposure**, because it collapses the boundary between an
    environment that deploys automatically and one that is meant to be gated.
-   ⚠️ The gating itself is **unverified external state**: only [`vps.md:130-133`](../../../docs/deployment/vps.md)
-   claims production requires a reviewer. The workflow YAML merely names the `production`
-   environment; protection rules live in GitHub settings and could not be checked from the repo.
-   Task 1.7 verifies it before anything relies on it.
+   ✅ The gating rule itself **has now been verified to exist** via the public GitHub environments
+   API — it is not merely asserted in [`vps.md:130-133`](../../../docs/deployment/vps.md). That
+   makes the shared account the *only* thing defeating it, which raises rather than lowers this
+   exposure's rank. Task 1.7 still confirms the reviewer set and rotation policy.
 5. **`/v1/context` trusts forwarded headers from anyone.** `extractIP()`
    ([`context.go:74-94`](../../../api/internal/handlers/context.go)) reads `X-Forwarded-For` and
    `X-Real-IP` with **no trusted-proxy check**, and it is the only IP path that endpoint uses
@@ -78,8 +82,15 @@ workflow-integrity control, **not** a key-compromise control.
 
 ## Decision: do NOT migrate to Podman — for narrower reasons than first claimed
 
-The daemonless premise is sound and **fixes none of exposures 1–4**, which are credential-path
-defects. That conclusion survives review. Several supporting arguments did not:
+⚠️ **Corrected:** earlier revisions said daemonless "fixes none of exposures 1–4." **That is too
+strong.** Exposure 1 *is* root escalation through the rootful Docker socket, and a completed
+rootless migration removes that mechanism outright. What it does **not** fix is exposure 2 (host-key
+verification), 3 (on-host builds), 4 (shared account across environments) or 5 (unguarded
+`extractIP`) — four of the five, including the highest-ranked one.
+
+So the honest statement is: **rootless would close one exposure that group 1 also closes, more
+cheaply and with no data migration.** Deferral rests on cost and operational risk, not on the
+migration being useless. Several supporting arguments were also wrong:
 
 ### ⚠️ The source-IP argument — corrected, and now narrower
 
@@ -88,17 +99,21 @@ returns false and `/v1/context` geolocates everyone identically."* **Two errors.
 
 1. **Wrong code path.** `/v1/context` never calls `clientIP()`, so the trusted-proxy check cannot
    affect it (see exposure 5). Only **rate limiting** would collapse into a single bucket.
-2. **Wrong about pasta.** Source-IP behaviour is forwarder-dependent, not universal:
-   `slirp4netns` + `port_handler=rootlesskit` rewrites the source (container sees `10.0.2.100`);
-   **pasta — the default since Podman 5.0 — preserves it**; `slirp4netns` + `port_handler=slirp4netns`
-   also preserves it. And source preservation *from the host's own loopback* is not enabled by
-   default and needs explicit `--map-gw`/`--map-host-loopback`.
+2. **Right about the mechanism, then over-corrected about pasta.** Revision 2 claimed "pasta — the
+   default since Podman 5.0 — preserves it," which **misapplies the default to the wrong topology.**
+   Podman documents that pasta is the default *network mode* for rootless containers — but Compose
+   creates **user-defined bridge networks**, and *"for rootless bridge networks, port forwarding
+   uses `rootlessport` by default,"* which *"does not preserve client source IPs."* Switching to
+   pasta forwarding requires `rootless_port_forwarder="pasta"` in `containers.conf` and is
+   documented as **experimental**, *"subject to change."*
 
-**What is actually true:** in a host-Caddy-to-loopback-published-port topology the peer address a
-rootless container observes is **unpredictable from documentation and must be measured**. The
-failure mode is real and silent if it occurs — `/health` returns 200 and the production smoke
-test checks only `status` and `version` — but it is not the certainty first claimed.
-The equivalent rootless-Docker outcome is **unverified**.
+**What is actually true for this stack:** these compose files define bridge networks, so a rootless
+migration would land on the **non-preserving** `rootlessport` path by default, and the peer address
+the API observes would change. The escape hatch exists but is experimental. Whether the resulting
+address happens to fall inside the configured trusted range is still **unmeasured** — but the
+concern is real by default, not merely possible. The failure would be silent: `/health` returns 200
+and the production smoke test checks only `status` and `version`.
+The equivalent rootless-Docker behaviour remains **unverified**.
 
 ### ⚠️ Other Podman claims, corrected
 
@@ -126,7 +141,9 @@ peer address **measured** first. Task 5 makes that failure detectable either way
 An earlier draft placed this out of scope as "necessary, and bounded by loopback publishing plus
 network separation." **That contradicted this document's own finding**, and the independent review
 caught it: `prod-api` and the public-facing `prod-umami` share the `prod-internal` network
-([`docker-compose.prod.yml:101-130`](../../../docker-compose.prod.yml)). A compromised Umami
+(`prod-api` at [`docker-compose.prod.yml:62-63`](../../../docker-compose.prod.yml), `prod-umami` at
+[`:117-118`](../../../docker-compose.prod.yml) — the earlier `101-130` citation showed only Umami's
+membership, not the API's). A compromised Umami
 container can reach the API directly and **forge `X-Forwarded-For` from a peer inside the trusted
 `172.16.0.0/12` range**. Umami is the largest attack surface here (public dashboard, Next.js).
 
