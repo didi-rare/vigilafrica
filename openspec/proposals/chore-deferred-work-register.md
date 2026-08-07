@@ -120,15 +120,21 @@ Consolidating them into an explicit `Ingestor` struct touches `scheduler.go`, al
 
 ## E. Found while doing this housekeeping
 
-### E1. Two stray spec documents in `openspec/specs/` — ⚠️ deliberately not fixed here
+### E1. Two orphaned design documents — ✅ RESOLVED, and it was not the judgement call it first looked like
 
-[`openspec/specs/fix-border-event-enrichment.md`](../specs/fix-border-event-enrichment.md) and [`openspec/specs/fix-ingest-bbox-validation.md`](../specs/fix-ingest-bbox-validation.md) both:
+`openspec/specs/fix-border-event-enrichment.md` and `openspec/specs/fix-ingest-bbox-validation.md` described work **shipped in v1.3.2** while still reading *"Status: Proposed — implementation in `fix/…`"*, and carried **4 broken links** — every remaining broken link under `openspec/`.
 
-- describe work that **shipped in v1.3.2**, while still reading **"Status: Proposed — implementation in `fix/…`"**;
-- link to companion proposals that were archived long ago, leaving **4 broken relative links** — the only ones remaining anywhere under `openspec/` after this PR;
-- sit beside `openspec/archive/spec-fix-*.md` files that are **related but not identical** — the archived ones are *spec deltas*, these are *full spec documents*.
+An initial pass deferred these as *"an editorial call about the spec's structure"*. **That was wrong**, and the git history says so plainly. They are a **missed step in an archive operation**, with 24 precedents for the correct action:
 
-**Not fixed here on purpose.** Deciding whether they should be merged into [`specs/vigilafrica/spec.md`](../specs/vigilafrica/spec.md), archived alongside their deltas, or deleted as superseded is a real editorial call about the spec's structure, not link rot — and this PR had no mandate for it. Everything else broken by the archive moves in this PR **was** repaired.
+- In **#159** (`85cc385`, 2026-07-21, *"archive 4 shipped fixes + merge their spec deltas"*) the proposals moved to `archive/proposal-*.md`, the change-record deltas moved to `archive/spec-*.md`, and the delta text merged into the canonical spec (verified present: the ADM0 fallback and the bbox-containment scenarios are both in `specs/vigilafrica/spec.md` today).
+- **`openspec/specs/*.md` was simply never touched.** Both link targets moved in that commit, which is exactly when the 4 links broke — **2026-07-21, not in this PR.**
+- `git log --diff-filter=D` shows **24 files** previously removed from `openspec/specs/*.md`, in commits titled *"archive X (proposal + spec)"*. Clearing that directory on archive is the established convention, applied 24 times and missed twice.
+
+**Why they were archived rather than deleted.** They are not duplicates of `archive/spec-fix-*.md` — that slot holds the **canonical OpenSpec delta** (`## MODIFIED Requirements`), while these are **design documents** (*Components to Touch, Design Decisions, Implementation Plan, Acceptance Criteria, Verification Plan*) whose sections appear in neither the archived proposal nor the delta. The root-cause evidence *is* duplicated in the proposals and would have survived deletion; the design reasoning would not.
+
+They are now `openspec/archive/design-fix-{border-event-enrichment,ingest-bbox-validation}.md` — `design-` matching OpenSpec's own `design.md` artifact name — with statuses corrected and links repointed at their archived siblings.
+
+⚠️ **The two remaining files in `openspec/specs/`** — `feature-ai-digest-narrative.md` and `feature-secondary-oracle.md` — are **correct and were left alone**: both have live proposals in `openspec/proposals/`, so their companion links resolve. That is what the directory is for.
 
 ## Out of Scope
 
