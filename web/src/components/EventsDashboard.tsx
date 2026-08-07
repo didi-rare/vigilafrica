@@ -1,10 +1,10 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
-import { fetchEvents, fetchContext, fetchHealth, fetchStates, getApiBaseUrl, eventKeys, stateKeys, healthKeys, contextKeys } from '../api/events'
+import { fetchEvents, fetchContext, fetchHealth, fetchStates, getApiBaseUrl, eventKeys, stateKeys, healthKeys, contextKeys, EVENTS_PAGE_SIZE } from '../api/events'
 import type { HealthResponse, EventCategory, VigilEvent } from '../api/events'
 import { track } from '../analytics'
-import { Droplet, Flame, MapPin, CircleCheck, Clock, AlertTriangle } from 'lucide-react'
+import { Droplet, Flame, MapPin, CircleCheck, Clock, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react'
 
 import { Select, type SelectOption } from './Select'
 import './EventsDashboard.css'
@@ -116,6 +116,7 @@ function FreshnessIndicator() {
         className="freshness-banner freshness-banner--ok"
         role="status"
         aria-live="polite"
+        aria-label="Data freshness"
       >
         <span className="freshness-icon" aria-hidden="true"><CircleCheck size={14} /></span>
         Data freshness unknown — no ingestion history available.
@@ -137,6 +138,7 @@ function FreshnessIndicator() {
       className={`freshness-banner ${variantClass}`}
       role={ariaRole}
       aria-live="polite"
+      aria-label="Data freshness"
     >
       <span className="freshness-icon" aria-hidden="true"><FreshnessIcon size={14} /></span>
       {resolved.message}
@@ -161,18 +163,46 @@ function DashboardDisclaimer() {
   )
 }
 
+// MAX_PAGE bounds what the URL may request. `offset` must stay a plain integer
+// the API will accept: beyond ~1e21 `String(offset)` produces exponential
+// notation ("5e+22"), which the Go handler rejects with a 400.
+const MAX_PAGE = 1_000_000
+
+// parsePage reads the 1-based `page` URL parameter defensively. The value is
+// user-editable, so anything that is not a plain positive integer within range
+// falls back to page 1 rather than reaching the API as an offset it will reject.
+//
+// `Number.parseInt` alone is NOT enough, and both gaps were found by review:
+// it accepts trailing junk ("2junk" → 2, silently treated as page 2) and it
+// happily returns 1e21 for a long digit string, which is `Number.isFinite` and
+// positive yet unusable as an offset. Match the whole string, then bound it.
+function parsePage(raw: string | null): number {
+  if (raw === null || !/^\d+$/.test(raw)) return 1
+  const parsed = Number(raw)
+  if (!Number.isSafeInteger(parsed) || parsed < 1) return 1
+  return Math.min(parsed, MAX_PAGE)
+}
+
 export function EventsDashboard() {
-  // §4.3: filter state lives in the URL — survives refresh, navigation, and link-sharing
+  // §4.3: filter state lives in the URL — survives refresh, navigation, and link-sharing.
+  // The page number lives there too, for the same reasons: a shared link to page 3
+  // of a filtered set should land on page 3.
   const [searchParams, setSearchParams] = useSearchParams()
   const selectedCountry  = searchParams.get('country') ?? ''
   const selectedCategory = (searchParams.get('category') ?? '') as EventCategory | ''
   const selectedState    = searchParams.get('state') ?? ''
+  const currentPage      = parsePage(searchParams.get('page'))
+  const offset           = (currentPage - 1) * EVENTS_PAGE_SIZE
 
+  // Every filter change drops `page`, returning to page 1 (task 3.3). Without
+  // this, changing country while on page 5 requests an offset the new, smaller
+  // result set has no rows for — an empty page that looks like "no events here".
   function handleCountryChange(country: string) {
     setSearchParams(prev => {
       const next = new URLSearchParams(prev)
       if (country) next.set('country', country); else next.delete('country')
       next.delete('state')
+      next.delete('page')
       return next
     })
   }
@@ -184,6 +214,7 @@ export function EventsDashboard() {
     setSearchParams(prev => {
       const next = new URLSearchParams(prev)
       if (category) next.set('category', category); else next.delete('category')
+      next.delete('page')
       return next
     })
   }
@@ -194,6 +225,17 @@ export function EventsDashboard() {
     setSearchParams(prev => {
       const next = new URLSearchParams(prev)
       if (state) next.set('state', state); else next.delete('state')
+      next.delete('page')
+      return next
+    })
+  }
+
+  function goToPage(page: number) {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      // Page 1 is the default, so it stays out of the URL — a clean canonical
+      // link, and it keeps the SEO'd landing URL free of a redundant `?page=1`.
+      if (page <= 1) next.delete('page'); else next.set('page', String(page))
       return next
     })
   }
@@ -206,13 +248,43 @@ export function EventsDashboard() {
     error: eventsError,
     refetch: refetchEvents,
     isFetching: eventsFetching,
+    isPlaceholderData,
   } = useQuery({
-    queryKey: eventKeys.list(selectedCountry, selectedCategory, selectedState),
+    queryKey: eventKeys.list(selectedCountry, selectedCategory, selectedState, offset),
     queryFn: () => fetchEvents(
       selectedCategory || undefined,
       selectedState || undefined,
       selectedCountry || undefined,
+      offset,
     ),
+    // Task 2.3, evaluated rather than assumed. Carrying the previous response is
+    // a clear win for a PAGE change: without it the list empties for a round
+    // trip, and on mobile — where `.dashboard-layout` is `height: auto` — the
+    // section collapses and re-expands, exactly the shift class #193/#198
+    // removed. Keeping the previous page rendered holds the height constant.
+    //
+    // ⚠️ But it must NOT be carried across a FILTER change, and plain
+    // `keepPreviousData` did exactly that. Measured: selecting Ghana left 50
+    // Nigeria-era cards on screen, under a country control already reading
+    // "Ghana", with the count reporting the previous filter's 3,268 total. The
+    // range label was truthful about the rows, but the screen as a whole was
+    // not — the same "shows you something other than what it claims" failure
+    // this change exists to remove, just relocated from the count to the filter.
+    //
+    // So: keep the previous data only when the filters are unchanged, i.e. when
+    // `offset` is the only part of the key that moved. A filter change falls
+    // back to the ordinary loading state, which is honest — the result set
+    // genuinely is different and not yet known.
+    placeholderData: (previousData, previousQuery) => {
+      const previousFilters = previousQuery?.queryKey?.[2] as
+        { country: string; category: string; state: string } | undefined
+      if (!previousFilters) return undefined
+      const sameFilters =
+        previousFilters.country === selectedCountry &&
+        previousFilters.category === selectedCategory &&
+        previousFilters.state === selectedState
+      return sameFilters ? previousData : undefined
+    },
   })
 
   const { data: statesData } = useQuery({
@@ -263,6 +335,39 @@ export function EventsDashboard() {
         ? [contextData.location.lng, contextData.location.lat]
         : COUNTRY_CENTERS['Nigeria']
 
+  // ── Pagination arithmetic ──────────────────────────────────────────────────
+  // EVERY value here derives from `meta` as the server applied it to the rows
+  // currently rendered — never from the offset the URL is asking for.
+  //
+  // ⚠️ That distinction is load-bearing, and getting it wrong was caught by
+  // review. `keepPreviousData` means that during a page change `eventsData` is
+  // still the PREVIOUS page while `offset` has already advanced. Computing the
+  // range from `offset` made the label read "Showing 51–100 / Page 2" over
+  // page-1 rows — the interface asserting something false about what is on
+  // screen, which is precisely the failure mode this whole change exists to
+  // remove. `meta.offset` describes the rows in hand, so the label cannot lie.
+  const total       = eventsData?.meta?.total ?? 0
+  const pageSize    = eventsData?.meta?.limit || EVENTS_PAGE_SIZE
+  const shownOffset = eventsData?.meta?.offset ?? 0
+  const shownCount  = eventsData?.data?.length ?? 0
+  const rangeStart  = shownCount > 0 ? shownOffset + 1 : 0
+  const rangeEnd    = shownOffset + shownCount
+  const totalPages  = total > 0 ? Math.ceil(total / pageSize) : 1
+  // The page the user is actually LOOKING AT, which during a placeholder render
+  // is the previous one, not `currentPage`.
+  const shownPage   = Math.floor(shownOffset / pageSize) + 1
+  // `canNext` is computed from rows actually returned rather than from
+  // shownPage < totalPages, so an out-of-range page (a hand-edited URL, or a
+  // filter that shrank the set) cannot offer a Next that leads nowhere.
+  const canPrev = shownPage > 1
+  const canNext = rangeEnd < total
+  // While placeholder data is on screen the visible list belongs to the previous
+  // page, so acting on the pager would skip or repeat a page. Freeze it until the
+  // real page lands. ⚠️ This freezes the PAGER only — the event links in the list
+  // stay live, and they correctly point at the events actually displayed, which
+  // the range label now also describes.
+  const controlsBusy = isPlaceholderData
+
   const availableStates = statesData ?? []
 
   const countryOptions: SelectOption[] = [
@@ -310,6 +415,99 @@ export function EventsDashboard() {
             options={stateOptions}
             disabled={availableStates.length === 0}
           />
+        </div>
+
+        {/*
+          The results bar sits ABOVE the layout on purpose. On desktop the
+          sidebar is a fixed 800px scroll container, so controls placed under the
+          list would scroll out of sight inside it — and the total is the one
+          number this whole change exists to make visible. It must not require
+          scrolling past an 800px map to find.
+        */}
+        {/*
+          The CONTAINER renders unconditionally, even before the first response.
+          Gating it on `eventsData` was measured to double the page's CLS
+          (0.0059 → 0.0122 at 1920x1600, 5/5 runs): the bar appeared when the
+          fetch resolved and shoved the 800px `.dashboard-layout` down 64px. Its
+          `min-height` reserves that space from mount, so the content can fill in
+          without moving anything. Same lesson as #193/#198, one element down.
+        */}
+        <div className="dashboard-results">
+          {eventsData && !eventsError && (
+            <>
+            {/*
+              A second polite live region alongside the freshness banner. Both
+              carry an aria-label so each is individually addressable — screen
+              readers announce the changed CONTENT of a live region, and the
+              label distinguishes them when navigating by role.
+            */}
+            <p
+              className="dashboard-results__count"
+              role="status"
+              aria-live="polite"
+              aria-label="Result count"
+            >
+              {total === 0 ? (
+                'No events match these filters'
+              ) : shownCount === 0 ? (
+                <>That page is past the end of <strong>{total.toLocaleString('en-GB')}</strong> matching events</>
+              ) : (
+                <>
+                  Showing <strong>{rangeStart.toLocaleString('en-GB')}–{rangeEnd.toLocaleString('en-GB')}</strong>
+                  {' of '}
+                  <strong>{total.toLocaleString('en-GB')}</strong> matching events
+                </>
+              )}
+            </p>
+
+            {/*
+              Past-the-end recovery. Stepping back one page from a hand-edited
+              `?page=99` would land on another empty page, so offer the only jump
+              that is guaranteed to have rows.
+            */}
+            {total > 0 && shownCount === 0 && (
+              <div className="dashboard-results__controls">
+                <button
+                  type="button"
+                  className="dashboard-page-button"
+                  onClick={() => goToPage(1)}
+                  aria-label="Return to the first page of events"
+                >
+                  <ChevronLeft size={16} aria-hidden="true" />
+                  First page
+                </button>
+              </div>
+            )}
+
+            {totalPages > 1 && shownCount > 0 && (
+              <div className="dashboard-results__controls">
+                <button
+                  type="button"
+                  className="dashboard-page-button"
+                  onClick={() => goToPage(shownPage - 1)}
+                  disabled={!canPrev || controlsBusy}
+                  aria-label="Previous page of events"
+                >
+                  <ChevronLeft size={16} aria-hidden="true" />
+                  Previous
+                </button>
+                <span className="dashboard-results__page">
+                  Page {shownPage.toLocaleString('en-GB')} of {totalPages.toLocaleString('en-GB')}
+                </span>
+                <button
+                  type="button"
+                  className="dashboard-page-button"
+                  onClick={() => goToPage(shownPage + 1)}
+                  disabled={!canNext || controlsBusy}
+                  aria-label="Next page of events"
+                >
+                  Next
+                  <ChevronRight size={16} aria-hidden="true" />
+                </button>
+              </div>
+            )}
+            </>
+          )}
         </div>
 
         <div className="dashboard-layout">

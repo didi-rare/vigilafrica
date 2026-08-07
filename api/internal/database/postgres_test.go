@@ -4,6 +4,7 @@ package database_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -482,4 +483,264 @@ func TestEnrichmentAndStates(t *testing.T) {
 			t.Fatalf("GetDistinctStatesByCountry(Nigeria) failed: %v", err)
 		}
 	})
+}
+
+// ── Pagination ordering (feature-events-pagination) ──────────────────────────
+//
+// The suite shares one database across tests and never truncates, so these tests
+// isolate their own rows with a far-future event_date window and the
+// DateFrom/DateTo filters rather than by assuming an empty table.
+
+// orderingWindowStart is well past any real EONET event_date, so
+// DateFrom/DateTo isolates exactly the rows seeded below.
+var orderingWindowStart = time.Date(2999, 1, 1, 0, 0, 0, 0, time.UTC)
+
+// seedTiedEvents inserts n events that ALL share the same event_date, i.e. one
+// maximal tie group. Ties are what an ordering without a unique terminator gets
+// wrong, and re-upserting a tied row is what an ordering containing ingested_at
+// gets wrong. Returns the source IDs in insertion order.
+func seedTiedEvents(t *testing.T, ctx context.Context, prefix string, n int, eventDate time.Time) []string {
+	t.Helper()
+	ids := make([]string, 0, n)
+	for i := 0; i < n; i++ {
+		sourceID := fmt.Sprintf("%s_%02d", prefix, i)
+		url := "https://eonet.gsfc.nasa.gov/api/v3/events/" + sourceID
+		e := models.Event{
+			SourceID:  sourceID,
+			Source:    "eonet",
+			Title:     fmt.Sprintf("Ordering fixture %s", sourceID),
+			Category:  models.CategoryFloods,
+			Status:    models.StatusOpen,
+			GeomType:  ptrStr("Point"),
+			Latitude:  ptrF64(6.0),
+			Longitude: ptrF64(3.0),
+			EventDate: &eventDate,
+			SourceURL: &url,
+		}
+		if err := testRepo.UpsertEvent(ctx, e, `{"type":"Point","coordinates":[3.0,6.0]}`); err != nil {
+			t.Fatalf("seeding %s failed: %v", sourceID, err)
+		}
+		// Each upsert is its own implicit transaction, so NOW() differs per row.
+		// That is precisely what used to make the order churn.
+		ids = append(ids, sourceID)
+	}
+	return ids
+}
+
+// reUpsert re-inserts the given source IDs, which fires
+// `ON CONFLICT DO UPDATE SET ingested_at = NOW()` on each one — simulating an
+// ingestion tick that touches already-stored events.
+func reUpsert(t *testing.T, ctx context.Context, sourceIDs []string, eventDate time.Time) {
+	t.Helper()
+	for _, sourceID := range sourceIDs {
+		url := "https://eonet.gsfc.nasa.gov/api/v3/events/" + sourceID
+		e := models.Event{
+			SourceID:  sourceID,
+			Source:    "eonet",
+			Title:     fmt.Sprintf("Ordering fixture %s", sourceID),
+			Category:  models.CategoryFloods,
+			Status:    models.StatusOpen,
+			GeomType:  ptrStr("Point"),
+			Latitude:  ptrF64(6.0),
+			Longitude: ptrF64(3.0),
+			EventDate: &eventDate,
+			SourceURL: &url,
+		}
+		if err := testRepo.UpsertEvent(ctx, e, `{"type":"Point","coordinates":[3.0,6.0]}`); err != nil {
+			t.Fatalf("re-upsert of %s failed: %v", sourceID, err)
+		}
+	}
+}
+
+// TestListEventsOrderingIsStableAcrossIdenticalQueries covers task 1.2: events
+// tying on event_date must come back in the same order every time.
+func TestListEventsOrderingIsStableAcrossIdenticalQueries(t *testing.T) {
+	ctx := context.Background()
+
+	eventDate := orderingWindowStart
+	windowEnd := eventDate.Add(24 * time.Hour)
+	const n = 6
+	seedTiedEvents(t, ctx, "TEST_ORDER_STABLE", n, eventDate)
+
+	filters := database.EventFilters{
+		DateFrom: &eventDate,
+		DateTo:   &windowEnd,
+		Limit:    200,
+	}
+
+	first, total, err := testRepo.ListEvents(ctx, filters)
+	if err != nil {
+		t.Fatalf("ListEvents failed: %v", err)
+	}
+	if total != n {
+		t.Fatalf("expected %d seeded events in the isolation window, got %d", n, total)
+	}
+
+	want := make([]string, len(first))
+	for i, e := range first {
+		want[i] = e.SourceID
+	}
+
+	// Repeat the identical query. Without a unique terminator in ORDER BY, equal
+	// sort keys leave Postgres free to return a different permutation.
+	for attempt := 0; attempt < 5; attempt++ {
+		got, _, err := testRepo.ListEvents(ctx, filters)
+		if err != nil {
+			t.Fatalf("ListEvents (attempt %d) failed: %v", attempt, err)
+		}
+		if len(got) != len(want) {
+			t.Fatalf("attempt %d returned %d events, want %d", attempt, len(got), len(want))
+		}
+		for i := range got {
+			if got[i].SourceID != want[i] {
+				t.Fatalf("attempt %d: order changed at position %d: got %s, want %s",
+					attempt, i, got[i].SourceID, want[i])
+			}
+		}
+	}
+}
+
+// TestListEventsPagingIsExactlyOnceDuringReIngestion covers task 1.3 — the case
+// the previous ordering failed. Walking by offset while existing events are
+// re-upserted must still yield every event exactly once, because ingested_at is
+// no longer part of the sort.
+func TestListEventsPagingIsExactlyOnceDuringReIngestion(t *testing.T) {
+	ctx := context.Background()
+
+	// A distinct day from the stability test, so the two isolation windows do not overlap.
+	eventDate := orderingWindowStart.Add(48 * time.Hour)
+	windowEnd := eventDate.Add(24 * time.Hour)
+	const n = 6
+	const pageSize = 2
+	sourceIDs := seedTiedEvents(t, ctx, "TEST_ORDER_PAGING", n, eventDate)
+
+	seen := make(map[string]int, n)
+	var order []string
+
+	for page := 0; page*pageSize < n; page++ {
+		offset := page * pageSize
+
+		// An ingestion tick lands before every page fetch, re-upserting the event
+		// with the OLDEST ingested_at (the events were seeded in order, so that is
+		// sourceIDs[page]). Under the old `ORDER BY event_date DESC, ingested_at
+		// DESC` that row jumps from the BACK of the tie group to the FRONT, pushing
+		// every other row down one position: the client then re-sees a row from the
+		// previous page and skips the one it displaced. Under the current ordering
+		// ingested_at is not a sort key, so nothing moves.
+		reUpsert(t, ctx, sourceIDs[page:page+1], eventDate)
+
+		rows, total, err := testRepo.ListEvents(ctx, database.EventFilters{
+			DateFrom: &eventDate,
+			DateTo:   &windowEnd,
+			Limit:    pageSize,
+			Offset:   offset,
+		})
+		if err != nil {
+			t.Fatalf("ListEvents at offset %d failed: %v", offset, err)
+		}
+		if total != n {
+			t.Fatalf("expected total %d at offset %d, got %d", n, offset, total)
+		}
+		if len(rows) != pageSize {
+			t.Fatalf("expected %d events at offset %d, got %d", pageSize, offset, len(rows))
+		}
+		for _, e := range rows {
+			seen[e.SourceID]++
+			order = append(order, e.SourceID)
+		}
+	}
+
+	if len(order) != n {
+		t.Fatalf("walked %d rows across all pages, want %d", len(order), n)
+	}
+	for _, sourceID := range sourceIDs {
+		switch seen[sourceID] {
+		case 1:
+			// exactly once — correct
+		case 0:
+			t.Errorf("event %s was SKIPPED while paging during re-ingestion (walk: %v)", sourceID, order)
+		default:
+			t.Errorf("event %s appeared %d times while paging during re-ingestion (walk: %v)",
+				sourceID, seen[sourceID], order)
+		}
+	}
+}
+
+// TestListEventsReDatingMovesARow pins the known LIMIT of the ordering rather
+// than the guarantee. An independent review noted that the upsert also sets
+// `event_date = EXCLUDED.event_date`, so re-ingestion CAN move a row after all —
+// just not on every routine tick, which is what removing `ingested_at` fixed.
+//
+// This test asserts the limitation is real and reproducible. If a future change
+// makes re-dating stop moving rows (keyset pagination, a snapshot), this test
+// SHOULD fail — that is the signal to update the spec's residual-limits
+// scenario, not to delete the assertion.
+func TestListEventsReDatingMovesARow(t *testing.T) {
+	ctx := context.Background()
+
+	eventDate := orderingWindowStart.Add(144 * time.Hour)
+	windowEnd := eventDate.Add(48 * time.Hour)
+	const n = 4
+	seedTiedEvents(t, ctx, "TEST_ORDER_REDATE", n, eventDate)
+
+	filters := database.EventFilters{DateFrom: &eventDate, DateTo: &windowEnd, Limit: 200}
+
+	before, _, err := testRepo.ListEvents(ctx, filters)
+	if err != nil {
+		t.Fatalf("ListEvents failed: %v", err)
+	}
+	// The last row in the current order is the one to re-date forward; under
+	// event_date DESC it must then jump to the front.
+	last := before[len(before)-1].SourceID
+
+	// Re-ingest that event with a LATER event_date — a genuine upstream
+	// correction, not routine churn.
+	reUpsert(t, ctx, []string{last}, eventDate.Add(24*time.Hour))
+
+	after, _, err := testRepo.ListEvents(ctx, filters)
+	if err != nil {
+		t.Fatalf("ListEvents after re-dating failed: %v", err)
+	}
+	if len(after) != n {
+		t.Fatalf("expected %d events after re-dating, got %d", n, len(after))
+	}
+	if after[0].SourceID != last {
+		t.Errorf("expected the re-dated event %s to move to the front, got %s — "+
+			"if re-dating no longer moves rows, the spec's residual-limits scenario is now understated",
+			last, after[0].SourceID)
+	}
+	if before[0].SourceID == after[0].SourceID {
+		t.Errorf("the order did not change at all after re-dating (%s stayed first); "+
+			"this test is meant to demonstrate that it does", before[0].SourceID)
+	}
+}
+
+// TestListEventsOffsetBeyondTotal covers task 4.3 at the repository layer: an
+// offset past the end is an empty page, not an error, and total stays truthful.
+func TestListEventsOffsetBeyondTotal(t *testing.T) {
+	ctx := context.Background()
+
+	eventDate := orderingWindowStart.Add(96 * time.Hour)
+	windowEnd := eventDate.Add(24 * time.Hour)
+	const n = 3
+	seedTiedEvents(t, ctx, "TEST_ORDER_BEYOND", n, eventDate)
+
+	events, total, err := testRepo.ListEvents(ctx, database.EventFilters{
+		DateFrom: &eventDate,
+		DateTo:   &windowEnd,
+		Limit:    50,
+		Offset:   n + 10,
+	})
+	if err != nil {
+		t.Fatalf("ListEvents beyond the end failed: %v", err)
+	}
+	if events == nil {
+		t.Error("expected an allocated empty slice, got nil")
+	}
+	if len(events) != 0 {
+		t.Errorf("expected an empty page beyond the end, got %d events", len(events))
+	}
+	if total != n {
+		t.Errorf("expected total to remain %d beyond the end, got %d", n, total)
+	}
 }
