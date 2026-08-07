@@ -4,6 +4,14 @@ status: proposed
 branch: tbd
 ---
 
+> ## 📦 ARCHIVED 2026-08-07 — SUPERSEDED, NOT SHIPPED
+>
+> Collapsed into a single proposal, **[`chore-design-tokens`](../proposals/chore-design-tokens.md)**, together with the other three token/stylelint chores.
+>
+> All four were slices of the same `developers-react.md` §7.5/§7.10 requirement, touching the same two files, each a near-identical audit → replace → enforce PR. Four proposals for one job made the backlog look four times as full as it is.
+>
+> **The work is not cancelled.** Read the successor — it carries freshly measured counts, and it corrects figures that were wrong here.
+
 # Proposal: Extract Hardcoded z-index Values into Design Tokens (chore-z-index-tokens)
 
 ## Why

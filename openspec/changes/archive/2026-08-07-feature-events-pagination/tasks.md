@@ -56,5 +56,11 @@ two of the confirmations required checking sources the author had only assumed.
 
 ## 5. Explicitly not in this change
 
-- [ ] 5.1 ~~Mobile TBT / bundle work~~ — the 1,140 ms figure is unverified this session and `map-vendor` is already off the critical path. Re-measure on staging first.
-- [ ] 5.2 ~~Cursor pagination, raising the 200 cap, map clustering, infinite scroll~~
+> **These stay unchecked on purpose — they were never tasks of this change.** They are
+> carried forward to [`chore-deferred-work-register`](../../../proposals/chore-deferred-work-register.md)
+> §A, so archiving this record does not delete them from the working set. Two further
+> items **measured during** this change are recorded there too: the `COUNT(*)` cost that
+> now dominates filtered requests (§A2), and the pre-existing freshness-banner CLS (§A3).
+
+- [ ] 5.1 ~~Mobile TBT / bundle work~~ — the 1,140 ms figure is unverified this session and `map-vendor` is already off the critical path. Re-measure on staging first. → register §A1
+- [ ] 5.2 ~~Cursor pagination, raising the 200 cap, map clustering, infinite scroll~~ → register §A4–A7

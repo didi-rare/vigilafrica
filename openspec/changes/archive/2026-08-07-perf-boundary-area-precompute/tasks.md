@@ -20,6 +20,11 @@
 - [x] 2.4 **Commit the harness** (`scripts/bench-enrichment/bench.sql`) so the numbers are auditable rather than asserted — raised by independent review, which noted the original claim had no reproducible artifact
 - [x] 2.5 Correct the headline from **16.2×** to the **11–13×** production-realistic range; the original was a method-A figure quoted as method B
 
+> **The four unchecked items below stay unchecked on purpose** — they are deferred work,
+> not incomplete work. Carried forward to
+> [`chore-deferred-work-register`](../../../proposals/chore-deferred-work-register.md) §B
+> so archiving this record does not delete them from the working set.
+
 ## 2a. Operational risk (surfaced by independent review, missed originally)
 
 - [x] 2a.1 Verify that `ADD COLUMN ... GENERATED STORED` rewrites the table — `pg_class.relfilenode` changes across the `ALTER`

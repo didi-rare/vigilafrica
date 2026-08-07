@@ -245,7 +245,7 @@ At 54 countries that becomes **108 sequential requests per tick**.
 >
 > It claimed the events list and the map marker set grow with the feed. **They do not.** `GET /v1/events` defaults to `limit = 50` (`handlers/events.go:76`) and the web client sends no `limit` or `offset` (`web/src/api/events.ts`), so the list and the markers are capped at **50** — today and at continental scale. Widening the feed takes them from 43 items to 50, not to thousands.
 >
-> The two bullets below about 14,000px stacking and 2,000 markers are **retracted**. `perf-mobile-first-render` was never written, and the version described here solves a problem that does not exist. See [`feature-events-pagination`](../changes/feature-events-pagination/proposal.md), which supersedes it.
+> The two bullets below about 14,000px stacking and 2,000 markers are **retracted**. `perf-mobile-first-render` was never written, and the version described here solves a problem that does not exist. See [`feature-events-pagination`](../changes/archive/2026-08-07-feature-events-pagination/proposal.md), which supersedes it.
 
 **What is genuinely required first is pagination — for correctness, not performance.** The API returns `meta.total`; the dashboard reads none of it. So at continental scale the UI shows **50 of ~3,268 and says nothing about the rest**. A user filtering to their country would reasonably conclude they were seeing every event near them. In a safety-adjacent product that is a trust failure, and it is the real prerequisite.
 
