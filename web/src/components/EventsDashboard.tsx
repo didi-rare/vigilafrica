@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { fetchEvents, fetchContext, fetchHealth, fetchStates, getApiBaseUrl, eventKeys, stateKeys, healthKeys, contextKeys, EVENTS_PAGE_SIZE } from '../api/events'
 import type { HealthResponse, EventCategory, VigilEvent } from '../api/events'
 import { track } from '../analytics'
@@ -257,15 +257,34 @@ export function EventsDashboard() {
       selectedCountry || undefined,
       offset,
     ),
-    // Task 2.3, evaluated rather than assumed: keepPreviousData is a clear win
-    // HERE specifically because the dashboard has a layout-stability history
-    // (#193/#198). Without it, changing page empties the list for a round trip,
-    // and on mobile — where `.dashboard-layout` is `height: auto` — the section
-    // collapses and re-expands, which is exactly the shift class those fixes
+    // Task 2.3, evaluated rather than assumed. Carrying the previous response is
+    // a clear win for a PAGE change: without it the list empties for a round
+    // trip, and on mobile — where `.dashboard-layout` is `height: auto` — the
+    // section collapses and re-expands, exactly the shift class #193/#198
     // removed. Keeping the previous page rendered holds the height constant.
-    // The cost is that the visible list is briefly one page stale, which
-    // `isPlaceholderData` below makes visible and prevents acting on.
-    placeholderData: keepPreviousData,
+    //
+    // ⚠️ But it must NOT be carried across a FILTER change, and plain
+    // `keepPreviousData` did exactly that. Measured: selecting Ghana left 50
+    // Nigeria-era cards on screen, under a country control already reading
+    // "Ghana", with the count reporting the previous filter's 3,268 total. The
+    // range label was truthful about the rows, but the screen as a whole was
+    // not — the same "shows you something other than what it claims" failure
+    // this change exists to remove, just relocated from the count to the filter.
+    //
+    // So: keep the previous data only when the filters are unchanged, i.e. when
+    // `offset` is the only part of the key that moved. A filter change falls
+    // back to the ordinary loading state, which is honest — the result set
+    // genuinely is different and not yet known.
+    placeholderData: (previousData, previousQuery) => {
+      const previousFilters = previousQuery?.queryKey?.[2] as
+        { country: string; category: string; state: string } | undefined
+      if (!previousFilters) return undefined
+      const sameFilters =
+        previousFilters.country === selectedCountry &&
+        previousFilters.category === selectedCategory &&
+        previousFilters.state === selectedState
+      return sameFilters ? previousData : undefined
+    },
   })
 
   const { data: statesData } = useQuery({

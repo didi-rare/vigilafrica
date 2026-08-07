@@ -491,6 +491,60 @@ describe('EventsDashboard pagination', () => {
     expect(screen.getByText('Page 2 of 66')).toBeInTheDocument()
   })
 
+  it('does not carry the previous filter rows into a filter change', async () => {
+    const user = userEvent.setup()
+    let releaseGhana: (v: EventsResponse) => void = () => {}
+    mockFetchEvents.mockImplementation((_c, _s, country) =>
+      country === 'Ghana'
+        ? new Promise<EventsResponse>(resolve => { releaseGhana = resolve })
+        : Promise.resolve(buildPage(0)))
+
+    const { container } = renderWithProviders(<EventsDashboard />)
+    await screen.findByRole('status', { name: /result count/i })
+    expect(container.querySelectorAll('.event-card')).toHaveLength(50)
+
+    await user.click(screen.getByRole('combobox', { name: /filter by country/i }))
+    await user.click(screen.getByRole('option', { name: 'Ghana' }))
+    await waitFor(() => {
+      expect(mockFetchEvents).toHaveBeenLastCalledWith(undefined, undefined, 'Ghana', 0)
+    })
+
+    // Ghana is still in flight. Plain keepPreviousData left all 50 Nigeria-era
+    // cards on screen under a control already reading "Ghana", with the count
+    // still reporting the previous filter's 3,268 total.
+    await waitFor(() => {
+      expect(container.querySelectorAll('.event-card')).toHaveLength(0)
+    })
+    expect(screen.queryByText(/of 3,268 matching events/)).not.toBeInTheDocument()
+
+    releaseGhana({ data: buildPage(0).data.slice(0, 4), meta: { total: 4, limit: 50, offset: 0 } })
+    await waitFor(() => {
+      expect(screen.getByRole('status', { name: /result count/i }))
+        .toHaveTextContent('Showing 1–4 of 4 matching events')
+    })
+  })
+
+  it('still carries the previous page across a page change', async () => {
+    const user = userEvent.setup()
+    let releasePage2: (v: EventsResponse) => void = () => {}
+    mockFetchEvents.mockImplementation((_c, _s, _co, offset = 0) =>
+      offset === 0
+        ? Promise.resolve(buildPage(0))
+        : new Promise<EventsResponse>(resolve => { releasePage2 = resolve }))
+
+    const { container } = renderWithProviders(<EventsDashboard />)
+    await screen.findByRole('status', { name: /result count/i })
+    await user.click(screen.getByRole('button', { name: /next page/i }))
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /next page/i })).toBeDisabled()
+    })
+
+    // The layout-stability reason for placeholder data is page changes, so this
+    // half must survive the filter-change fix: the list stays populated.
+    expect(container.querySelectorAll('.event-card')).toHaveLength(50)
+    releasePage2(buildPage(50))
+  })
+
   it.each([
     ['banana', 'non-numeric'],
     ['2junk', 'trailing junk — parseInt would silently accept this as page 2'],
