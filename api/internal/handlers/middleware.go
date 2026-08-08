@@ -271,6 +271,15 @@ func (l *ipRateLimiter) evictOldestLocked() {
 
 // clientIP extracts the client IP from the request. Forwarded headers are only
 // trusted when the direct peer is a configured trusted proxy.
+//
+// ⚠️ This is the ONLY client-IP resolution path in this package. Do not add a
+// second one. Until fix-unify-client-ip-resolution, context.go carried its own
+// extractIP() that read X-Forwarded-For unconditionally, so the same request
+// resolved to two different addresses depending on which handler saw it — the
+// rate limiter got the peer, /v1/context got whatever the caller claimed.
+//
+// If you need the client IP anywhere else, call this. If you need it with a
+// specific CIDR set (tests), call clientIPWithTrustedProxies directly.
 func clientIP(r *http.Request) string {
 	return clientIPWithTrustedProxies(r, trustedProxyCIDRsFromEnv())
 }
