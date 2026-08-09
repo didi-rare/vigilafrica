@@ -389,7 +389,15 @@ components:
 
     GeoLocation:
       type: object
-      description: Resolved administrative location for the API caller, derived from IP geolocation via MaxMind GeoLite2.
+      description: |
+        A resolved location. Check `location_source` on the enclosing response to
+        know where it came from — it is NOT always IP geolocation.
+
+        When derived from the caller's IP (`location_source: ip`) it is a MaxMind
+        GeoLite2 lookup and `country`/`state` are populated. When the caller
+        supplied coordinates (`location_source: explicit`) only `lat`/`lng` are
+        meaningful and `country`/`state` are empty strings: this service has no
+        point-to-administrative-name resolver and does not guess.
       properties:
         country:
           type: string
