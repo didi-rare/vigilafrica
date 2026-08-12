@@ -1,6 +1,11 @@
 # Spec: Unify Client-IP Resolution (fix-unify-client-ip-resolution)
 
-**Status:** Proposed — **decision (B) settled 2026-08-08**; ready for `/openspec-apply`.
+**Status:** Implemented — decision (B); two independent review rounds absorbed (both BLOCK, all findings fixed).
+
+⚠️ **Deviations from this document, recorded rather than glossed:**
+1. `clientIP()` was replaced by the injected `ProxyConfig.ClientIP` method during the round-1 refactor for §2.6/§6.3. This document still names `clientIP()`; the single-resolver property it required is unchanged, and `clientIPWithTrustedProxies` is still the only implementation.
+2. `GetContext` became a method on `ContextHandler` (§6.3) rather than a closure-returning function, and gained an injected `*slog.Logger` (§8.6) and a `GeoLookup` interface so handler behaviour is testable without an mmdb.
+3. The response is marshalled to a buffer before the status is committed, which this document did not anticipate — see tasks.md §8.3.
 **Companion:** [`openspec/proposals/fix-unify-client-ip-resolution.md`](../proposals/fix-unify-client-ip-resolution.md) (rationale, corrected severity, design question, out-of-scope).
 
 ## Context

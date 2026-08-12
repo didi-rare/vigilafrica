@@ -2,7 +2,9 @@
 
 ### Requirement: Situational Context API
 
-The system SHALL resolve a geographic location for the caller and return relevant open events for that location.
+The system SHALL resolve a geographic location for the caller and return nearby events for that location, **regardless of event status**.
+
+⚠️ **The previous wording promised "open events" and was false.** `GetNearbyEvents` filters on geometry and distance only — it has never had a status predicate, so closed events were always returned. The requirement is corrected to match the implementation rather than the implementation narrowed to match it: closed-event ingestion was added deliberately (a recently-closed flood near you is still situational awareness), `status` is present on every event so clients can distinguish, and filtering here would silently remove data callers see today.
 
 ⚠️ **Amended from "resolve the caller's IP address".** That is no longer the only path: a caller may state a location explicitly, and the IP path is now bound by the trust policy below. The previous wording described behaviour the system no longer has.
 
@@ -47,6 +49,12 @@ An explicit coordinate that is unparseable or out of range SHALL be rejected. It
 - **WHEN** a client supplies a `lat` or `lng` that is unparseable, out of range, or missing its pair
 - **THEN** the API SHALL return HTTP 400 naming the offending parameter
 - **AND** it SHALL NOT fall back to IP geolocation
+
+#### Scenario: Nearby events are not filtered by status
+
+- **WHEN** the area around the resolved location contains both open and closed events
+- **THEN** the API SHALL return both, ordered by distance
+- **AND** each event SHALL carry its `status` so the caller can distinguish them
 
 #### Scenario: Location cannot be resolved
 

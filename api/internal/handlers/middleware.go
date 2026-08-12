@@ -400,11 +400,24 @@ func rateLimitMiddlewareFromEnv(next http.Handler, rpmEnv string, fallbackRPM in
 	rpm := positiveIntFromEnv(rpmEnv, fallbackRPM)
 	maxBuckets := positiveIntFromEnv("RATE_LIMIT_MAX_BUCKETS", defaultRateLimitMaxBuckets)
 	bucketTTL := time.Duration(positiveIntFromEnv("RATE_LIMIT_BUCKET_TTL_SECONDS", defaultRateLimitBucketTTLSeconds)) * time.Second
-	limiter := newIPRateLimiterWithOptions(rpm, maxBuckets, bucketTTL)
 	// Parsed once here rather than per request (§2.6). This constructor runs
 	// once, from main, when the middleware chain is built.
 	proxies := LoadProxyConfig()
 	slog.Info("rate limiter: initialised", "rpm_env", rpmEnv, "rpm_per_ip", rpm, "max_buckets", maxBuckets, "bucket_ttl_seconds", int(bucketTTL.Seconds()), "trusted_proxy_cidrs", len(proxies.Trusted))
+	return rateLimitMiddlewareWithConfig(next, rpm, maxBuckets, bucketTTL, proxies)
+}
+
+// rateLimitMiddlewareWithConfig is the injectable form of the production
+// middleware. rateLimitMiddlewareFromEnv differs ONLY in where the numbers come
+// from, so a test driving this function exercises the real composition:
+// limiter, client-IP resolution and the 429 path together.
+//
+// ⚠️ Tests must call THIS rather than rebuild an equivalent handler. A test
+// that reimplements the composition still passes when production wiring keys on
+// the wrong value — the same class of defect fix-unify-client-ip-resolution
+// exists to remove, one layer up.
+func rateLimitMiddlewareWithConfig(next http.Handler, rpm, maxBuckets int, bucketTTL time.Duration, proxies ProxyConfig) http.Handler {
+	limiter := newIPRateLimiterWithOptions(rpm, maxBuckets, bucketTTL)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ip := proxies.ClientIP(r)
 		if !limiter.bucketFor(ip).allow() {

@@ -58,7 +58,10 @@ type ContextConfig struct {
 
 // LoadContextConfig reads the context handler's configuration from the
 // environment. Call this ONCE from main and inject the result (§2.6).
-func LoadContextConfig() ContextConfig {
+func LoadContextConfig(logger *slog.Logger) ContextConfig {
+	if logger == nil {
+		logger = slog.Default()
+	}
 	cfg := ContextConfig{
 		Proxy:         LoadProxyConfig(),
 		DevOverrideIP: os.Getenv("DEV_OVERRIDE_IP"),
@@ -68,7 +71,7 @@ func LoadContextConfig() ContextConfig {
 		// These exist for local development. If they are ever set in a deployed
 		// environment they silently replace real geolocation, so make that
 		// visible in the logs at startup rather than leaving it to be discovered.
-		slog.Warn("context: development location override active",
+		logger.Warn("context: development location override active",
 			"dev_force_lagos", cfg.DevForceLagos,
 			"dev_override_ip_set", cfg.DevOverrideIP != "")
 	}
@@ -81,6 +84,7 @@ type ContextHandler struct {
 	repo database.Repository
 	geo  GeoLookup
 	cfg  ContextConfig
+	log  *slog.Logger
 }
 
 // NewContextHandler constructs the handler.
@@ -89,8 +93,11 @@ type ContextHandler struct {
 // and degrades to a null location. Pass an untyped nil, NOT a nil *geoip.Reader
 // stored in the interface: a typed nil is a non-nil interface value and would
 // dereference on the first lookup. main guards this explicitly.
-func NewContextHandler(repo database.Repository, geo GeoLookup, cfg ContextConfig) *ContextHandler {
-	return &ContextHandler{repo: repo, geo: geo, cfg: cfg}
+func NewContextHandler(repo database.Repository, geo GeoLookup, cfg ContextConfig, logger *slog.Logger) *ContextHandler {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	return &ContextHandler{repo: repo, geo: geo, cfg: cfg, log: logger}
 }
 
 // locationPlan is the decision about where the caller is, made before any
@@ -244,14 +251,28 @@ func (h *ContextHandler) GetContext(w http.ResponseWriter, r *http.Request) {
 		resp.NearbyEvents = events
 	}
 
+	// ⚠️ Marshal BEFORE committing the status. Encoding straight to the
+	// ResponseWriter writes the 200 first, so any marshal failure leaves a 200
+	// with a truncated body — exactly how the NaN defect manifested.
+	//
+	// An earlier revision "fixed" that by rejecting non-finite user input and
+	// then asserting in a comment that every float here was finite. That claim
+	// was FALSE: GeoLookup results and NearbyEvents carry floats this handler
+	// never validates, so malformed dependency or database data could still
+	// produce a truncated 200. Buffering removes the class, not just the one
+	// input that happened to be noticed.
+	body, marshalErr := json.Marshal(resp)
+	if marshalErr != nil {
+		h.log.Error("context: failed to encode response", "err", marshalErr)
+		respondWithError(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	// best-effort — status already framed, so the body is all that can be lost.
-	// Every float reaching this point is finite (parseCoordinate rejects NaN and
-	// Inf; mmdb values are finite), so encoding cannot fail on unsupported
-	// values; a failure here is network-level (§4.7). Logged rather than
-	// silently dropped so a regression is visible.
-	if encErr := json.NewEncoder(w).Encode(resp); encErr != nil {
-		slog.Warn("context: failed to encode response", "err", encErr)
+	// best-effort — the status is framed, so only the body can be lost and a
+	// failure here is network-level (§4.7).
+	if _, writeErr := w.Write(body); writeErr != nil {
+		h.log.Warn("context: failed to write response body", "err", writeErr)
 	}
 }

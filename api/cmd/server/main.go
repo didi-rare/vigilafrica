@@ -100,7 +100,7 @@ func main() {
 	if geoReader != nil {
 		geoLookup = geoReader
 	}
-	contextHandler := handlers.NewContextHandler(repo, geoLookup, handlers.LoadContextConfig())
+	contextHandler := handlers.NewContextHandler(repo, geoLookup, handlers.LoadContextConfig(nil), nil)
 
 	// ── Router ────────────────────────────────────────────────────────────────
 	// v1 sub-mux: all /v1/* routes go through rate limiting.

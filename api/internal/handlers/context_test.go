@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -147,11 +148,21 @@ func TestGetContextIgnoresForgedHeadersFromUntrustedPeer(t *testing.T) {
 			headers:     map[string]string{"X-Forwarded-For": "8.8.8.8"},
 			wantCountry: "IPv6 Peer",
 		},
+		{
+			// Claimed in an earlier task record but absent from the matrix.
+			// IPv6 host/port splitting is easy to get wrong, and ::1 is the
+			// loopback a same-host reverse proxy actually connects from.
+			name:        "trusted IPv6 loopback proxy is believed",
+			remoteAddr:  "[::1]:51000",
+			headers:     map[string]string{"X-Forwarded-For": "41.58.100.7"},
+			wantCountry: "Real Client",
+			why:         "::1 is in the trusted set; a same-host proxy must still work",
+		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			h := NewContextHandler(&contextTestRepo{}, geo, testContextConfig(t))
+			h := NewContextHandler(&contextTestRepo{}, geo, testContextConfig(t), nil)
 			rec := httptest.NewRecorder()
 			h.GetContext(rec, newRequest("/v1/context", tc.remoteAddr, tc.headers))
 
@@ -181,7 +192,7 @@ func TestResolveLocationPlanPrecedence(t *testing.T) {
 	t.Run("explicit outranks DevForceLagos", func(t *testing.T) {
 		cfg := base
 		cfg.DevForceLagos = true
-		h := NewContextHandler(&contextTestRepo{}, nil, cfg)
+		h := NewContextHandler(&contextTestRepo{}, nil, cfg, nil)
 		plan, err := h.resolveLocationPlan(newRequest("/v1/context?lat=51.5&lng=-0.12", "203.0.113.9:1", nil))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -194,7 +205,7 @@ func TestResolveLocationPlanPrecedence(t *testing.T) {
 	t.Run("explicit outranks DevOverrideIP", func(t *testing.T) {
 		cfg := base
 		cfg.DevOverrideIP = "8.8.8.8"
-		h := NewContextHandler(&contextTestRepo{}, nil, cfg)
+		h := NewContextHandler(&contextTestRepo{}, nil, cfg, nil)
 		plan, err := h.resolveLocationPlan(newRequest("/v1/context?lat=51.5&lng=-0.12", "203.0.113.9:1", nil))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -208,7 +219,7 @@ func TestResolveLocationPlanPrecedence(t *testing.T) {
 		cfg := base
 		cfg.DevForceLagos = true
 		cfg.DevOverrideIP = "8.8.8.8"
-		h := NewContextHandler(&contextTestRepo{}, nil, cfg)
+		h := NewContextHandler(&contextTestRepo{}, nil, cfg, nil)
 		plan, err := h.resolveLocationPlan(newRequest("/v1/context", "203.0.113.9:1", nil))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -224,7 +235,7 @@ func TestResolveLocationPlanPrecedence(t *testing.T) {
 	t.Run("DevOverrideIP outranks the request IP", func(t *testing.T) {
 		cfg := base
 		cfg.DevOverrideIP = "8.8.8.8"
-		h := NewContextHandler(&contextTestRepo{}, nil, cfg)
+		h := NewContextHandler(&contextTestRepo{}, nil, cfg, nil)
 		plan, err := h.resolveLocationPlan(newRequest("/v1/context", "203.0.113.9:1", nil))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -235,7 +246,7 @@ func TestResolveLocationPlanPrecedence(t *testing.T) {
 	})
 
 	t.Run("no headers falls back to the peer", func(t *testing.T) {
-		h := NewContextHandler(&contextTestRepo{}, nil, base)
+		h := NewContextHandler(&contextTestRepo{}, nil, base, nil)
 		plan, err := h.resolveLocationPlan(newRequest("/v1/context", "203.0.113.9:51000", nil))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -246,7 +257,7 @@ func TestResolveLocationPlanPrecedence(t *testing.T) {
 	})
 
 	t.Run("malformed RemoteAddr is passed through, not fatal", func(t *testing.T) {
-		h := NewContextHandler(&contextTestRepo{}, nil, base)
+		h := NewContextHandler(&contextTestRepo{}, nil, base, nil)
 		plan, err := h.resolveLocationPlan(newRequest("/v1/context", "not-an-address", nil))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -329,11 +340,29 @@ func TestParseExplicitLocation(t *testing.T) {
 // TestGetContextRejectsInvalidCoordinates asserts the FULL response, not just
 // the status. The NaN case previously returned 200 with a truncated body.
 func TestGetContextRejectsInvalidCoordinates(t *testing.T) {
-	for _, q := range []string{"?lat=999&lng=0", "?lat=NaN&lng=0", "?lat=0&lng=Inf", "?lat=5"} {
-		t.Run(q, func(t *testing.T) {
-			h := NewContextHandler(&contextTestRepo{}, nil, testContextConfig(t))
+	// ⚠️ Each case asserts the message NAMES the offending parameter. Accepting
+	// any non-empty string (as an earlier revision did) would let a generic
+	// "bad request" satisfy the test while breaking the documented contract.
+	tests := []struct {
+		query  string
+		errHas string
+	}{
+		{"?lat=999&lng=0", "lat"},
+		{"?lat=NaN&lng=0", "lat"},
+		{"?lat=nan&lng=0", "lat"},
+		{"?lat=0&lng=Inf", "lng"},
+		{"?lat=0&lng=-Inf", "lng"},
+		{"?lat=0&lng=200", "lng"},
+		{"?lat=5", "lng"},
+		{"?lng=5", "lat"},
+		{"?lat=abc&lng=0", "lat"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.query, func(t *testing.T) {
+			h := NewContextHandler(&contextTestRepo{}, nil, testContextConfig(t), nil)
 			rec := httptest.NewRecorder()
-			h.GetContext(rec, newRequest("/v1/context"+q, "203.0.113.9:1", nil))
+			h.GetContext(rec, newRequest("/v1/context"+tc.query, "203.0.113.9:1", nil))
 
 			if rec.Code != http.StatusBadRequest {
 				t.Fatalf("status = %d, want 400 (body %q)", rec.Code, rec.Body.String())
@@ -345,16 +374,39 @@ func TestGetContextRejectsInvalidCoordinates(t *testing.T) {
 			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 				t.Fatalf("400 body is not valid JSON (%v): %s", err, rec.Body.String())
 			}
-			if body.Error == "" {
-				t.Error("400 body has an empty error message")
+			if !strings.Contains(body.Error, tc.errHas) {
+				t.Errorf("error %q does not name the offending parameter %q", body.Error, tc.errHas)
 			}
 		})
 	}
 }
 
+// TestGetContextSurvivesNonFiniteDependencyData proves the buffered write.
+// Coordinate validation only covers CALLER input; a dependency returning a
+// non-finite float would previously have produced a 200 with a truncated body,
+// because encoding happened after WriteHeader had committed.
+func TestGetContextSurvivesNonFiniteDependencyData(t *testing.T) {
+	geo := stubGeo{"203.0.113.9": {Country: "Broken", Lat: math.Inf(1), Lng: math.NaN()}}
+	h := NewContextHandler(&contextTestRepo{}, geo, testContextConfig(t), nil)
+
+	rec := httptest.NewRecorder()
+	h.GetContext(rec, newRequest("/v1/context", "203.0.113.9:1", nil))
+
+	if rec.Code == http.StatusOK {
+		t.Fatalf("got 200 with body %q — a response that cannot be encoded must not be committed as 200", rec.Body.String())
+	}
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", rec.Code)
+	}
+	var body APIError
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("500 body is not valid JSON (%v): %s", err, rec.Body.String())
+	}
+}
+
 func TestGetContextDegradesGracefully(t *testing.T) {
 	t.Run("no geo reader", func(t *testing.T) {
-		h := NewContextHandler(&contextTestRepo{}, nil, testContextConfig(t))
+		h := NewContextHandler(&contextTestRepo{}, nil, testContextConfig(t), nil)
 		rec := httptest.NewRecorder()
 		h.GetContext(rec, newRequest("/v1/context", "203.0.113.9:1", nil))
 
@@ -369,7 +421,7 @@ func TestGetContextDegradesGracefully(t *testing.T) {
 
 	// The failed-lookup half, which the first revision claimed but never covered.
 	t.Run("geo reader present but lookup fails", func(t *testing.T) {
-		h := NewContextHandler(&contextTestRepo{}, stubGeo{}, testContextConfig(t))
+		h := NewContextHandler(&contextTestRepo{}, stubGeo{}, testContextConfig(t), nil)
 		rec := httptest.NewRecorder()
 		h.GetContext(rec, newRequest("/v1/context", "203.0.113.9:1", nil))
 
@@ -385,7 +437,7 @@ func TestGetContextDegradesGracefully(t *testing.T) {
 
 func TestGetContextExplicitLocationDrivesTheQuery(t *testing.T) {
 	repo := &contextTestRepo{}
-	h := NewContextHandler(repo, nil, testContextConfig(t))
+	h := NewContextHandler(repo, nil, testContextConfig(t), nil)
 	rec := httptest.NewRecorder()
 	h.GetContext(rec, newRequest("/v1/context?lat=6.5244&lng=3.3792", "203.0.113.9:1", nil))
 

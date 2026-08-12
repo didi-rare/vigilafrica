@@ -30,16 +30,16 @@ Promoted from `openspec/proposals/` + `openspec/specs/` at `/openspec-apply`. Ra
     extractIP() [/v1/context]  -> "8.8.8.8"       <- forged value believed
   ```
   The two resolvers returned **different answers for identical input**. That is the evidence; the rest of this change removes the difference.
-- [x] 1.2 Table-driven over `(peer, headers, expected IP)`: untrusted peer + forged XFF; untrusted peer + forged `X-Real-IP`; trusted peer + XFF; trusted proxy taking the leftmost XFF entry; trusted peer + `X-Real-IP` only; no headers; IPv6 loopback peer; untrusted IPv6 peer.
-  ⚠️ **Deviation from this task as originally written, recorded rather than glossed.** It said to call `clientIPWithTrustedProxies` directly and avoid the environment. Following 1.1, the tests target `resolveLocationPlan` instead — and that function reads `TRUSTED_PROXY_CIDRS` internally, so the env var is unavoidable. Used `t.Setenv`, which the stdlib restores per-test and refuses to run under `t.Parallel()`, so the isolation the original wording wanted still holds — by a different mechanism. Testing the correct-but-uncalled function was the whole trap.
-  ⚠️ **Dropped from the original list: malformed `RemoteAddr`.** `resolveLocationPlan` returns it verbatim (via `remoteAddrIP`'s `SplitHostPort` error path), which is existing `clientIP` behaviour this change does not alter; asserting it here would test the untouched path, not this change.
+- [x] 1.2 Table-driven over `(peer, headers, expected country)`, asserted through `GetContext` on the decoded response body: untrusted peer + forged `X-Forwarded-For`; untrusted peer + forged `X-Real-IP`; trusted proxy + XFF; trusted proxy taking the leftmost XFF entry; trusted proxy + `X-Real-IP` only; untrusted IPv6 peer; **trusted IPv6 loopback (`::1`)**. Malformed `RemoteAddr` is covered separately in the precedence test.
+  ⚠️ **This task's wording has been reconciled twice and the earlier text was left FALSE in between** — independent review round 2 caught it. It previously said the tests call `clientIPWithTrustedProxies` directly, then said they use `t.Setenv` and read `TRUSTED_PROXY_CIDRS`, then said the malformed-`RemoteAddr` case was dropped and that `::1` was covered. **None of those describe the final implementation.** What is actually true now: every test constructs `ContextConfig`/`ProxyConfig` explicitly, nothing reads the environment, `t.Setenv` is not used anywhere in this file, malformed `RemoteAddr` **is** covered, and `::1` **is** covered.
+  **Lesson recorded rather than tidied away:** a task list edited to match an earlier draft of the code becomes a false record of the work. Reconcile it with the tree at the end, not with the plan.
 
 ## 2. Unify the resolver
 
 - [x] 2.1 Delete `extractIP()` from `context.go` **entirely** — no deprecated alias. A second name for the same behaviour reintroduces the ambiguity this change exists to remove.
-- [x] 2.2 Route `/v1/context` through the shared `clientIP()` / `clientIPWithTrustedProxies`. Do **not** write a third resolver.
+- [x] 2.2 Route `/v1/context` through the shared resolver. ⚠️ **Undeclared deviation, now recorded** (review round 2): the review refactor replaced package-level `clientIP()` with the injected `ProxyConfig.ClientIP` method, so the name in this task no longer exists. The single-resolver property still holds — `clientIPWithTrustedProxies` remains the only implementation — but the plan said `clientIP()` and the code says otherwise, and that deviation went unrecorded until review caught it.
 - [x] 2.3 Replace the misleading comment (`context.go:73` described intent — "accounting for reverse proxies") with one stating the trust constraint.
-- [x] 2.4 Add a doc comment on `clientIP` recording that it is now the **only** client-IP path in the package.
+- [x] 2.4 Doc comment recording the single-path property — now on `ProxyConfig.ClientIP` (see the 2.2 deviation), not on `clientIP`, which was removed.
 - [x] 2.5 Preserve `DEV_FORCE_LAGOS` / `DEV_OVERRIDE_IP` behaviour per the table above, and assert both with tests, since this change moves code around them.
 
 ## 3. Explicit location (decision B)
@@ -57,14 +57,14 @@ Promoted from `openspec/proposals/` + `openspec/specs/` at `/openspec-apply`. Ra
 ## 5. Verification
 
 - [x] 5.1 ⚠️ **Criterion AMENDED, not just annotated** (independent review, P3). It originally demanded `grep -rn "extractIP" api/` return nothing, which was false — and marking a false criterion complete is the defect, regardless of how harmless the residue is. **Amended to:** no *declaration* and no *call site* of a second resolver may exist. Verified: `grep -rn "func extractIP\|extractIP(" api/` returns nothing. Historical mentions survive in prose comments deliberately, recording why a second resolver must not be reintroduced.
-- [x] 5.2 Asserted mechanically: `grep -rn "X-Forwarded-For\|X-Real-IP" api/internal/ --include=*.go` (excluding tests) matches **only** `middleware.go:293,302`, both inside `clientIPWithTrustedProxies`.
+- [x] 5.2 Asserted mechanically: excluding tests, `X-Forwarded-For`/`X-Real-IP` are read in exactly one function, `clientIPWithTrustedProxies`. `ProxyConfig.ClientIP` is the only caller-facing entry point to it.
 - [x] 5.3 Untrusted peer + forged XFF → response does **not** reflect the forged location.
 - [x] 5.4 Trusted peer + XFF → resolves to the forwarded address; the legitimate Caddy path still works.
-- [x] 5.5 Rate-limit bucketing unchanged — two clients through a trusted proxy still land in distinct buckets (regression guard on the untouched path).
-- [x] 5.6 An untrusted peer cannot forge a rate-limit identity (existing behaviour, now explicitly asserted).
+- [x] 5.5 Two clients through one trusted proxy land in **distinct** buckets — asserted by driving `rateLimitMiddlewareWithConfig`, the production middleware itself. ⚠️ The first attempt at this test **reimplemented** the middleware instead of calling it and would have passed with production wiring broken; see §8.2.
+- [x] 5.6 An untrusted peer cannot rotate `X-Forwarded-For` to escape its own bucket — asserted through the production middleware. Plus a 429 contract test (status, `Content-Type`, `Retry-After`).
 - [x] 5.7 `location: null` still returned with `200` when the reader is absent or the lookup fails.
-- [x] 5.8 Out-of-range coordinate → `400` naming the parameter.
-- [x] 5.9 `scripts/test-api.ps1` green — every package `ok`, handlers `0.029s`. Also `go build ./...`, `go vet ./internal/handlers/`, `openspec validate fix-unify-client-ip-resolution --strict` (**valid**), `openspec validate --specs` (1 passed), and the sentinel gate. ⚠️ Windows AppLocker blocks bare `go test` binaries here; the script is the supported path and does **not** run `-race`.
+- [x] 5.8 Invalid coordinate → `400` **naming the offending parameter**, asserted across 9 handler cases. ⚠️ The earlier assertion accepted any non-empty message, which a generic "bad request" would have satisfied while breaking the contract.
+- [x] 5.9 `scripts/test-api.ps1 -count=1` green — every package `ok`. Also `go build ./...`, `go vet ./internal/handlers/`, `openspec validate fix-unify-client-ip-resolution --strict` (**valid**), `openspec validate --specs` (1 passed), and the sentinel gate. ⚠️ Windows AppLocker blocks bare `go test` binaries here; the script is the supported path and does **not** run `-race`.
 
 ## 7. Independent review round 1 — verdict BLOCK, all findings fixed
 
@@ -89,6 +89,19 @@ Promoted from `openspec/proposals/` + `openspec/specs/` at `/openspec-apply`. Ra
 ⚠️ Review also **cleared** the security reasoning: "no P0 understatement was found." It independently confirmed `/v1/context` was never a rate-limit bypass, the resolved IP is never logged, and — a fact this change had not credited — Caddy already overwrites both forwarded headers with `{remote_host}` (`deploy/Caddyfile.example:5-7`).
 
 ⚠️ Review could not run `-race` locally (the Docker test path lacks a cgo toolchain) and left CI's status unverified. **Closed here:** `ci-cd.yml:57` runs `go test -race ./...` and `build-and-test` passed on PR #225.
+
+## 8. Independent review round 2 — verdict BLOCK, all findings fixed
+
+Round 2 (`/sol-review`, `/openspec-review` framing) confirmed **no over-correction** of the round-1 fixes: *"Amending the literal `extractIP` criterion did not hide a failure — the stricter original grep is currently clean."* Security reasoning cleared again. It found seven more:
+
+- [x] 8.1 **The spec promised "open events"; the query returns all statuses (P2).** Verified: `GetNearbyEvents` filters on `geom IS NOT NULL` and `ST_DWithin` only — **no status predicate has ever existed**. The phrase was inherited from the live requirement and copied forward unchecked; archiving would have enshrined a knowingly false spec.
+  **Decision (b): amend the requirement, do not narrow the query.** Closed-event ingestion was added deliberately (#148) — a recently-closed flood nearby is still situational awareness — `status` is on every event so clients can distinguish, and filtering would have silently removed data callers see today, bundled into an unrelated change. Requirement reworded and a scenario added.
+- [x] 8.2 **The rate-limit test reimplemented the middleware (P2).** `limiterFor` rebuilt an equivalent handler, so both tests would still pass if production keyed on the proxy, the peer, or a constant. ⚠️ **This is the same defect class the change exists to fix, one layer up** — a test that duplicates wiring cannot detect the wiring being wrong. Extracted `rateLimitMiddlewareWithConfig`, which `rateLimitMiddlewareFromEnv` now calls; tests drive that exact function.
+- [x] 8.3 **200 committed before encoding (P3).** ⚠️ **My own comment was false.** It asserted "every float reaching this point is finite" — but `GeoLookup` results and `NearbyEvents` carry floats this handler never validates, so malformed dependency or database data could still yield a truncated 200. Now marshals to a buffer first and returns 500 on failure; covered by a test feeding `Inf`/`NaN` from the GeoIP stub.
+- [x] 8.4 **§8.6 — package-global `slog` (P3).** `*slog.Logger` injected into `ContextHandler` and `LoadContextConfig`, nil → `slog.Default()`, matching `NewEventHandler`/`NewDigestHandler`.
+- [x] 8.5 **New inaccuracy introduced while fixing one (P3).** The round-1 `GeoLocation` rewrite claimed IP-derived `country`/`state` are populated. `reader.go` sets `State` only when MaxMind returns a subdivision, so it can be empty. Corrected and resynced.
+- [x] 8.6 **400 tests accepted any message; `::1` case absent (P3).** Both fixed — see 5.8 and 1.2.
+- [x] 8.7 **The task record itself had gone false (P3).** See 1.2, 2.2, 2.4, 5.2.
 
 ## 6. Explicitly not in this change
 
