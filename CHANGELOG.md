@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.4.0](https://github.com/didi-rare/vigilafrica/compare/v1.3.7...v1.4.0) (2026-08-12)
+
+
+### Features
+
+* **api,web:** paginate the events list and make truncation visible ([#221](https://github.com/didi-rare/vigilafrica/issues/221)) ([343fc8b](https://github.com/didi-rare/vigilafrica/commit/343fc8bc63c03f729192075800eee3dc2895fb61))
+
+
+### Bug Fixes
+
+* **api:** correct open-events contract, test real middleware, buffer response ([087f236](https://github.com/didi-rare/vigilafrica/commit/087f236ecb5a82d52f3efa2e2a1c5536e6fbfc08))
+* **api:** declare the 500 contract, harden the gate, repair records ([ad360b2](https://github.com/didi-rare/vigilafrica/commit/ad360b227d947c4a3a3e33df840d1e1ed2eeca00))
+* **api:** reject non-finite coordinates, inject config, close review gaps ([3970985](https://github.com/didi-rare/vigilafrica/commit/3970985bd7f6f3af7b2f6ad31b201038eafe5130))
+* **api:** repair invalid OpenAPI, add parse gate, stop silent fallbacks ([4d327a9](https://github.com/didi-rare/vigilafrica/commit/4d327a9ce0106d25333b7f838ed2fcc5f62545a5))
+* **api:** unify client-IP resolution and add explicit lat/lng to /v1/context ([dc9897c](https://github.com/didi-rare/vigilafrica/commit/dc9897c87251f16889d857910a040a8084064265))
+* **web:** bump nanoid to 3.3.18 to clear GHSA-2v37-7h3g-55p8 ([c264e38](https://github.com/didi-rare/vigilafrica/commit/c264e3818f7e55eb6d7cbc4818a0502780cf5c99))
+* **web:** bump nanoid to 3.3.18 to clear GHSA-2v37-7h3g-55p8 ([bd4bc3d](https://github.com/didi-rare/vigilafrica/commit/bd4bc3d92ecd95943abfb8e6d5f1c1a19a39895d))
+
 ## [1.3.7](https://github.com/didi-rare/vigilafrica/compare/v1.3.6...v1.3.7) (2026-08-07)
 
 
