@@ -130,8 +130,37 @@ paths:
     get:
       tags: [Location & Discovery]
       summary: Get situational context
-      description: Returns the caller's detected location and nearby events for local awareness.
+      description: |
+        Returns a location and the nearby events for it.
+
+        The location is taken from `lat`/`lng` when supplied, and otherwise
+        derived from the caller's IP address. Forwarded headers
+        (`X-Forwarded-For`, `X-Real-IP`) are honoured **only** when the request
+        arrives from a configured trusted proxy; from any other peer they are
+        ignored and the peer address is used.
+
+        `location_source` reports which path produced the answer, so a degraded
+        IP lookup is distinguishable from a deliberate query.
       operationId: getContext
+      parameters:
+        - name: lat
+          in: query
+          schema:
+            type: number
+            minimum: -90
+            maximum: 90
+          description: |
+            Latitude to report context for. Must be supplied together with `lng`.
+            When present, it takes precedence over IP geolocation. An
+            out-of-range or unparseable value returns 400 — it never falls back
+            to IP, so a typo cannot be mistaken for a working query.
+        - name: lng
+          in: query
+          schema:
+            type: number
+            minimum: -180
+            maximum: 180
+          description: Longitude to report context for. Must be supplied together with `lat`.
       responses:
         '200':
           description: OK
@@ -139,6 +168,17 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ContextResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '500':
+          description: |
+            The location was resolved but the nearby-events query failed. Returned
+            rather than a 200 with an empty array, so a backend outage is not
+            indistinguishable from "no events near you".
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /v1/states:
     get:
@@ -358,7 +398,22 @@ components:
 
     GeoLocation:
       type: object
-      description: Resolved administrative location for the API caller, derived from IP geolocation via MaxMind GeoLite2.
+      description: |
+        A resolved location. Check `location_source` on the enclosing response to
+        know where it came from — it is NOT always IP geolocation.
+
+        When derived from the caller's IP (`location_source: ip`) it is a MaxMind
+        GeoLite2 lookup. `country` is populated; **`state` may be an empty
+        string** — MaxMind does not return a subdivision for every address, and
+        the service does not guess one.
+
+        When the caller supplied coordinates (`location_source: explicit`) only
+        `lat`/`lng` are meaningful: **both `country` and `state` are empty
+        strings**, because this service has no point-to-administrative-name
+        resolver.
+
+        Treat `country` and `state` as possibly-empty in all cases; only
+        `lat`/`lng` are always meaningful.
       properties:
         country:
           type: string
@@ -377,11 +432,23 @@ components:
           oneOf:
             - $ref: '#/components/schemas/GeoLocation'
             - type: 'null'
+        location_source:
+          type: string
+          enum: [explicit, dev_override, ip, unavailable]
+          description: |
+            How `location` was determined.
+
+            - `explicit` — the caller supplied `lat`/`lng`. `country` and
+              `state` are empty: this service has no point-to-admin-name
+              resolver, and does not guess.
+            - `dev_override` — a development environment override was in effect.
+            - `ip` — derived from the resolved client IP.
+            - `unavailable` — no location could be determined; `location` is null.
         nearby_events:
           type: array
           items:
             $ref: '#/components/schemas/EventSummary'
-      required: [location, nearby_events]
+      required: [location, location_source, nearby_events]
 
     StatesResponse:
       type: object
