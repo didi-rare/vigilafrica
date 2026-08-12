@@ -30,12 +30,12 @@ archived_reason: >
 # Proposal: v1.3 Risk Intelligence Categories (feature-v13-risk-intelligence)
 
 **Status:** Proposed — v1.3. Lands **second** in the v1.3 cycle, after the
-companion [feature-impact-categories](../changes/feature-impact-categories/proposal.md)
+companion [feature-impact-categories](../changes/archive/2026-08-07-feature-impact-categories/proposal.md)
 proposal introduces the category registry. Both ship before the v1.3.0 tag.
 
 ## Why
 
-After [feature-impact-categories](../changes/feature-impact-categories/proposal.md)
+After [feature-impact-categories](../changes/archive/2026-08-07-feature-impact-categories/proposal.md)
 adds `landslides` and `tempExtremes` (and the supporting category registry),
 VigilAfrica should continue expanding toward categories with stronger
 public-safety and humanitarian value. NASA EONET exposes `severeStorms` and

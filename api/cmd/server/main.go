@@ -88,6 +88,24 @@ func main() {
 	enrichmentStatsHandler := handlers.NewEnrichmentStatsHandler(repo)
 	digestHandler := handlers.NewDigestHandler(repo, slog.Default().With("component", "digest"))
 
+	// ── Context handler ───────────────────────────────────────────────────────
+	// Configuration is read once here and injected (§2.6); the handler holds its
+	// dependencies on a struct (§6.3).
+	//
+	// ⚠️ geoReader is a *geoip.Reader that is nil when no mmdb loaded. Assigning
+	// it straight into the handlers.GeoLookup interface would produce a NON-nil
+	// interface holding a nil pointer, and the first lookup would dereference it.
+	// Convert only when it is actually non-nil.
+	var geoLookup handlers.GeoLookup
+	if geoReader != nil {
+		geoLookup = geoReader
+	}
+	// Scoped loggers are constructed here and injected (§8.6) rather than each
+	// subsystem reaching for slog.Default().
+	contextLog := slog.Default().With("subsystem", "context")
+	rateLimitLog := slog.Default().With("subsystem", "ratelimit")
+	contextHandler := handlers.NewContextHandler(repo, geoLookup, handlers.LoadContextConfig(contextLog), contextLog)
+
 	// ── Router ────────────────────────────────────────────────────────────────
 	// v1 sub-mux: all /v1/* routes go through rate limiting.
 	// /health, /live, /ready, and docs are also covered by a lighter global limiter.
@@ -96,7 +114,7 @@ func main() {
 		cache.CacheMiddleware(http.HandlerFunc(eventHandler.ListEvents)),
 	)
 	v1Mux.HandleFunc("GET /v1/events/{id}", eventHandler.GetEventByID)
-	v1Mux.HandleFunc("GET /v1/context", handlers.GetContext(repo, geoReader))
+	v1Mux.HandleFunc("GET /v1/context", contextHandler.GetContext)
 	v1Mux.Handle("GET /v1/enrichment-stats", enrichmentStatsHandler)
 	v1Mux.HandleFunc("GET /v1/states", handlers.StatesHandler(repo))
 	v1Mux.HandleFunc("GET /v1/digest/today.json", digestHandler.GetTodayDigest)
@@ -108,7 +126,7 @@ func main() {
 	mux.Handle("GET /openapi.yaml", handlers.OpenAPISpecHandler()) // local docs/testing
 	mux.Handle("GET /docs", handlers.SwaggerUIHandler())           // local docs/testing
 	mux.Handle("GET /docs/", handlers.SwaggerUIHandler())          // local docs/testing
-	mux.Handle("/v1/", handlers.RateLimitMiddleware(v1Mux))        // rate-limited v1 routes
+	mux.Handle("/v1/", handlers.RateLimitMiddleware(v1Mux, rateLimitLog)) // rate-limited v1 routes
 
 	// Global middleware chain, outermost first: panic recovery, security headers,
 	// CORS, and a light public limiter wrap everything. Recovery is outermost so
@@ -118,7 +136,7 @@ func main() {
 	globalHandler := handlers.RecoveryMiddleware(
 		handlers.SecurityHeadersMiddleware(
 			handlers.CORSMiddleware(
-				handlers.GlobalRateLimitMiddleware(mux),
+				handlers.GlobalRateLimitMiddleware(mux, rateLimitLog),
 			),
 		),
 	)

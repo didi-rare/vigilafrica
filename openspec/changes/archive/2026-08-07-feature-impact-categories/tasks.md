@@ -1,5 +1,25 @@
 # Tasks: v1.3 Impact Category Expansion
 
+> ## 📦 ARCHIVED 2026-08-07 — CLOSED UNIMPLEMENTED (0/32 tasks), by its own conclusion
+>
+> This change is archived **without being built**, which is the outcome its own banner
+> argued for. Both categories it adds — `landslides` and `tempExtremes` — are valid EONET
+> category IDs that returned **zero events worldwide** when measured 2026-08-03. Building
+> UI, API validation, DB constraints, ingestion and seed data for them would ship nothing.
+>
+> ⚠️ **Archived with `--skip-specs` on purpose.** Merging these spec deltas into the main
+> spec would assert requirements for categories the system does not implement and does not
+> intend to — the spec would describe a product that does not exist.
+>
+> **What survives:** the **category registry** — one declared source of truth replacing the
+> category values currently duplicated across the API validator, the DB `CHECK` constraint,
+> the TS union and the filter options. It is real groundwork for any future expansion and is
+> carried forward to
+> [`chore-deferred-work-register`](../../../proposals/chore-deferred-work-register.md) §C1.
+>
+> ⚠️ Re-verify the zero-event finding before acting on it — it was measured against a moving
+> upstream.
+
 ## 1. Category Registry
 
 - [ ] 1.1 Add backend category constants for `landslides` and `tempExtremes`

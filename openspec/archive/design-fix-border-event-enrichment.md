@@ -1,7 +1,7 @@
 # Spec: Label neighbour-country border events (fix-border-event-enrichment)
 
-**Status:** Proposed — implementation in `fix/border-event-enrichment`.
-**Companion:** [`openspec/proposals/fix-border-event-enrichment.md`](../proposals/fix-border-event-enrichment.md).
+**Status:** Archived — shipped via PR #152; superseded by the canonical delta in [`spec-fix-border-event-enrichment.md`](./spec-fix-border-event-enrichment.md), which was merged into `openspec/specs/vigilafrica/spec.md`.
+**Companion:** [`openspec/archive/proposal-fix-border-event-enrichment.md`](./proposal-fix-border-event-enrichment.md).
 
 ## Context
 
@@ -10,7 +10,7 @@ The enrichment trigger `trg_enrich_event_location` ([`api/db/migrations/000006_f
 ## Requirement Delta
 
 The `Requirement: Geospatial Event Enrichment` change lives in the change record, per the `feature-impact-categories` convention:
-[`openspec/changes/fix-border-event-enrichment/specs/vigilafrica/spec.md`](../changes/fix-border-event-enrichment/specs/vigilafrica/spec.md). It merges into canonical `openspec/specs/vigilafrica/spec.md` at `/openspec-archive` time.
+[`openspec/changes/fix-border-event-enrichment/specs/vigilafrica/spec.md`](./spec-fix-border-event-enrichment.md). It merges into canonical `openspec/specs/vigilafrica/spec.md` at `/openspec-archive` time.
 
 > **Sentinel gate note:** the gate (`api/cmd/sentinel`) recognises only `openspec/proposals/` and `openspec/changes/` among a PR's *changed* files. The integration test lands in `api/internal/database/` (a critical path), so the change record under `openspec/changes/` is what satisfies the gate.
 

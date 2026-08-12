@@ -4,6 +4,11 @@ status: proposed
 branch: chore/react-router-8-advisory-fix
 ---
 
+> ## ✅ ARCHIVED 2026-08-07 — SHIPPED in #208 (`db9135d`), released in v1.3.7
+>
+> All four stated outcomes verified in the tree at archive time:
+> `react-router@8.3.0` in `web/package.json`; **zero** `react-router-dom` references under `web/src`; React at 19.2.8; and `npm run audit:ci` reporting **0 documented exceptions** — the allowlist is empty, and `GHSA-qwww-vcr4-c8h2` was retired ahead of its 2026-08-14 review date.
+
 # Proposal: Move to react-router 8 and Retire the Last Audit Exception (chore-react-router-8)
 
 ## Why

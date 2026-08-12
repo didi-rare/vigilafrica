@@ -448,12 +448,27 @@ h2[id],
 */
 .dashboard-fallback {
   /*
-    Cap at the dashboard's real mounted height above 768px (~1459px, rounded up).
-    Below a ~1460px-tall viewport min() resolves to 100vh, i.e. exactly the
-    behaviour verified as fixing the shift — the cap only engages on displays
-    tall enough for 100vh to over-reserve, which is precisely where it was waste.
+    Cap at the dashboard's real mounted height above 768px. Below a viewport that
+    tall min() resolves to 100vh, i.e. exactly the behaviour verified as fixing
+    the shift — the cap only engages on displays tall enough for 100vh to
+    over-reserve, which is precisely where it was waste.
+
+    Raised 1460px -> 1530px for feature-events-pagination. The pagination bar
+    ("Showing 1–50 of 3,268" + pager) sits between the filters and the layout and
+    adds a MEASURED +64px: the mounted `#dashboard` goes 1459px -> 1523px. A/B'd
+    in one page load by hiding `.dashboard-results` and re-measuring, at both 43
+    events (today) and 3,268 (continental scale) — +64px in every desktop/tablet
+    case, since the bar's height is fixed by `min-height` and does not vary with
+    the row count.
+
+    ⚠️ This is invariant maintenance, NOT a measured CLS fix. Holding the cap at
+    1460 was measured to change CLS by nothing at 1920x1600 (5/5 runs identical),
+    because at any realistic viewport the content below the reservation is already
+    off-screen and an off-screen shift is not counted. The cap's actual job is to
+    stop 100vh over-reserving on very tall displays; it just must never fall BELOW
+    the real mounted height, or it under-reserves there instead.
   */
-  min-height: min(100vh, 1460px);
+  min-height: min(100vh, 1530px);
   /*
     Top-aligned, NOT centred. The reserved box starts near the bottom of the
     fold (y≈710 at 1350x940), so centring pushed the loading text to y≈1180 —
