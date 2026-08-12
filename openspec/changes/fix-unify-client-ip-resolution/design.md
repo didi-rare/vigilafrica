@@ -45,7 +45,8 @@ The work is to collapse these into one resolver, keep the rate limiter's behavio
 
 ### Untouched
 
-- The rate limiter. Its resolution is already correct; this change must not alter it.
+- ~~The rate limiter. Its resolution is already correct; this change must not alter it.~~
+  ⚠️ **This became false and is corrected here.** The limiter WAS refactored: it now parses its trusted-proxy CIDRs once at construction instead of per request (§2.6), calls the extracted `rateLimitMiddlewareWithConfig`, and takes an injected logger (§8.6). Its *resolution behaviour* is unchanged — same CIDRs, same precedence, same buckets — which is what "must not alter it" was protecting, and there are now tests driving the production composition to prove it.
 - `TRUSTED_PROXY_CIDRS` defaults and parsing — `chore-vps-access-hardening` task 5.2 owns narrowing them.
 
 ## Behaviour
@@ -64,7 +65,8 @@ The work is to collapse these into one resolver, keep the rate limiter's behavio
 
 ## Acceptance Criteria
 
-- [ ] `extractIP` no longer exists anywhere in the tree — `grep -rn "extractIP" api/` returns nothing outside history.
+- [x] No second client-IP resolver exists: `grep -rn "func extractIP\|extractIP(" api/` returns nothing — no declaration, no call site.
+  ⚠️ **Criterion amended.** As originally written ("`grep -rn \"extractIP\" api/` returns nothing") it was false and would stay false: historical prose comments deliberately name the removed helper to record why a second resolver must not return. Marking a false criterion complete is the defect; the criterion is corrected rather than the comments deleted.
 - [ ] Exactly one client-IP resolution path exists in `api/internal/handlers`, asserted by a grep-based or vet-style check, not only by review.
 - [ ] `GET /v1/context` with a forged `X-Forwarded-For` from an **untrusted** peer resolves to the peer address, and the response does **not** reflect the forged location.
 - [ ] `GET /v1/context` with `X-Forwarded-For` from a **trusted** peer resolves to the forwarded address — the legitimate Caddy path still works.

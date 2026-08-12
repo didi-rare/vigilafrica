@@ -63,7 +63,7 @@ func LoadContextConfig(logger *slog.Logger) ContextConfig {
 		logger = slog.Default()
 	}
 	cfg := ContextConfig{
-		Proxy:         LoadProxyConfig(),
+		Proxy:         LoadProxyConfig(logger),
 		DevOverrideIP: os.Getenv("DEV_OVERRIDE_IP"),
 		DevForceLagos: os.Getenv("DEV_FORCE_LAGOS") == "true",
 	}
@@ -237,17 +237,24 @@ func (h *ContextHandler) GetContext(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Defaults for local testing when the IP is localhost or lookup fails.
-	centerLat := 9.0820 // Nigeria center default
-	centerLng := 8.6753 // Nigeria center default
-
+	// ⚠️ No hidden default centre. This previously fell back to the geographic
+	// centre of Nigeria whenever the location was unknown, so the response could
+	// carry events from an undisclosed place while reporting
+	// `location: null, location_source: unavailable`. That is precisely the
+	// undisclosed-fallback class this change exists to remove — and the live
+	// spec already required an empty event list in that case.
 	if resp.Location != nil {
-		centerLat = resp.Location.Lat
-		centerLng = resp.Location.Lng
-	}
-
-	events, err := h.repo.GetNearbyEvents(r.Context(), centerLat, centerLng, 200.0, 5) // 200km radius, max 5 events
-	if err == nil {
+		events, err := h.repo.GetNearbyEvents(r.Context(), resp.Location.Lat, resp.Location.Lng, 200.0, 5) // 200km radius, max 5 events
+		if err != nil {
+			// ⚠️ Not swallowed. This used to be `if err == nil`, which turned a
+			// database outage into a successful "no events near you" — the worst
+			// possible answer for a safety product, and indistinguishable from
+			// the real thing (§4.5, §6.4).
+			h.log.Error("context: nearby events query failed",
+				"err", err, "lat", resp.Location.Lat, "lng", resp.Location.Lng)
+			respondWithError(w, http.StatusInternalServerError, "internal server error")
+			return
+		}
 		resp.NearbyEvents = events
 	}
 

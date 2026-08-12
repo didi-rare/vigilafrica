@@ -393,7 +393,7 @@ components:
         A resolved location. Check `location_source` on the enclosing response to
         know where it came from — it is NOT always IP geolocation.
 
-When derived from the caller's IP (`location_source: ip`) it is a MaxMind
+        When derived from the caller's IP (`location_source: ip`) it is a MaxMind
         GeoLite2 lookup. `country` is populated; **`state` may be an empty
         string** — MaxMind does not return a subdivision for every address, and
         the service does not guess one.

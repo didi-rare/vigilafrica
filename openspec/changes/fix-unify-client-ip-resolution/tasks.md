@@ -64,7 +64,7 @@ Promoted from `openspec/proposals/` + `openspec/specs/` at `/openspec-apply`. Ra
 - [x] 5.6 An untrusted peer cannot rotate `X-Forwarded-For` to escape its own bucket — asserted through the production middleware. Plus a 429 contract test (status, `Content-Type`, `Retry-After`).
 - [x] 5.7 `location: null` still returned with `200` when the reader is absent or the lookup fails.
 - [x] 5.8 Invalid coordinate → `400` **naming the offending parameter**, asserted across 9 handler cases. ⚠️ The earlier assertion accepted any non-empty message, which a generic "bad request" would have satisfied while breaking the contract.
-- [x] 5.9 `scripts/test-api.ps1 -count=1` green — every package `ok`. Also `go build ./...`, `go vet ./internal/handlers/`, `openspec validate fix-unify-client-ip-resolution --strict` (**valid**), `openspec validate --specs` (1 passed), and the sentinel gate. ⚠️ Windows AppLocker blocks bare `go test` binaries here; the script is the supported path and does **not** run `-race`.
+- [x] 5.9 Full suite green — every package `ok`. ⚠️ **Exact command recorded, because the shorthand was wrong:** `./scripts/test-api.ps1 -GoTestArgs '-count=1','./...'`. Writing `scripts/test-api.ps1 -count=1` would suppress the script's default `./...` and test only the current directory — review round 3 caught that the record implied a wider run than the command performs. ⚠️ The final runs used native `go test -count=1 ./...` because Docker Desktop was down; `-race` cannot run on this host at all (no gcc, and the Docker path lacks a cgo toolchain), so CI (`ci-cd.yml:57`) is the only `-race` coverage. Also `go build ./...`, `go vet ./internal/handlers/`, `openspec validate fix-unify-client-ip-resolution --strict` (**valid**), `openspec validate --specs` (1 passed), and the sentinel gate. ⚠️ Windows AppLocker blocks bare `go test` binaries here; the script is the supported path and does **not** run `-race`.
 
 ## 7. Independent review round 1 — verdict BLOCK, all findings fixed
 
@@ -102,6 +102,18 @@ Round 2 (`/sol-review`, `/openspec-review` framing) confirmed **no over-correcti
 - [x] 8.5 **New inaccuracy introduced while fixing one (P3).** The round-1 `GeoLocation` rewrite claimed IP-derived `country`/`state` are populated. `reader.go` sets `State` only when MaxMind returns a subdivision, so it can be empty. Corrected and resynced.
 - [x] 8.6 **400 tests accepted any message; `::1` case absent (P3).** Both fixed — see 5.8 and 1.2.
 - [x] 8.7 **The task record itself had gone false (P3).** See 1.2, 2.2, 2.4, 5.2.
+
+## 9. Independent review round 3 — verdict BLOCK, all findings fixed
+
+- [x] 9.1 **🚨 P1: I shipped an invalid OpenAPI contract, and every gate passed.** A multi-line `description:` block lost its indentation, so **both copies became unparseable YAML** — the document served at `/openapi.yaml` and rendered by `/docs`. `npm run sync:openapi` copies bytes without parsing; `git diff --exit-code` compared two equally-broken files; `openspec validate --specs` does not read the embedded YAML; `go build`/`vet`/`test` never touched it. **Nothing automated could see it.** Verified with PyYAML: `mapping values are not allowed here`.
+  Fixed the indentation **and the blind spot**: `openapi_contract_test.go` parses the **embedded** copy — the bytes actually served — and asserts `lat`/`lng` survive as real parameters, that the `400` is declared, and that `location_source` is required. ⚠️ **Proven by re-breaking the file**: the gate fails with `yaml: line 401: mapping values are not allowed in this context`, and passes once repaired. Uses `gopkg.in/yaml.v3`, already in `go.mod` — no new dependency.
+- [x] 9.2 **Undisclosed fallback location (P2).** With no resolvable location the handler still queried events around the hardcoded geographic centre of Nigeria, so a caller could receive events from a place the response never named while reporting `location: null, location_source: unavailable`. **That is the exact class this change exists to remove**, and the live spec already required an empty list. The query is now skipped entirely; asserted by a test that fails if the repository is called at all.
+- [x] 9.3 **Database errors became successful empty responses (P2).** `if err == nil { … }` turned an outage into "no events near you" — indistinguishable from the real thing, and the worst possible answer for a safety product (§4.5, §6.4). Now logged and returned as a sanitized 500, with a test asserting the upstream error does not leak.
+- [x] 9.4 **`design.md` was still false (P2).** It claimed the rate limiter was untouched — it was refactored for §2.6/§8.6 — and still carried the literal zero-`extractIP` criterion. Both corrected in place, with the resolution-behaviour guarantee restated and pointed at the tests that now prove it.
+- [x] 9.5 **§8.6 injection was incomplete (P3).** `LoadProxyConfig`, `trustedProxyCIDRsFromEnv` and the rate-limit constructor still used package-global `slog`. All now take an injected logger, nil → `slog.Default()`.
+- [x] 9.6 **The recorded test command was wrong (P2, part).** See 5.9.
+
+⚠️ **Standing lesson from this round, worth more than the fix:** four green gates and a full passing test suite certified a contract that no parser could read. *Green gates only prove what they actually check.* The fix that matters is 9.1's parse test, not the indentation.
 
 ## 6. Explicitly not in this change
 

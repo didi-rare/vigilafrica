@@ -59,10 +59,16 @@ func newRequest(target, remoteAddr string, headers map[string]string) *http.Requ
 type contextTestRepo struct {
 	database.Repository
 	gotLat, gotLng float64
+	calls          int
+	err            error
 }
 
 func (r *contextTestRepo) GetNearbyEvents(_ context.Context, lat, lng float64, _ float64, _ int) ([]models.Event, error) {
+	r.calls++
 	r.gotLat, r.gotLng = lat, lng
+	if r.err != nil {
+		return nil, r.err
+	}
 	return []models.Event{}, nil
 }
 
@@ -454,5 +460,59 @@ func TestGetContextExplicitLocationDrivesTheQuery(t *testing.T) {
 	// The coordinates must actually reach the query, not merely be echoed back.
 	if repo.gotLat != 6.5244 || repo.gotLng != 3.3792 {
 		t.Errorf("nearby-events query used (%v, %v), want the supplied coordinates", repo.gotLat, repo.gotLng)
+	}
+}
+
+// TestGetContextDoesNotQueryAroundAHiddenDefault covers the undisclosed-fallback
+// defect: the handler used to query events around the geographic centre of
+// Nigeria whenever the location was unknown, so a caller could receive events
+// from a place the response never named while it reported
+// `location: null, location_source: unavailable`.
+//
+// That is the same class of silent behaviour this whole change removes, and the
+// live spec already required an empty event list here.
+func TestGetContextDoesNotQueryAroundAHiddenDefault(t *testing.T) {
+	repo := &contextTestRepo{}
+	h := NewContextHandler(repo, nil, testContextConfig(t), nil) // nil geo -> location unavailable
+
+	rec := httptest.NewRecorder()
+	h.GetContext(rec, newRequest("/v1/context", "203.0.113.9:1", nil))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	resp := decodeContext(t, rec)
+	if resp.LocationSource != LocationSourceUnavailable {
+		t.Fatalf("location_source = %q, want %q", resp.LocationSource, LocationSourceUnavailable)
+	}
+	if repo.calls != 0 {
+		t.Errorf("repository was queried %d time(s) with no known location — it must not query around an undisclosed centre", repo.calls)
+	}
+	if len(resp.NearbyEvents) != 0 {
+		t.Errorf("nearby_events = %d, want 0 when the location is unknown", len(resp.NearbyEvents))
+	}
+}
+
+// TestGetContextReturns500WhenTheQueryFails covers §4.5/§6.4. A database outage
+// previously surfaced as 200 with an empty array — indistinguishable from "no
+// events near you", which is the worst possible answer for a safety product.
+func TestGetContextReturns500WhenTheQueryFails(t *testing.T) {
+	repo := &contextTestRepo{err: errors.New("connection refused")}
+	geo := stubGeo{"203.0.113.9": {Country: "Somewhere", Lat: 1, Lng: 2}}
+	h := NewContextHandler(repo, geo, testContextConfig(t), nil)
+
+	rec := httptest.NewRecorder()
+	h.GetContext(rec, newRequest("/v1/context", "203.0.113.9:1", nil))
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500 (body %q)", rec.Code, rec.Body.String())
+	}
+	var body APIError
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("500 body is not valid JSON (%v): %s", err, rec.Body.String())
+	}
+	// The upstream error must not leak to the caller.
+	if strings.Contains(body.Error, "connection refused") {
+		t.Errorf("500 body leaks the internal error: %q", body.Error)
 	}
 }

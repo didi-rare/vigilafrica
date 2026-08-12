@@ -277,9 +277,13 @@ type ProxyConfig struct {
 }
 
 // LoadProxyConfig parses TRUSTED_PROXY_CIDRS. Call once from main, or once when
-// constructing a middleware, and pass the result down.
-func LoadProxyConfig() ProxyConfig {
-	return ProxyConfig{Trusted: trustedProxyCIDRsFromEnv()}
+// constructing a middleware, and pass the result down. The logger is injected
+// (§8.6); nil falls back to slog.Default().
+func LoadProxyConfig(logger *slog.Logger) ProxyConfig {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	return ProxyConfig{Trusted: trustedProxyCIDRsFromEnv(logger)}
 }
 
 // ClientIP resolves the client IP for a request. Forwarded headers are honoured
@@ -325,7 +329,10 @@ func remoteAddrIP(remoteAddr string) string {
 	return host
 }
 
-func trustedProxyCIDRsFromEnv() []*net.IPNet {
+func trustedProxyCIDRsFromEnv(logger *slog.Logger) []*net.IPNet {
+	if logger == nil {
+		logger = slog.Default()
+	}
 	config := trimSpace(os.Getenv("TRUSTED_PROXY_CIDRS"))
 	if config == "" {
 		config = "127.0.0.1/8,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
@@ -334,7 +341,7 @@ func trustedProxyCIDRsFromEnv() []*net.IPNet {
 	for _, part := range splitComma(config) {
 		_, network, err := net.ParseCIDR(part)
 		if err != nil {
-			slog.Warn("rate limiter: ignoring invalid trusted proxy CIDR", "cidr", part)
+			logger.Warn("rate limiter: ignoring invalid trusted proxy CIDR", "cidr", part)
 			continue
 		}
 		networks = append(networks, network)
@@ -397,13 +404,14 @@ func GlobalRateLimitMiddleware(next http.Handler) http.Handler {
 }
 
 func rateLimitMiddlewareFromEnv(next http.Handler, rpmEnv string, fallbackRPM int) http.Handler {
+	logger := slog.Default()
 	rpm := positiveIntFromEnv(rpmEnv, fallbackRPM)
 	maxBuckets := positiveIntFromEnv("RATE_LIMIT_MAX_BUCKETS", defaultRateLimitMaxBuckets)
 	bucketTTL := time.Duration(positiveIntFromEnv("RATE_LIMIT_BUCKET_TTL_SECONDS", defaultRateLimitBucketTTLSeconds)) * time.Second
 	// Parsed once here rather than per request (§2.6). This constructor runs
 	// once, from main, when the middleware chain is built.
-	proxies := LoadProxyConfig()
-	slog.Info("rate limiter: initialised", "rpm_env", rpmEnv, "rpm_per_ip", rpm, "max_buckets", maxBuckets, "bucket_ttl_seconds", int(bucketTTL.Seconds()), "trusted_proxy_cidrs", len(proxies.Trusted))
+	proxies := LoadProxyConfig(logger)
+	logger.Info("rate limiter: initialised", "rpm_env", rpmEnv, "rpm_per_ip", rpm, "max_buckets", maxBuckets, "bucket_ttl_seconds", int(bucketTTL.Seconds()), "trusted_proxy_cidrs", len(proxies.Trusted))
 	return rateLimitMiddlewareWithConfig(next, rpm, maxBuckets, bucketTTL, proxies)
 }
 
