@@ -269,10 +269,34 @@ func (l *ipRateLimiter) evictOldestLocked() {
 	}
 }
 
-// clientIP extracts the client IP from the request. Forwarded headers are only
-// trusted when the direct peer is a configured trusted proxy.
-func clientIP(r *http.Request) string {
-	return clientIPWithTrustedProxies(r, trustedProxyCIDRsFromEnv())
+// ProxyConfig holds the parsed trusted-proxy CIDRs. Build it ONCE at startup
+// with LoadProxyConfig and inject it (§2.6) — do not re-read the environment
+// per request.
+type ProxyConfig struct {
+	Trusted []*net.IPNet
+}
+
+// LoadProxyConfig parses TRUSTED_PROXY_CIDRS. Call once from main, or once when
+// constructing a middleware, and pass the result down. The logger is injected
+// (§8.6); nil falls back to slog.Default().
+func LoadProxyConfig(logger *slog.Logger) ProxyConfig {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	return ProxyConfig{Trusted: trustedProxyCIDRsFromEnv(logger)}
+}
+
+// ClientIP resolves the client IP for a request. Forwarded headers are honoured
+// ONLY when the direct peer is one of the configured trusted proxies.
+//
+// ⚠️ This is the ONLY client-IP resolution path in this package. Do not add a
+// second one. Until fix-unify-client-ip-resolution, context.go carried its own
+// unguarded helper that read X-Forwarded-For unconditionally, so the same
+// request resolved to two different addresses depending on which handler saw
+// it — the rate limiter got the peer, /v1/context got whatever the caller
+// claimed.
+func (c ProxyConfig) ClientIP(r *http.Request) string {
+	return clientIPWithTrustedProxies(r, c.Trusted)
 }
 
 func clientIPWithTrustedProxies(r *http.Request, trustedProxies []*net.IPNet) string {
@@ -305,7 +329,10 @@ func remoteAddrIP(remoteAddr string) string {
 	return host
 }
 
-func trustedProxyCIDRsFromEnv() []*net.IPNet {
+func trustedProxyCIDRsFromEnv(logger *slog.Logger) []*net.IPNet {
+	if logger == nil {
+		logger = slog.Default()
+	}
 	config := trimSpace(os.Getenv("TRUSTED_PROXY_CIDRS"))
 	if config == "" {
 		config = "127.0.0.1/8,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
@@ -314,7 +341,7 @@ func trustedProxyCIDRsFromEnv() []*net.IPNet {
 	for _, part := range splitComma(config) {
 		_, network, err := net.ParseCIDR(part)
 		if err != nil {
-			slog.Warn("rate limiter: ignoring invalid trusted proxy CIDR", "cidr", part)
+			logger.Warn("rate limiter: ignoring invalid trusted proxy CIDR", "cidr", part)
 			continue
 		}
 		networks = append(networks, network)
@@ -366,24 +393,43 @@ func trimSpace(s string) string {
 // RateLimitMiddleware wraps a handler with a per-IP token-bucket rate limiter.
 // The limit is read from RATE_LIMIT_RPM (default: 60 requests/min per IP).
 // Returns HTTP 429 when a client's bucket is empty.
-func RateLimitMiddleware(next http.Handler) http.Handler {
-	return rateLimitMiddlewareFromEnv(next, "RATE_LIMIT_RPM", defaultRateLimitRPM)
+func RateLimitMiddleware(next http.Handler, logger *slog.Logger) http.Handler {
+	return rateLimitMiddlewareFromEnv(next, "RATE_LIMIT_RPM", defaultRateLimitRPM, logger)
 }
 
 // GlobalRateLimitMiddleware applies a lighter limit to public non-v1 endpoints
 // such as /health, /ready, /docs, and /openapi.yaml.
-func GlobalRateLimitMiddleware(next http.Handler) http.Handler {
-	return rateLimitMiddlewareFromEnv(next, "GLOBAL_RATE_LIMIT_RPM", defaultGlobalRateLimitRPM)
+func GlobalRateLimitMiddleware(next http.Handler, logger *slog.Logger) http.Handler {
+	return rateLimitMiddlewareFromEnv(next, "GLOBAL_RATE_LIMIT_RPM", defaultGlobalRateLimitRPM, logger)
 }
 
-func rateLimitMiddlewareFromEnv(next http.Handler, rpmEnv string, fallbackRPM int) http.Handler {
+func rateLimitMiddlewareFromEnv(next http.Handler, rpmEnv string, fallbackRPM int, logger *slog.Logger) http.Handler {
+	if logger == nil {
+		logger = slog.Default()
+	}
 	rpm := positiveIntFromEnv(rpmEnv, fallbackRPM)
 	maxBuckets := positiveIntFromEnv("RATE_LIMIT_MAX_BUCKETS", defaultRateLimitMaxBuckets)
 	bucketTTL := time.Duration(positiveIntFromEnv("RATE_LIMIT_BUCKET_TTL_SECONDS", defaultRateLimitBucketTTLSeconds)) * time.Second
+	// Parsed once here rather than per request (§2.6). This constructor runs
+	// once, from main, when the middleware chain is built.
+	proxies := LoadProxyConfig(logger)
+	logger.Info("rate limiter: initialised", "rpm_env", rpmEnv, "rpm_per_ip", rpm, "max_buckets", maxBuckets, "bucket_ttl_seconds", int(bucketTTL.Seconds()), "trusted_proxy_cidrs", len(proxies.Trusted))
+	return rateLimitMiddlewareWithConfig(next, rpm, maxBuckets, bucketTTL, proxies)
+}
+
+// rateLimitMiddlewareWithConfig is the injectable form of the production
+// middleware. rateLimitMiddlewareFromEnv differs ONLY in where the numbers come
+// from, so a test driving this function exercises the real composition:
+// limiter, client-IP resolution and the 429 path together.
+//
+// ⚠️ Tests must call THIS rather than rebuild an equivalent handler. A test
+// that reimplements the composition still passes when production wiring keys on
+// the wrong value — the same class of defect fix-unify-client-ip-resolution
+// exists to remove, one layer up.
+func rateLimitMiddlewareWithConfig(next http.Handler, rpm, maxBuckets int, bucketTTL time.Duration, proxies ProxyConfig) http.Handler {
 	limiter := newIPRateLimiterWithOptions(rpm, maxBuckets, bucketTTL)
-	slog.Info("rate limiter: initialised", "rpm_env", rpmEnv, "rpm_per_ip", rpm, "max_buckets", maxBuckets, "bucket_ttl_seconds", int(bucketTTL.Seconds()))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip := clientIP(r)
+		ip := proxies.ClientIP(r)
 		if !limiter.bucketFor(ip).allow() {
 			w.Header().Set("Content-Type", "application/json")
 			w.Header().Set("Retry-After", "1")

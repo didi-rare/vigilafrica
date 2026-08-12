@@ -1,10 +1,15 @@
 # Proposal: Paginate the Events List (feature-events-pagination)
 
-**Status:** Proposed — prerequisite for [feature-continental-coverage](../../proposals/feature-continental-coverage.md).
+**Status:** Implemented (22/22 tasks) — prerequisite for [feature-continental-coverage](../../../proposals/feature-continental-coverage.md), which is now unblocked.
+
+⚠️ Two things changed against what this document predicted, both recorded in [tasks.md](tasks.md) rather than quietly reconciled:
+
+1. **A composite index turned out to be warranted**, contrary to the "measure, expect nothing" prior — and the working form is `(event_date DESC NULLS LAST, id DESC)`, because `idx_events_event_date` is NULLS FIRST and cannot serve this ordering at all. Migration `000014`, harness at `scripts/bench-events-ordering/`.
+2. **The pagination bar introduced a layout shift of its own** (CLS 0.0059 → 0.0122) by rendering only once data arrived. Caught by the task 4.6 re-check, fixed, re-measured to 0.0054 — at or below baseline.
 
 ## Why
 
-`GET /v1/events` defaults to `limit = 50` ([`events.go:76`](../../../api/internal/handlers/events.go)) and the web client **never sends a `limit` or `offset`** ([`events.ts:63-68`](../../../web/src/api/events.ts)). The API returns `meta.total`, `meta.limit` and `meta.offset` — and `EventsDashboard.tsx` **reads none of them**.
+`GET /v1/events` defaults to `limit = 50` ([`events.go:76`](../../../../api/internal/handlers/events.go)) and the web client **never sends a `limit` or `offset`** ([`events.ts:63-68`](../../../../web/src/api/events.ts)). The API returns `meta.total`, `meta.limit` and `meta.offset` — and `EventsDashboard.tsx` **reads none of them**.
 
 So the dashboard shows **at most 50 events and never says there are more.**
 
@@ -47,7 +52,7 @@ Measured against real data:
 
 - **43 events across 32 distinct `event_date` values — largest tie group is 3.** So `event_date` ties are real and routine.
 - Those ties are currently broken by `ingested_at`, which had **0 duplicates** — each upsert runs as its own implicit transaction (`pool.Exec`, no explicit `Begin`), so `now()` differs per row.
-- **But `ON CONFLICT DO UPDATE SET ingested_at = NOW()`** ([`db.go:114`](../../../api/internal/database/db.go)) means **re-ingesting an event bumps its sort key.** Every ingestion tick reshuffles the order *within* each `event_date` tie group.
+- **But `ON CONFLICT DO UPDATE SET ingested_at = NOW()`** ([`db.go:114`](../../../../api/internal/database/db.go)) means **re-ingesting an event bumps its sort key.** Every ingestion tick reshuffles the order *within* each `event_date` tie group.
 
 So a user paging through during an ingestion run can legitimately see a duplicate or skip an event. Invisible at 43 events on one page; a real defect once pages exist.
 

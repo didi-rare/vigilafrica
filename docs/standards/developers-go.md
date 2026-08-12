@@ -508,9 +508,9 @@ Cross-ref: ADR-009 (pgx chosen over `database/sql` + driver with explicit ration
 **§10.3 — Pin exact versions in `go.mod`. Do not use `latest` or floating pseudo-versions without a recorded reason.**
 *Why:* Reproducible builds. `go mod tidy` + committed `go.sum` is the baseline.
 
-**§10.4 — Current approved non-stdlib dependencies: `jackc/pgx/v5`, `google/uuid`, `golang-migrate/migrate/v4`, `oschwald/geoip2-golang`, `testcontainers/testcontainers-go` (test-only). Adding to this list requires §10.2.**
+**§10.4 — Current approved non-stdlib dependencies: `jackc/pgx/v5`, `google/uuid`, `golang-migrate/migrate/v4`, `oschwald/geoip2-golang`, `testcontainers/testcontainers-go` (test-only), `gopkg.in/yaml.v3` (test-only). Adding to this list requires §10.2.**
 *Why:* One place to audit the external surface. Keep this list up to date when deps change.
-Note: Resend email alerts use stdlib `net/http` against the Resend REST API directly (no SDK dependency). `oschwald/maxminddb-golang` is an indirect transitive dep of `geoip2-golang`. `testcontainers-go` is a test-only dependency — it must not be imported in non-`_test.go` files.
+Note: `gopkg.in/yaml.v3` is **test-only** — imported solely by `handlers/openapi_contract_test.go` to parse the embedded OpenAPI document, and it must not be imported in non-`_test.go` files. Rationale per §10.2 in `openspec/changes/fix-unify-client-ip-resolution/tasks.md` §10: it was already present as an indirect dependency, the stdlib has no YAML parser, and the alternative — shipping an unparseable API contract undetected — actually happened. Resend email alerts use stdlib `net/http` against the Resend REST API directly (no SDK dependency). `oschwald/maxminddb-golang` is an indirect transitive dep of `geoip2-golang`. `testcontainers-go` is a test-only dependency — it must not be imported in non-`_test.go` files.
 
 **§10.5 — `go mod tidy` runs clean before every commit that touches `.go` files. `go.sum` is committed.**
 *Why:* Divergent `go.sum` breaks other contributors' builds and CI.

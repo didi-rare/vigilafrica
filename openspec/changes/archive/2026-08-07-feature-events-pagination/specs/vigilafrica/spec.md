@@ -4,9 +4,15 @@
 
 The system SHALL expose a paginated, filterable REST API for accessing enriched natural event data.
 
-Listing results SHALL be returned in a **deterministic total order** built only from values that are stable under ingestion. Ordering SHALL NOT include a column that routine ingestion rewrites, and SHALL terminate in a unique immutable identifier.
+Listing results SHALL be returned in a **deterministic total order** terminating in a unique immutable identifier. Ordering SHALL NOT include a column that **every** ingestion cycle rewrites regardless of whether the event changed.
 
-⚠️ This requires that re-ingesting existing events does not reorder results. It does **not** claim exactly-once paging under arbitrary concurrent writes: a genuinely new event can still shift later rows by one position. Removing that too would require keyset pagination or a consistent snapshot, neither of which is in scope.
+⚠️ **Precisely what this does and does not require.** It requires that re-ingesting an event whose content is unchanged does not reorder results — the routine case, since every tick re-upserts every live event. It does **not** claim exactly-once paging under arbitrary writes. A row can still move when:
+
+- its `event_date` is revised (a NULL date becoming known, or an upstream correction) — the upsert does write this column;
+- a genuinely new event sorts ahead of the client's current page;
+- re-ingestion changes a **filtered** column (`category`, `status`, or the geometry behind `country_name`/`state_name`), so the row leaves or joins the filtered set ahead of the client's offset.
+
+These are properties of offset pagination over a live table, not of the ordering. Removing them would require keyset pagination or a consistent snapshot, neither of which is in scope.
 
 #### Scenario: Listing events by category
 
@@ -27,18 +33,20 @@ Listing results SHALL be returned in a **deterministic total order** built only 
 - **AND** no event SHALL appear in two pages
 - **AND** this SHALL hold even when events tie on `event_date`
 
-#### Scenario: Re-ingesting existing events does not reorder results
+#### Scenario: Re-ingesting UNCHANGED events does not reorder results
 
-- **WHEN** an ingestion run re-upserts events that are already stored, updating their ingestion timestamp
+- **WHEN** an ingestion run re-upserts events that are already stored and whose content is unchanged, updating only their ingestion timestamp
 - **THEN** the order of results SHALL be unchanged
 - **AND** a client paging through the collection SHALL NOT see a duplicate or a skipped event as a result
 - **AND** this SHALL hold because the ingestion timestamp is not part of the ordering, not merely because ties are broken
 
-#### Scenario: The residual limit is acknowledged, not concealed
+#### Scenario: The residual limits are acknowledged, not concealed
 
 - **WHEN** a genuinely new event is stored that sorts ahead of a client's current page
+- **OR** an existing event's `event_date` is revised by re-ingestion
+- **OR** re-ingestion changes an event's `category`, `status`, or resolved location so that it leaves or joins the client's filtered set ahead of the current offset
 - **THEN** later rows may shift by one position, and the client may see one event twice or miss one
-- **AND** this limitation SHALL be documented rather than claimed to be solved
+- **AND** each of these limitations SHALL be documented rather than claimed to be solved
 
 #### Scenario: Offset beyond the end of the collection
 

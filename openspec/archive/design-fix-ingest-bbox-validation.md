@@ -1,7 +1,7 @@
 # Spec: Ingest Bounding-Box Containment Guard (fix-ingest-bbox-validation)
 
-**Status:** Proposed — implementation in `fix/ingest-bbox-validation`.
-**Companion:** [`openspec/proposals/fix-ingest-bbox-validation.md`](../proposals/fix-ingest-bbox-validation.md) (root-cause evidence, rationale, out-of-scope, origin).
+**Status:** Archived — shipped via PR #146; superseded by the canonical delta in [`spec-fix-ingest-bbox-validation.md`](./spec-fix-ingest-bbox-validation.md), which was merged into `openspec/specs/vigilafrica/spec.md`.
+**Companion:** [`openspec/archive/proposal-fix-ingest-bbox-validation.md`](./proposal-fix-ingest-bbox-validation.md) (root-cause evidence, rationale, out-of-scope, origin).
 
 ## Context
 
@@ -29,7 +29,7 @@ enforced **client-side**, plus the rejection, cross-border-retention, and
 unverifiable-geometry scenarios — lives in the change record, per the
 `feature-impact-categories` convention:
 
-[`openspec/changes/fix-ingest-bbox-validation/specs/vigilafrica/spec.md`](../changes/fix-ingest-bbox-validation/specs/vigilafrica/spec.md)
+[`openspec/changes/fix-ingest-bbox-validation/specs/vigilafrica/spec.md`](./spec-fix-ingest-bbox-validation.md)
 
 It merges into the canonical `openspec/specs/vigilafrica/spec.md` at
 `/openspec-archive` time; the canonical spec is not edited by this change.

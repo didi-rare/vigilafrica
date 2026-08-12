@@ -10,7 +10,7 @@
 - Avoid broad all-category support until the product proves which categories
   matter most.
 - Capture `severeStorms` and `drought` as the companion
-  [feature-v13-risk-intelligence](../../proposals/feature-v13-risk-intelligence.md)
+  [feature-v13-risk-intelligence](../../../archive/proposal-feature-v13-risk-intelligence.md)
   proposal — it lands second in the same v1.3 cycle, not as separate-release work.
 
 ## Assumptions

@@ -60,12 +60,28 @@ export interface EventsResponse {
   };
 }
 
-export async function fetchEvents(category?: EventCategory, stateName?: string, country?: string): Promise<EventsResponse> {
+// EVENTS_PAGE_SIZE is the page size the client requests explicitly. The API
+// would default to 50 anyway, but sending it makes the contract visible at the
+// call site and keeps the UI's "Showing X–Y of Z" arithmetic honest — the page
+// size the interface claims is the one it asked for.
+export const EVENTS_PAGE_SIZE = 50
+
+export async function fetchEvents(
+  category?: EventCategory,
+  stateName?: string,
+  country?: string,
+  offset = 0,
+  limit: number = EVENTS_PAGE_SIZE,
+): Promise<EventsResponse> {
   const url = new URL('/v1/events', getApiBaseUrl())
 
   if (category) url.searchParams.set('category', category)
   if (stateName) url.searchParams.set('state', stateName)
   if (country) url.searchParams.set('country', country)
+  url.searchParams.set('limit', String(limit))
+  // Always sent, including offset=0. The API rejects a negative offset with a
+  // 400, so clamp rather than forward a value that would surface as an error.
+  url.searchParams.set('offset', String(Math.max(0, offset)))
 
   const res = await fetch(url.toString())
   if (!res.ok) {
@@ -121,8 +137,10 @@ export async function fetchHealth(): Promise<HealthResponse> {
 
 export const eventKeys = {
   all:    ['events'] as const,
-  list:   (country: string, category: string, state: string) =>
-    [...eventKeys.all, 'list', { country, category, state }] as const,
+  // `offset` is part of the key so each page caches independently rather than
+  // one page overwriting another under a shared key (task 2.2).
+  list:   (country: string, category: string, state: string, offset = 0) =>
+    [...eventKeys.all, 'list', { country, category, state, offset }] as const,
   detail: (id: string) => [...eventKeys.all, 'detail', id] as const,
 }
 

@@ -111,6 +111,75 @@
   border: 0;
 }
 
+/* ── Results bar: "Showing 1–50 of 3,268" + pager ────────────────────────────
+   Sits between the filters and the layout. `min-height` is fixed rather than
+   content-derived so the bar does not change height when the label switches
+   between its states (a range, "past the end", "no events") — the dashboard has
+   a layout-stability history (#193/#198) and this element renders directly above
+   an 800px block. */
+.dashboard-results {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
+  margin-top: 1.5rem;
+  min-height: 2.5rem;
+}
+
+.dashboard-results__count {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.dashboard-results__count strong {
+  color: var(--text-primary);
+  font-weight: 600;
+  /* Tabular figures so the count does not jitter horizontally as digits change. */
+  font-variant-numeric: tabular-nums;
+}
+
+.dashboard-results__controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.dashboard-results__page {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.dashboard-page-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.45rem 0.9rem;
+  background: var(--surface-white-soft);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.85rem;
+  /* Only `border-color` — not `all`/`transform` — so this stays off the
+     compositor's non-composited-animation list, which the web audit drove to 0. */
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.dashboard-page-button:hover:not(:disabled) {
+  border-color: var(--accent-amber);
+  color: var(--accent-amber);
+}
+
+.dashboard-page-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .dashboard-layout {
   display: flex;
   gap: 2rem;
