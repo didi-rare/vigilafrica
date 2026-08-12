@@ -1,12 +1,12 @@
 # Spec: Unify Client-IP Resolution (fix-unify-client-ip-resolution)
 
-**Status:** Implemented — decision (B); two independent review rounds absorbed (both BLOCK, all findings fixed).
+**Status:** Implemented — decision (B); **four** independent review rounds absorbed (all BLOCK, all findings fixed). Round-by-round record in [tasks.md](tasks.md) §7–§10.
 
 ⚠️ **Deviations from this document, recorded rather than glossed:**
 1. `clientIP()` was replaced by the injected `ProxyConfig.ClientIP` method during the round-1 refactor for §2.6/§6.3. This document still names `clientIP()`; the single-resolver property it required is unchanged, and `clientIPWithTrustedProxies` is still the only implementation.
 2. `GetContext` became a method on `ContextHandler` (§6.3) rather than a closure-returning function, and gained an injected `*slog.Logger` (§8.6) and a `GeoLookup` interface so handler behaviour is testable without an mmdb.
 3. The response is marshalled to a buffer before the status is committed, which this document did not anticipate — see tasks.md §8.3.
-**Companion:** [`openspec/proposals/fix-unify-client-ip-resolution.md`](../proposals/fix-unify-client-ip-resolution.md) (rationale, corrected severity, design question, out-of-scope).
+**Companion:** [`proposal.md`](proposal.md) (rationale, corrected severity, design question, out-of-scope).
 
 ## Context
 
@@ -21,7 +21,7 @@ extractIP()  context.go:74       UNGUARDED  -> GET /v1/context     context.go:42
 
 The work is to collapse these into one resolver, keep the rate limiter's behaviour byte-identical, and decide what `/v1/context` offers in place of the capability that closing the gap removes.
 
-⚠️ **`clientIPWithTrustedProxies` is the reusable core.** [`middleware.go:278`](../../api/internal/handlers/middleware.go) already takes the CIDR list as a parameter — it is written to be testable and reusable. `clientIP()` is only the env-reading wrapper. Do **not** write a third resolver.
+⚠️ **`clientIPWithTrustedProxies` is the reusable core.** [`middleware.go:278`](../../../api/internal/handlers/middleware.go) already takes the CIDR list as a parameter — it is written to be testable and reusable. `clientIP()` is only the env-reading wrapper. Do **not** write a third resolver.
 
 ## Components to Touch
 
@@ -37,7 +37,7 @@ The work is to collapse these into one resolver, keep the rate limiter's behavio
    - Rename nothing that is exported; `clientIP`/`clientIPWithTrustedProxies` are package-private and already correctly named.
    - Add a doc comment noting this is now **the only** client-IP path in the package, so a future reader does not add a second.
 
-3. **`openspec/specs/vigilafrica/openapi.yaml`** — **required (decision B)**. Add the explicit location parameter(s) to `/v1/context`, then run `npm run sync:openapi` to regenerate `api/internal/handlers/openapi.yaml`. ⚠️ CI fails the build if these drift ([`ci-cd.yml:48-49`](../../.github/workflows/ci-cd.yml)).
+3. **`openspec/specs/vigilafrica/openapi.yaml`** — **required (decision B)**. Add the explicit location parameter(s) to `/v1/context`, then run `npm run sync:openapi` to regenerate `api/internal/handlers/openapi.yaml`. ⚠️ CI fails the build if these drift ([`ci-cd.yml:48-49`](../../../.github/workflows/ci-cd.yml)).
 
 ### New
 
@@ -71,9 +71,9 @@ The work is to collapse these into one resolver, keep the rate limiter's behavio
 - [ ] `GET /v1/context` with a forged `X-Forwarded-For` from an **untrusted** peer resolves to the peer address, and the response does **not** reflect the forged location.
 - [ ] `GET /v1/context` with `X-Forwarded-For` from a **trusted** peer resolves to the forwarded address — the legitimate Caddy path still works.
 - [ ] Two clients through a trusted proxy still land in **distinct** rate-limit buckets (regression guard on the untouched path).
-- [ ] An untrusted peer cannot forge a rate-limit identity (existing behaviour, now explicitly asserted — [`middleware_test.go:43,58`](../../api/internal/handlers/middleware_test.go) covers the header cases but not the untrusted-peer case).
+- [ ] An untrusted peer cannot forge a rate-limit identity (existing behaviour, now explicitly asserted — [`middleware_test.go:43,58`](../../../api/internal/handlers/middleware_test.go) covers the header cases but not the untrusted-peer case).
 - [ ] `DEV_FORCE_LAGOS=true` still short-circuits before any lookup; `DEV_OVERRIDE_IP` still wins over the request. Both asserted, since this change moves code around them.
-- [ ] `/v1/context` still returns `200` with `location: null` when the GeoIP reader is absent or the lookup fails — the graceful-degradation path at [`context.go:45-49`](../../api/internal/handlers/context.go) must survive.
+- [ ] `/v1/context` still returns `200` with `location: null` when the GeoIP reader is absent or the lookup fails — the graceful-degradation path at [`context.go:45-49`](../../../api/internal/handlers/context.go) must survive.
 - [ ] An explicit out-of-range coordinate returns `400` naming the parameter, **not** a silent IP fallback.
 - [ ] `openapi.yaml` updated and `npm run sync:openapi` run; the CI drift check passes.
 - [ ] The response discriminates IP-derived from client-supplied location, so degraded geolocation is distinguishable from a deliberate query.

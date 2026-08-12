@@ -100,7 +100,11 @@ func main() {
 	if geoReader != nil {
 		geoLookup = geoReader
 	}
-	contextHandler := handlers.NewContextHandler(repo, geoLookup, handlers.LoadContextConfig(nil), nil)
+	// Scoped loggers are constructed here and injected (§8.6) rather than each
+	// subsystem reaching for slog.Default().
+	contextLog := slog.Default().With("subsystem", "context")
+	rateLimitLog := slog.Default().With("subsystem", "ratelimit")
+	contextHandler := handlers.NewContextHandler(repo, geoLookup, handlers.LoadContextConfig(contextLog), contextLog)
 
 	// ── Router ────────────────────────────────────────────────────────────────
 	// v1 sub-mux: all /v1/* routes go through rate limiting.
@@ -122,7 +126,7 @@ func main() {
 	mux.Handle("GET /openapi.yaml", handlers.OpenAPISpecHandler()) // local docs/testing
 	mux.Handle("GET /docs", handlers.SwaggerUIHandler())           // local docs/testing
 	mux.Handle("GET /docs/", handlers.SwaggerUIHandler())          // local docs/testing
-	mux.Handle("/v1/", handlers.RateLimitMiddleware(v1Mux))        // rate-limited v1 routes
+	mux.Handle("/v1/", handlers.RateLimitMiddleware(v1Mux, rateLimitLog)) // rate-limited v1 routes
 
 	// Global middleware chain, outermost first: panic recovery, security headers,
 	// CORS, and a light public limiter wrap everything. Recovery is outermost so
@@ -132,7 +136,7 @@ func main() {
 	globalHandler := handlers.RecoveryMiddleware(
 		handlers.SecurityHeadersMiddleware(
 			handlers.CORSMiddleware(
-				handlers.GlobalRateLimitMiddleware(mux),
+				handlers.GlobalRateLimitMiddleware(mux, rateLimitLog),
 			),
 		),
 	)

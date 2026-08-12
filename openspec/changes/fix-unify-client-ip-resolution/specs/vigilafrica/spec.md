@@ -61,4 +61,15 @@ An explicit coordinate that is unparseable or out of range SHALL be rejected. It
 - **WHEN** the caller's IP cannot be resolved to a known location, or no geolocation database is available
 - **THEN** the API SHALL return HTTP 200 with a null `location`
 - **AND** `location_source` SHALL be `unavailable`
+- **AND** `nearby_events` SHALL be an empty array
+- **AND** the system SHALL NOT query events around any undisclosed default location
 - **AND** SHALL NOT return any 4xx or 5xx response
+
+⚠️ The empty-array clause is **carried forward from the live specification, not new**. An earlier revision of this delta dropped it while the implementation was simultaneously changed to enforce it — archiving that would have deleted the very requirement justifying the change.
+
+#### Scenario: A failed events query is reported, not disguised
+
+- **WHEN** a location is resolved but the nearby-events query fails
+- **THEN** the API SHALL return HTTP 500 with a sanitized message
+- **AND** it SHALL NOT return HTTP 200 with an empty array, which would be indistinguishable from a genuine absence of nearby events
+- **AND** the underlying error SHALL be logged and SHALL NOT be exposed to the caller

@@ -393,18 +393,20 @@ func trimSpace(s string) string {
 // RateLimitMiddleware wraps a handler with a per-IP token-bucket rate limiter.
 // The limit is read from RATE_LIMIT_RPM (default: 60 requests/min per IP).
 // Returns HTTP 429 when a client's bucket is empty.
-func RateLimitMiddleware(next http.Handler) http.Handler {
-	return rateLimitMiddlewareFromEnv(next, "RATE_LIMIT_RPM", defaultRateLimitRPM)
+func RateLimitMiddleware(next http.Handler, logger *slog.Logger) http.Handler {
+	return rateLimitMiddlewareFromEnv(next, "RATE_LIMIT_RPM", defaultRateLimitRPM, logger)
 }
 
 // GlobalRateLimitMiddleware applies a lighter limit to public non-v1 endpoints
 // such as /health, /ready, /docs, and /openapi.yaml.
-func GlobalRateLimitMiddleware(next http.Handler) http.Handler {
-	return rateLimitMiddlewareFromEnv(next, "GLOBAL_RATE_LIMIT_RPM", defaultGlobalRateLimitRPM)
+func GlobalRateLimitMiddleware(next http.Handler, logger *slog.Logger) http.Handler {
+	return rateLimitMiddlewareFromEnv(next, "GLOBAL_RATE_LIMIT_RPM", defaultGlobalRateLimitRPM, logger)
 }
 
-func rateLimitMiddlewareFromEnv(next http.Handler, rpmEnv string, fallbackRPM int) http.Handler {
-	logger := slog.Default()
+func rateLimitMiddlewareFromEnv(next http.Handler, rpmEnv string, fallbackRPM int, logger *slog.Logger) http.Handler {
+	if logger == nil {
+		logger = slog.Default()
+	}
 	rpm := positiveIntFromEnv(rpmEnv, fallbackRPM)
 	maxBuckets := positiveIntFromEnv("RATE_LIMIT_MAX_BUCKETS", defaultRateLimitMaxBuckets)
 	bucketTTL := time.Duration(positiveIntFromEnv("RATE_LIMIT_BUCKET_TTL_SECONDS", defaultRateLimitBucketTTLSeconds)) * time.Second

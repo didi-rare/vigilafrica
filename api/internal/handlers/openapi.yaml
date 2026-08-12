@@ -170,6 +170,15 @@ paths:
                 $ref: '#/components/schemas/ContextResponse'
         '400':
           $ref: '#/components/responses/BadRequestError'
+        '500':
+          description: |
+            The location was resolved but the nearby-events query failed. Returned
+            rather than a 200 with an empty array, so a backend outage is not
+            indistinguishable from "no events near you".
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /v1/states:
     get:

@@ -44,8 +44,13 @@ func TestEmbeddedOpenAPIIsValidYAML(t *testing.T) {
 }
 
 // TestEmbeddedOpenAPIDescribesContextContract pins the parts this change added.
-// Syntax validity alone would not catch a description block that swallowed the
-// parameters into prose — which is exactly what the indentation bug did.
+//
+// ⚠️ Syntax validity is not enough, and the first version of this gate proved
+// it: the handler had begun returning 500 while the contract declared only
+// 200 and 400, and this test passed anyway. Independent review caught the lie
+// the gate was written to catch. It now asserts that every status the handler
+// can produce is declared, and that the parameters are real parameters with
+// locations, types and bounds — not prose that happens to parse.
 func TestEmbeddedOpenAPIDescribesContextContract(t *testing.T) {
 	doc := loadEmbeddedSpec(t)
 
@@ -59,29 +64,71 @@ func TestEmbeddedOpenAPIDescribesContextContract(t *testing.T) {
 		t.Fatal("/v1/context has no get operation")
 	}
 
-	// lat and lng must survive as real parameters, not prose.
+	// --- parameters must be structured, not prose ---
+	wantParams := map[string]struct {
+		min, max float64
+	}{
+		"lat": {-90, 90},
+		"lng": {-180, 180},
+	}
 	params, _ := get["parameters"].([]any)
 	seen := map[string]bool{}
-	for _, p := range params {
-		if m, ok := p.(map[string]any); ok {
-			if name, ok := m["name"].(string); ok {
-				seen[name] = true
+	for _, raw := range params {
+		m, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		name, _ := m["name"].(string)
+		want, tracked := wantParams[name]
+		if !tracked {
+			continue
+		}
+		seen[name] = true
+
+		if in, _ := m["in"].(string); in != "query" {
+			t.Errorf("parameter %q: in = %q, want \"query\"", name, in)
+		}
+		schema, ok := m["schema"].(map[string]any)
+		if !ok {
+			t.Errorf("parameter %q has no schema", name)
+			continue
+		}
+		if typ, _ := schema["type"].(string); typ != "number" {
+			t.Errorf("parameter %q: type = %q, want \"number\"", name, typ)
+		}
+		// Bounds must match the handler's validation, or the contract lies about
+		// what is accepted.
+		for key, want := range map[string]float64{"minimum": want.min, "maximum": want.max} {
+			got, ok := toFloat(schema[key])
+			if !ok {
+				t.Errorf("parameter %q has no %s", name, key)
+				continue
+			}
+			if got != want {
+				t.Errorf("parameter %q: %s = %v, want %v (must match parseCoordinate)", name, key, got, want)
 			}
 		}
 	}
-	for _, want := range []string{"lat", "lng"} {
-		if !seen[want] {
-			t.Errorf("query parameter %q missing from /v1/context (found %v)", want, seen)
+	for name := range wantParams {
+		if !seen[name] {
+			t.Errorf("query parameter %q missing from /v1/context (found %v)", name, seen)
 		}
 	}
 
-	// The 400 contract must be declared, since the handler returns one.
+	// --- every status the handler can return must be declared ---
+	//
+	// Keep this list in step with GetContext. It currently returns:
+	//   200 success
+	//   400 invalid or non-finite coordinates
+	//   500 response could not be encoded, or the nearby-events query failed
 	responses, _ := get["responses"].(map[string]any)
-	if _, ok := responses["400"]; !ok {
-		t.Error("/v1/context does not declare a 400 response, but the handler returns one")
+	for _, code := range []string{"200", "400", "500"} {
+		if _, ok := responses[code]; !ok {
+			t.Errorf("/v1/context does not declare a %s response, but the handler returns one", code)
+		}
 	}
 
-	// location_source must be required, or clients may treat it as optional.
+	// --- location_source must be required ---
 	schemas := doc["components"].(map[string]any)["schemas"].(map[string]any)
 	ctxResp, ok := schemas["ContextResponse"].(map[string]any)
 	if !ok {
@@ -97,4 +144,36 @@ func TestEmbeddedOpenAPIDescribesContextContract(t *testing.T) {
 	if !found {
 		t.Errorf("location_source is not in ContextResponse.required (got %v)", required)
 	}
+
+	// The enum must cover every LocationSource constant, or a client switching
+	// on it has an unhandled case.
+	props := ctxResp["properties"].(map[string]any)
+	ls, ok := props["location_source"].(map[string]any)
+	if !ok {
+		t.Fatal("ContextResponse.location_source property missing")
+	}
+	declared := map[string]bool{}
+	for _, v := range ls["enum"].([]any) {
+		if s, ok := v.(string); ok {
+			declared[s] = true
+		}
+	}
+	for _, want := range []LocationSource{
+		LocationSourceExplicit, LocationSourceDevOverride,
+		LocationSourceIP, LocationSourceUnavailable,
+	} {
+		if !declared[string(want)] {
+			t.Errorf("location_source enum omits %q, which the handler can emit", want)
+		}
+	}
+}
+
+func toFloat(v any) (float64, bool) {
+	switch n := v.(type) {
+	case int:
+		return float64(n), true
+	case float64:
+		return n, true
+	}
+	return 0, false
 }
