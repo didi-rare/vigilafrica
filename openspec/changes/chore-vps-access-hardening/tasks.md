@@ -17,11 +17,30 @@ outside the box. Do it first, verify it with a second concurrent session, and do
 > applying them to the host and proving they work. Do not read the deferral as "nothing here is
 > implementable yet", and do not read this note as "the code is already written".
 
-- [ ] 1.1 **Create and verify a separate administrative account before touching anything else.**
+- [x] 1.1 **Create and verify a separate administrative account before touching anything else.**
       [`provision.sh:33-47`](../../../deploy/provision.sh) creates only deploy accounts, so hardening
       SSH or converting deploy access to a forced command with no admin path in **can lock the
       maintainer out of the VPS.** Create an admin user with its own key and sudo rights, then
       prove it by opening a **second concurrent session** while the first stays open.
+
+      ✅ **DONE 2026-08-14.** `vigil-admin` created with its own dedicated ed25519 key (separate from
+      the deploy key) and `sudo` group membership. **Verified the way the task requires:** logged in
+      from a *second* terminal while the original root session stayed open, and `sudo -v` succeeded
+      there. The rescue path is real, not assumed — **this unblocks 1.6.**
+
+      ⚠️ **`passwd <admin>` is not optional.** With no password set the account is locked for
+      password auth and **`sudo` fails**, leaving an "admin" account that cannot administer. This
+      adds no SSH exposure — 1.6 disables password *authentication* separately; the password exists
+      only for `sudo`.
+
+      ⚠️ **Gotcha that cost a cycle:** the first attempt failed with *"No ED25519 host key is known
+      … and you have requested strict checking"*. That is the **host** half failing before
+      authentication is attempted, and says nothing about the account. `StrictHostKeyChecking=yes`
+      **refuses an unknown host rather than enrolling it**, so the pinned `known_hosts` file must be
+      written *first* — the same ordering defect independent review caught in the runbook. The
+      operator instructions in
+      [`staging-production-topology.md`](../../../docs/deployment/staging-production-topology.md)
+      already write the file before connecting; follow them in order.
 - [x] 1.2 **Pin the host key.** Add a `VPS_HOST_KEY` secret per environment and write `known_hosts`
       from it; delete the `ssh-keyscan` lines at
       [`deploy-production.yml:51`](../../../.github/workflows/deploy-production.yml) and
