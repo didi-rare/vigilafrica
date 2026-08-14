@@ -61,6 +61,16 @@ jobs:
           VPS_USER: ${{ secrets.VPS_USER }}
           DEPLOY_TAG: ${{ steps.ref.outputs.tag }}
         run: |
+          # Fixed-command protocol: send a REQUEST, not a shell program. The
+          # deploy key carries restrict,command="/usr/local/bin/vigil-deploy",
+          # which would override any program sent here anyway -- so sending one
+          # would silently do nothing. See deploy/vigil-deploy.
+          #
+          # NB the tag-ancestry check in "Resolve deploy tag" above runs on THIS
+          # runner, so it is a workflow-integrity control, not a key-compromise
+          # one -- anyone holding the key can skip the workflow entirely.
+          # vigil-deploy-run repeats the origin/release ancestry check on the
+          # host, where the key holder cannot skip it.
           ssh -i ~/.ssh/vigilafrica_deploy \
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" \
@@ -69,14 +79,9 @@ jobs:
             -o VerifyHostKeyDNS=no \
             -o CheckHostIP=no \
             -o UpdateHostKeys=no \
-            "${VPS_USER}@${VPS_HOST}" bash -s -- "${DEPLOY_TAG}" <<'REMOTE'
-            set -euo pipefail
-            deploy_tag="$1"
-            cd /opt/vigilafrica/production
-            git fetch --all --tags
-            git checkout --force "refs/tags/${deploy_tag}"
-            APP_VERSION="${deploy_tag}" docker compose -f docker-compose.prod.yml up -d --build
-          REMOTE
+            -o RequestTTY=no \
+            "${VPS_USER}@${VPS_HOST}" \
+            "deploy-production ${DEPLOY_TAG}" < /dev/null
 
       - name: Smoke test production API
         env:

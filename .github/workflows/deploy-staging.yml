@@ -30,6 +30,10 @@ jobs:
           VPS_USER: ${{ secrets.VPS_USER }}
           GITHUB_SHA: ${{ github.sha }}
         run: |
+          # Fixed-command protocol: send a REQUEST, not a shell program. The
+          # deploy key carries restrict,command="/usr/local/bin/vigil-deploy",
+          # which would override any program sent here anyway -- so sending one
+          # would silently do nothing. See deploy/vigil-deploy.
           ssh -i ~/.ssh/vigilafrica_deploy \
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" \
@@ -38,14 +42,9 @@ jobs:
             -o VerifyHostKeyDNS=no \
             -o CheckHostIP=no \
             -o UpdateHostKeys=no \
-            "${VPS_USER}@${VPS_HOST}" "
-            set -euo pipefail
-            cd /opt/vigilafrica/staging
-            git fetch --all --tags
-            git checkout main
-            git pull --ff-only origin main
-            APP_VERSION=${GITHUB_SHA::7} docker compose -f docker-compose.staging.yml up -d --build
-          "
+            -o RequestTTY=no \
+            "${VPS_USER}@${VPS_HOST}" \
+            "deploy-staging ${GITHUB_SHA::7}" < /dev/null
 
       - name: Smoke test staging API
         env:

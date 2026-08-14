@@ -1,0 +1,22 @@
+# Install as /etc/sudoers.d/vigil-deploy, root:root 0440.
+# ALWAYS validate before reloading sshd/sudo:  visudo -cf /etc/sudoers.d/vigil-deploy
+#
+# The deploy account may run exactly one program, as root, without a password.
+# It may pass arguments -- vigil-deploy-run re-validates them and derives every
+# path itself, so no argument names a file, a flag, or a compose target.
+#
+# ⚠️ Deliberately NOT a wildcard. `vigil-deploy-run *` would be equivalent to
+# granting root, because the helper's argv is the entire trust boundary.
+#
+# ⚠️ env_reset and secure_path are what stop the deploy account smuggling
+# behaviour in through the environment -- PATH, LD_PRELOAD, DOCKER_HOST,
+# BASH_ENV. Without them the helper could be made to run an attacker's binary
+# while still "only" being the one permitted program.
+Defaults:deploy     env_reset
+Defaults:deploy     secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Defaults:deploy     !requiretty
+Defaults:deploy     log_output
+Defaults:deploy     logfile="/var/log/sudo-vigil-deploy.log"
+
+deploy ALL=(root) NOPASSWD: /usr/local/sbin/vigil-deploy-run staging *, \
+                            /usr/local/sbin/vigil-deploy-run production *

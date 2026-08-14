@@ -39,9 +39,20 @@ for wf in "${WORKFLOWS[@]}"; do
     fi
   done
 
-  # The whole point of the change: never relearn the key at deploy time.
+  # The whole point of the host-key change: never relearn the key at deploy time.
   if grep -q 'ssh-keyscan' "${wf}"; then
     echo "FAIL ${wf}: ssh-keyscan reintroduced"; fail=1
+  fi
+
+  # Forced-command protocol: send a REQUEST, never a remote shell program.
+  # The deploy key's authorized_keys entry forces /usr/local/bin/vigil-deploy,
+  # so a remote program would be silently ignored -- the deploy would appear to
+  # run and do nothing. Catch that here rather than in production.
+  if grep -qE 'bash -s|<<[[:space:]]*.?REMOTE' "${wf}"; then
+    echo "FAIL ${wf}: sends a remote shell program; the forced command overrides it"; fail=1
+  fi
+  if ! grep -qE '"deploy-(staging|production) ' "${wf}"; then
+    echo "FAIL ${wf}: does not send a vigil-deploy request"; fail=1
   fi
 
   [ "${fail}" -eq 0 ] && echo "ok   ${wf}"

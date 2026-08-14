@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+#
+# Forced command for the deploy SSH key. Installed as:
+#
+#   /usr/local/bin/vigil-deploy      root:root 0755   (deploy CANNOT write it)
+#
+# and referenced from the deploy account's authorized_keys as:
+#
+#   restrict,command="/usr/local/bin/vigil-deploy" ssh-ed25519 AAAA...
+#
+# Runs AS THE DEPLOY USER. Its whole job is to turn "whatever the client asked
+# for" into one of a small number of validated requests, then hand off to the
+# privileged helper. It performs no privileged work itself.
+#
+# Threat model: assume VPS_SSH_KEY has leaked. Before this existed, that gave
+# an attacker an interactive shell as a member of the docker group -- i.e. host
+# root. With it, a leaked key can ask for exactly two things, with arguments
+# matched against strict patterns.
+#
+# ⚠️ Argument parsing happens HERE, unprivileged, before any elevation. The
+# privileged helper re-validates everything anyway, because a control that
+# trusts its caller is not a boundary.
+set -euo pipefail
+
+# Absolute path: never resolve the privileged helper through PATH.
+# The test harness rewrites this line; it is not configurable at runtime.
+SUDO=/usr/bin/sudo
+HELPER=/usr/local/sbin/vigil-deploy-run
+
+# Discard anything the client piped in. Without this, a request could smuggle a
+# script body on stdin for something downstream to execute.
+exec < /dev/null
+
+deny() {
+  printf 'vigil-deploy: refused: %s\n' "$1" >&2
+  # Log the refusal with the peer, so a leaked key shows up as a pattern of
+  # denials rather than silence.
+  logger -t vigil-deploy "REFUSED: $1 | peer=${SSH_CLIENT%% *} | cmd=${SSH_ORIGINAL_COMMAND:-<none>}" 2>/dev/null || true
+  exit 1
+}
+
+cmd="${SSH_ORIGINAL_COMMAND:-}"
+
+# An interactive login attempt arrives with no original command. That is the
+# single most likely thing a stolen key tries first.
+[ -n "${cmd}" ] || deny "this key is restricted to the deploy protocol; no shell"
+
+# Reject shell metacharacters outright rather than trying to quote around them.
+# Nothing downstream uses a shell, but this keeps the accepted input boring and
+# makes the log unambiguous.
+case "${cmd}" in
+  *[\;\&\|\<\>\`\$\(\)\{\}\\\'\"]* | *'
+'* ) deny "command contains shell metacharacters" ;;
+esac
+
+# Split on whitespace WITHOUT a shell: read never evaluates its input.
+read -r verb ref extra <<< "${cmd}" || true
+[ -z "${extra:-}" ] || deny "too many arguments"
+[ -n "${ref:-}" ]   || deny "missing ref argument"
+
+case "${verb}" in
+  deploy-staging)
+    # Staging deploys a commit from main; the workflow sends a short SHA.
+    [[ "${ref}" =~ ^[0-9a-f]{7,40}$ ]] \
+      || deny "staging ref must be a hex commit sha"
+    environment=staging
+    ;;
+  deploy-production)
+    # Production deploys an annotated SemVer tag. The helper additionally
+    # proves the tag is reachable from origin/release, SERVER-SIDE -- the
+    # equivalent check in the workflow runs on the runner and is therefore a
+    # workflow-integrity control, not a key-compromise control.
+    [[ "${ref}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] \
+      || deny "production ref must be a SemVer tag"
+    environment=production
+    ;;
+  *)
+    deny "unknown verb '${verb}'"
+    ;;
+esac
+
+logger -t vigil-deploy "ACCEPTED: ${verb} ${ref} | peer=${SSH_CLIENT%% *}" 2>/dev/null || true
+
+# Fixed argv. No shell, no globbing, no caller-supplied paths or flags.
+exec "${SUDO}" -n "${HELPER}" "${environment}" "${ref}"
