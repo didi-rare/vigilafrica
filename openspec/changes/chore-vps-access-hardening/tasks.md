@@ -9,6 +9,14 @@ outside the box. Do it first, verify it with a second concurrent session, and do
 
 ## 1. Credential path — highest severity, no data risk
 
+> ⚠️ **Implementation vs rollout.** Tasks 1.1 and 1.3–1.6 need the live VPS for **migration and
+> verification**, not for authoring. The forced-command script, sudoers drop-in, split-user
+> provisioning and `sshd_config` hardening do **not exist yet** — none of them are in
+> [`deploy/provision.sh`](../../../deploy/provision.sh) today — but all of them *can be written*
+> into repository-controlled provisioning assets from a workstation. What cannot be done there is
+> applying them to the host and proving they work. Do not read the deferral as "nothing here is
+> implementable yet", and do not read this note as "the code is already written".
+
 - [ ] 1.1 **Create and verify a separate administrative account before touching anything else.**
       [`provision.sh:33-47`](../../../deploy/provision.sh) creates only deploy accounts, so hardening
       SSH or converting deploy access to a forced command with no admin path in **can lock the
@@ -20,6 +28,28 @@ outside the box. Do it first, verify it with a second concurrent session, and do
       [`deploy-staging.yml:20`](../../../.github/workflows/deploy-staging.yml). Verify by pinning a
       deliberately wrong key once and confirming the deploy **fails** rather than warning.
       Independent of everything else — safe to land on its own.
+      **Repo side landed** (deliberately still unticked — see the gate below): both `ssh-keyscan`
+      calls removed; `known_hosts` written and **validated** by the shared
+      [`.github/scripts/write-known-hosts.sh`](../../../.github/scripts/write-known-hosts.sh), which
+      rejects an empty secret, `@cert-authority`/`@revoked` records and wildcard host patterns, and
+      confirms via `ssh-keygen -F` that the pin actually matches `VPS_HOST`. Both `ssh` calls set
+      `StrictHostKeyChecking=yes`, an explicit `UserKnownHostsFile`, **and**
+      `GlobalKnownHostsFile=/dev/null` so the secret is the exclusive trust source. Secrets moved out
+      of `${{ }}` interpolation into `env:`.
+      ⚠️ **Corrected after independent review — the first version's enrollment procedure was
+      unsound.** It told the operator to run `ssh-keyscan` "on the VPS console". `ssh-keyscan` opens
+      a *network* connection and records whatever answers **wherever it is run**, so it cannot
+      authenticate the key and simply repeats the trust-on-first-use step this secret exists to
+      remove. The runbook now derives the pin from `/etc/ssh/ssh_host_ed25519_key.pub` on the
+      filesystem, with a console fingerprint comparison. It also no longer suggests `hostname -f`,
+      which is not reliably equal to `VPS_HOST`.
+      ⚠️ **This stays unticked until the control is real, not merely written.** Required:
+      (a) set `VPS_HOST_KEY` in **both** environments from the filesystem-derived key;
+      (b) pin a deliberately wrong key on staging and confirm the deploy **fails**;
+      (c) restore the correct key and confirm a staging deploy **succeeds**.
+      Until (a), every deploy *and* the `workflow_dispatch` rollback path fail closed at Configure
+      SSH. That is the intended direction, but it is an outage until the secret exists. It does not
+      alter the VPS itself — recovery is to set the secret.
 - [ ] 1.3 **Forced-command deploy protocol — one atomic task.** ⚠️ The first revision split this in
       two and would have broken deployment: it installed
       `restrict,command="/usr/local/bin/vigil-deploy"` in task 1.1 while the script and its argument
@@ -67,6 +97,16 @@ outside the box. Do it first, verify it with a second concurrent session, and do
       so it is no longer an unverified premise — but the *reviewer set* has not been checked, and
       `VPS_SSH_KEY` is a static secret with no expiry. Confirm both, then update
       [`vps.md:130-133`](../../../docs/deployment/vps.md) for tasks 1.1–1.6.
+      **Reviewer set — CONFIRMED 2026-08-14** via `gh api repos/didi-rare/vigilafrica/environments`:
+      `production` carries `required_reviewers` with exactly one reviewer, **`didi-rare`** — the sole
+      maintainer, who also triggers releases. So the gate is a **self-approval confirmation step, not
+      a separation-of-duties boundary**, and it constrains only the workflow path; `VPS_SSH_KEY`
+      reaches the host without touching GitHub. This is now recorded in `vps.md` and **strengthens
+      the case for 1.5** — the host-level account split has to be the boundary, because this is not.
+      Key rotation documented in `vps.md` with the retire-the-old-key step called out, since adding
+      a new key without removing the old one is the usual way rotation silently fails.
+      **Left open deliberately:** the task also requires documenting tasks 1.1–1.6, and 1.1/1.3–1.6
+      are not implemented. Ticking this now would document a host state that does not exist.
 
 ## 2. Move the build off production
 
