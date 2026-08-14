@@ -22,7 +22,7 @@ outside the box. Do it first, verify it with a second concurrent session, and do
       SSH or converting deploy access to a forced command with no admin path in **can lock the
       maintainer out of the VPS.** Create an admin user with its own key and sudo rights, then
       prove it by opening a **second concurrent session** while the first stays open.
-- [ ] 1.2 **Pin the host key.** Add a `VPS_HOST_KEY` secret per environment and write `known_hosts`
+- [x] 1.2 **Pin the host key.** Add a `VPS_HOST_KEY` secret per environment and write `known_hosts`
       from it; delete the `ssh-keyscan` lines at
       [`deploy-production.yml:51`](../../../.github/workflows/deploy-production.yml) and
       [`deploy-staging.yml:20`](../../../.github/workflows/deploy-staging.yml). Verify by pinning a
@@ -43,13 +43,35 @@ outside the box. Do it first, verify it with a second concurrent session, and do
       remove. The runbook now derives the pin from `/etc/ssh/ssh_host_ed25519_key.pub` on the
       filesystem, with a console fingerprint comparison. It also no longer suggests `hostname -f`,
       which is not reliably equal to `VPS_HOST`.
-      ⚠️ **This stays unticked until the control is real, not merely written.** Required:
-      (a) set `VPS_HOST_KEY` in **both** environments from the filesystem-derived key;
-      (b) pin a deliberately wrong key on staging and confirm the deploy **fails**;
-      (c) restore the correct key and confirm a staging deploy **succeeds**.
-      Until (a), every deploy *and* the `workflow_dispatch` rollback path fail closed at Configure
-      SSH. That is the intended direction, but it is an outage until the secret exists. It does not
-      alter the VPS itself — recovery is to set the secret.
+      ✅ **COMPLETE — verified live on staging 2026-08-14, not self-certified.**
+
+      `VPS_HOST_KEY` is set in **both** environments. The value was derived from
+      `/etc/ssh/ssh_host_ed25519_key.pub` on the VPS console and agreed **four independent ways**:
+      the maintainer's laptop `known_hosts`, `ssh-keygen -lf` on the box, recomputation from the
+      transcribed string, and the fingerprint sshd actually presents on port 22 — so the `.pub` is
+      demonstrably not stale.
+
+      Three staging deploys, in an order chosen so the negative test could not be confounded with a
+      wrong `VPS_HOST`:
+
+      | # | Run | Pin | Result |
+      |---|---|---|---|
+      | 1 | [31796783722](https://github.com/didi-rare/vigilafrica/actions/runs/31796783722) | correct | **success** — `Pinned host key verified`, `/health` = `ed3bf23` |
+      | 2 | [31797550080](https://github.com/didi-rare/vigilafrica/actions/runs/31797550080) | **valid but wrong** | **failure, exit 255** |
+      | 3 | [31797616419](https://github.com/didi-rare/vigilafrica/actions/runs/31797616419) | restored | **success** |
+
+      ⚠️ **Run 2 is the one that matters, and it failed in exactly the right place.** The decoy was a
+      *well-formed* ed25519 record for the correct host — so `Configure SSH` **succeeded** (the
+      validator accepted it, as designed) and the refusal came from **OpenSSH itself** at connect
+      time: `REMOTE HOST IDENTIFICATION HAS CHANGED` / `Host key verification failed`, with the smoke
+      test correctly **skipped**. Using a malformed decoy would only have tested our own validator,
+      not host-key verification.
+
+      Also confirmed: a failed deploy is a **no-op**, not an outage — staging stayed healthy on
+      `ed3bf23` throughout run 2, because the connection is refused before anything is executed.
+
+      Run 1 additionally confirms `VPS_HOST` is the IP `178.104.104.122`, which until then was
+      inferred rather than known.
 - [ ] 1.3 **Forced-command deploy protocol — one atomic task.** ⚠️ The first revision split this in
       two and would have broken deployment: it installed
       `restrict,command="/usr/local/bin/vigil-deploy"` in task 1.1 while the script and its argument
