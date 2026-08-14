@@ -23,6 +23,15 @@ cat > "${D}/sudo-stub" <<'STUB'
 # drop the leading -n that vigil-deploy passes
 [ "${1:-}" = "-n" ] && shift
 printf '%s\n' "$*" > "${SUDO_ARGV_FILE}"
+# Record whether stdin still carries the client's data. vigil-deploy must have
+# replaced it with /dev/null, so a read here must hit EOF immediately.
+# ⚠️ Without this the "discards stdin" case was VACUOUS: the stub never read
+# stdin, so deleting `exec < /dev/null` from vigil-deploy still passed 29/29.
+if IFS= read -r -t 1 leaked; then
+  printf '%s\n' "${leaked}" > "${SUDO_STDIN_FILE}"
+else
+  : > "${SUDO_STDIN_FILE}"
+fi
 exit 0
 STUB
 chmod +x "${D}/sudo-stub"
@@ -38,8 +47,8 @@ pass=0; fail=0
 run() {  # run <accept|reject> <desc> <SSH_ORIGINAL_COMMAND> [expected-argv]
   local want="$1" desc="$2" cmd="$3" expect_argv="${4:-}"
   local rc argv
-  export SUDO_ARGV_FILE="${D}/argv"
-  : > "${SUDO_ARGV_FILE}"
+  export SUDO_ARGV_FILE="${D}/argv" SUDO_STDIN_FILE="${D}/stdin"
+  : > "${SUDO_ARGV_FILE}"; : > "${SUDO_STDIN_FILE}"
 
   # Feed stdin deliberately: the script must discard it.
   SSH_ORIGINAL_COMMAND="${cmd}" SSH_CLIENT="203.0.113.7 1234 22" \
@@ -93,6 +102,20 @@ run accept "staging short sha"   "deploy-staging abc1234"                  "/usr
 run accept "staging full sha"    "deploy-staging $(printf 'a%.0s' {1..40})" "/usr/local/sbin/vigil-deploy-run staging $(printf 'a%.0s' {1..40})"
 run accept "production tag"      "deploy-production v1.4.0"                "/usr/local/sbin/vigil-deploy-run production v1.4.0"
 run accept "production prerelease" "deploy-production v1.4.0-rc.1"         "/usr/local/sbin/vigil-deploy-run production v1.4.0-rc.1"
+
+# Stdin must not survive into the privileged helper. `run` always pipes a
+# payload in; assert the helper saw EOF rather than that payload.
+export SUDO_ARGV_FILE="${D}/argv" SUDO_STDIN_FILE="${D}/stdin"
+: > "${SUDO_STDIN_FILE}"
+SSH_ORIGINAL_COMMAND="deploy-staging abc1234" SSH_CLIENT="203.0.113.7 1234 22" \
+  bash "${D}/vigil-deploy" > /dev/null 2>&1 <<< "echo pwned; rm -rf /"
+if [ -s "${SUDO_STDIN_FILE}" ]; then
+  printf '  FAIL %-24s client stdin reached the helper: %s\n' "stdin discarded" "$(head -1 "${SUDO_STDIN_FILE}")"
+  fail=$((fail+1))
+else
+  printf '  ok   %-24s (helper saw EOF)\n' "stdin discarded"
+  pass=$((pass+1))
+fi
 
 # ---- privileged helper: argument re-validation (root check stubbed out) ----
 echo "Privileged helper re-validates its own arguments:"

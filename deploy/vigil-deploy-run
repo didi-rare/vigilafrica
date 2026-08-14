@@ -60,40 +60,74 @@ esac
 # caller-supplied path, so an alternate compose file cannot be requested.
 cd "${workdir}" || die "missing workdir ${workdir}"
 
-# Refuse to run if the tree is writable by anyone but root: that would reopen
-# the Dockerfile-edit path this design exists to close. Checked every run, not
-# just at provisioning time, because ownership can drift.
-owner="$(stat -c '%U' "${workdir}")"
-[ "${owner}" = "root" ] || die "${workdir} is owned by ${owner}, expected root"
-perms="$(stat -c '%a' "${workdir}")"
-case "${perms}" in
-  *[2367]) die "${workdir} is group/world writable (${perms})" ;;
-esac
+# Serialize per environment. Without this, two deploys can interleave their
+# fetch/checkout/build steps and ship a tree from one request with the
+# APP_VERSION of another.
+exec 9> "/run/lock/vigil-deploy-${environment}.lock" 2>/dev/null \
+  || exec 9> "/tmp/vigil-deploy-${environment}.lock"
+flock -w 600 9 || die "another ${environment} deploy is in progress"
 
-git config --global --add safe.directory "${workdir}" 2>/dev/null || true
-git fetch --force --prune origin '+refs/heads/*:refs/remotes/origin/*' '+refs/tags/*:refs/tags/*' \
+# Refuse to run if ANYTHING here is writable by anyone but root: that would
+# reopen the Dockerfile-edit path this design exists to close.
+#
+# ⚠️ Checks the whole tree and the parent chain, not just the top directory.
+# An earlier revision checked only `stat` on ${workdir}, which passed while the
+# Dockerfile inside it was still deploy-owned. Its mode test was also wrong:
+# `case ${perms} in *[2367])` only inspects the LAST digit, so 0775 (group
+# writable) passed.
+check_parents() {
+  local p="$1"
+  while [ "${p}" != "/" ]; do
+    [ "$(stat -c '%U' "${p}")" = "root" ] \
+      || die "${p} is owned by $(stat -c '%U' "${p}"), expected root"
+    [ -z "$(find "${p}" -maxdepth 0 -perm /022)" ] \
+      || die "${p} is group/world writable ($(stat -c '%a' "${p}"))"
+    p="$(dirname "${p}")"
+  done
+}
+check_parents "${workdir}"
+
+unsafe="$(find "${workdir}" \( ! -user root -o -perm /022 -o -type l \) -print -quit 2>/dev/null || true)"
+[ -z "${unsafe}" ] || die "unsafe path in deploy tree: ${unsafe} (must be root-owned, not group/world writable, no symlinks)"
+
+# Scope safe.directory to this invocation. Appending to root's global gitconfig
+# on every deploy grows the file without bound and mutates state outside this
+# tree.
+GIT="git -c safe.directory=${workdir}"
+
+${GIT} fetch --force --prune origin '+refs/heads/*:refs/remotes/origin/*' '+refs/tags/*:refs/tags/*' \
   || die "git fetch failed"
 
 if [ "${environment}" = "production" ]; then
   # SERVER-SIDE release-branch ancestry check. The equivalent check in
   # deploy-production.yml runs on the GitHub runner, so anyone holding the
   # deploy key can simply not run the workflow. This one they cannot skip.
-  git rev-parse -q --verify "refs/tags/${ref}" >/dev/null \
+  ${GIT} rev-parse -q --verify "refs/tags/${ref}" >/dev/null \
     || die "tag ${ref} does not exist"
-  tag_sha="$(git rev-list -n 1 "refs/tags/${ref}")"
-  git merge-base --is-ancestor "${tag_sha}" origin/release \
+  tag_sha="$(${GIT} rev-list -n 1 "refs/tags/${ref}")"
+  ${GIT} merge-base --is-ancestor "${tag_sha}" origin/release \
     || die "tag ${ref} is not reachable from origin/release; refusing to deploy"
-  git checkout --force "refs/tags/${ref}" || die "checkout failed"
+  # ⚠️ Check out the SHA we just validated, not the tag NAME. Tags are mutable;
+  # re-resolving the name here would let a tag moved between the check and the
+  # checkout deploy something that was never validated.
+  target="${tag_sha}"
   app_version="${ref}"
 else
-  git merge-base --is-ancestor "${ref}" origin/main \
+  ${GIT} merge-base --is-ancestor "${ref}" origin/main \
     || die "commit ${ref} is not reachable from origin/main; refusing to deploy"
-  git checkout --force "${ref}" || die "checkout failed"
+  target="${ref}"
   app_version="${ref:0:7}"
 fi
 
-[ -f "${compose}" ] || die "missing ${compose} in ${workdir}"
-[ -f .env ]         || die "missing .env in ${workdir}"
+# Preflight BEFORE mutating the working tree, so a missing manifest cannot
+# leave the checkout on a new ref while the old containers keep running.
+${GIT} cat-file -e "${target}:${compose}" 2>/dev/null \
+  || die "${compose} does not exist at ${target}"
+[ -f .env ] || die "missing .env in ${workdir} (root-owned, 0600)"
+
+${GIT} checkout --force "${target}" || die "checkout failed"
+
+[ -f "${compose}" ] || die "missing ${compose} after checkout"
 
 logger -t vigil-deploy-run "DEPLOY ${environment} ${ref}" 2>/dev/null || true
 

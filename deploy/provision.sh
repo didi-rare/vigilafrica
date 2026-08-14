@@ -6,6 +6,21 @@ DEPLOY_USER="${DEPLOY_USER:-deploy}"
 SSH_PUBLIC_KEY="${SSH_PUBLIC_KEY:-}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# ⚠️ These two LOOK configurable but are not, and a mismatch produces a broken
+# install that reports success: vigil-deploy-run hardcodes APP_ROOT, and the
+# sudoers rules hardcode the `deploy` user name. Fail loudly rather than
+# provision something that cannot deploy.
+if [[ "${APP_ROOT}" != "/opt/vigilafrica" ]]; then
+  echo "APP_ROOT is pinned to /opt/vigilafrica (hardcoded in vigil-deploy-run)." >&2
+  echo "Change it there and in deploy/sudoers.d/* together, or leave it unset." >&2
+  exit 1
+fi
+if [[ "${DEPLOY_USER}" != "deploy" ]]; then
+  echo "DEPLOY_USER is pinned to 'deploy' (hardcoded in deploy/sudoers.d/*)." >&2
+  echo "Change it there too, or leave it unset." >&2
+  exit 1
+fi
+
 if [[ "${EUID}" -ne 0 ]]; then
   echo "Run as root: sudo APP_ROOT=/opt/vigilafrica SSH_PUBLIC_KEY='ssh-ed25519 ...' ./deploy/provision.sh" >&2
   exit 1
@@ -35,14 +50,32 @@ if ! id "${DEPLOY_USER}" >/dev/null 2>&1; then
   useradd --create-home --shell /bin/bash "${DEPLOY_USER}"
 fi
 
-# The deploy account is deliberately NOT in the `docker` group: membership is
-# equivalent to root, so a leaked VPS_SSH_KEY would be host root. It reaches
-# Docker only through the audited forced command below.
-# gpasswd is idempotent and also removes the membership on an existing host.
-if id -nG "${DEPLOY_USER}" | tr ' ' '\n' | grep -qx docker; then
-  gpasswd -d "${DEPLOY_USER}" docker
-  echo "Removed ${DEPLOY_USER} from the docker group."
+# ⚠️ Docker-group removal is deliberately NOT here. It is the last cutover
+# step, at the end of this script. Removing it before the helper, sudoers,
+# forced key and ownership migration are all in place means any later failure
+# leaves the OLD deploy path unable to reach Docker and the NEW one not yet
+# working -- i.e. no way to deploy at all.
+#
+# Preflight instead: fail before mutating anything if the inputs are wrong.
+if [[ -z "${SSH_PUBLIC_KEY}" ]]; then
+  echo "SSH_PUBLIC_KEY is required: without it this script would leave the deploy" >&2
+  echo "account's existing unrestricted key in place and report success." >&2
+  exit 1
 fi
+if [[ "$(printf '%s' "${SSH_PUBLIC_KEY}" | grep -c '')" -ne 1 ]]; then
+  echo "SSH_PUBLIC_KEY must be exactly one line; a pasted newline would add a" >&2
+  echo "second, unrestricted authorized_keys entry." >&2
+  exit 1
+fi
+if ! printf '%s\n' "${SSH_PUBLIC_KEY}" | ssh-keygen -l -f /dev/stdin >/dev/null 2>&1; then
+  echo "SSH_PUBLIC_KEY is not a valid OpenSSH public key" >&2
+  exit 1
+fi
+for f in vigil-deploy vigil-deploy-run sudoers.d/vigil-deploy sudoers.d/vigil-deploy.pre-1.9.10; do
+  [[ -f "${SCRIPT_DIR}/${f}" ]] || { echo "missing ${SCRIPT_DIR}/${f}" >&2; exit 1; }
+done
+command -v flock  >/dev/null || { echo "flock is required by vigil-deploy-run" >&2; exit 1; }
+command -v visudo >/dev/null || { echo "visudo is required" >&2; exit 1; }
 
 # --- forced-command deploy protocol (chore-vps-access-hardening 1.3 / 1.4) ---
 #
@@ -57,6 +90,9 @@ install -m 0700 -o root -g root "${SCRIPT_DIR}/vigil-deploy-run" /usr/local/sbin
 # confusing. Pick the form this host can actually enforce.
 SUDO_VER="$(sudo -V 2>/dev/null | sed -n '1s/.*version \([0-9.]*\).*/\1/p')"
 SUDOERS_SRC="${SCRIPT_DIR}/sudoers.d/vigil-deploy"
+# Refuse to guess. An unreadable version must not silently select the regex
+# rule, which on old sudo parses but never matches -- every deploy would fail.
+[[ -n "${SUDO_VER}" ]] || { echo "cannot determine sudo version; refusing to guess" >&2; exit 1; }
 if [[ -n "${SUDO_VER}" ]] &&
    [[ "$(printf '%s\n1.9.10\n' "${SUDO_VER}" | sort -V | head -1)" != "1.9.10" ]] &&
    [[ "${SUDO_VER}" != "1.9.10" ]]; then
@@ -76,32 +112,63 @@ if ! visudo -cf "${TMP_SUDOERS}"; then
   echo "sudoers file rejected by visudo; refusing to install it" >&2
   exit 1
 fi
-install -m 0440 -o root -g root "${TMP_SUDOERS}" /etc/sudoers.d/vigil-deploy
+# Atomic same-filesystem rename, so there is never a window where
+# /etc/sudoers.d/vigil-deploy is half-written -- sudo reads the directory
+# continuously, and a truncated file there can break sudo for everyone,
+# including the vigil-admin rescue account.
+install -m 0440 -o root -g root "${TMP_SUDOERS}" /etc/sudoers.d/.vigil-deploy.new
+mv -f /etc/sudoers.d/.vigil-deploy.new /etc/sudoers.d/vigil-deploy
 rm -f "${TMP_SUDOERS}"
+visudo -c >/dev/null || { echo "FATAL: /etc/sudoers is now invalid" >&2; exit 1; }
 
-if [[ -n "${SSH_PUBLIC_KEY}" ]]; then
-  install -d -m 700 -o "${DEPLOY_USER}" -g "${DEPLOY_USER}" "/home/${DEPLOY_USER}/.ssh"
-  # `restrict` disables port/agent/X11 forwarding, PTY allocation and user rc;
-  # `command=` forces every session through vigil-deploy regardless of what the
-  # client asks to run.
-  FORCED="restrict,command=\"/usr/local/bin/vigil-deploy\" ${SSH_PUBLIC_KEY}"
-  printf '%s\n' "${FORCED}" > "/home/${DEPLOY_USER}/.ssh/authorized_keys"
-  chown "${DEPLOY_USER}:${DEPLOY_USER}" "/home/${DEPLOY_USER}/.ssh/authorized_keys"
-  chmod 600 "/home/${DEPLOY_USER}/.ssh/authorized_keys"
-fi
+# `restrict` disables port/agent/X11/tunnel forwarding, PTY allocation and
+# ~/.ssh/rc; `command=` forces every session -- including sftp and scp, which
+# arrive as subsystem/exec requests -- through vigil-deploy.
+#
+# ⚠️ ROOT-owned and NOT writable by deploy. If the deploy account owns its own
+# authorized_keys it can simply delete the forced command, and the whole
+# boundary lasts only until someone thinks to do that.
+install -d -m 0755 -o root -g root "/home/${DEPLOY_USER}/.ssh"
+FORCED="restrict,command=\"/usr/local/bin/vigil-deploy\" ${SSH_PUBLIC_KEY}"
+printf '%s\n' "${FORCED}" > "/home/${DEPLOY_USER}/.ssh/authorized_keys.new"
+chown root:root "/home/${DEPLOY_USER}/.ssh/authorized_keys.new"
+chmod 0644 "/home/${DEPLOY_USER}/.ssh/authorized_keys.new"
+mv -f "/home/${DEPLOY_USER}/.ssh/authorized_keys.new" \
+      "/home/${DEPLOY_USER}/.ssh/authorized_keys"
+echo "Installed forced-command authorized_keys (root-owned, 1 key)."
 
-# ⚠️ ROOT-owned, and the deploy user must not be able to write here.
+# ⚠️ ROOT-owned, and the deploy user must not be able to write ANYTHING here.
 #
 # The compose files build the API from a Dockerfile inside this tree. If the
 # deploy user could write it, running compose as root would let them edit that
 # Dockerfile and execute arbitrary code as root -- so root-owning only the
 # compose file would be theatre. vigil-deploy-run does the git work itself and
 # refuses to run if this ownership has drifted.
-install -d -m 0755 -o root -g root "${APP_ROOT}/staging" "${APP_ROOT}/production"
+#
+# ⚠️ ORDER MATTERS, and getting it wrong made this a silent no-op.
+# An earlier revision ran `install -d -o root` first and then re-owned only
+# `if` the directory was not already root. `install -d` flips the TOP directory
+# immediately, so the test always saw root and the recursive chown never ran --
+# on a host that already had a deploy-owned tree, the Dockerfile and .env
+# stayed deploy-writable while the directory *looked* migrated. Verified: the
+# deploy account could still append `RUN id` to the Dockerfile that root builds.
+# Re-own unconditionally and recursively, BEFORE creating anything.
+install -d -m 0755 -o root -g root "${APP_ROOT}"
 for d in "${APP_ROOT}/staging" "${APP_ROOT}/production"; do
-  if [[ -e "${d}" ]] && [[ "$(stat -c '%U' "${d}")" != "root" ]]; then
+  if [[ -e "${d}" ]]; then
     chown -R root:root "${d}"
-    echo "Re-owned ${d} to root (was deploy-writable)."
+    # Strip group/other write from everything, not just the top directory.
+    chmod -R go-w "${d}"
+    echo "Re-owned ${d} to root:root and removed group/other write."
+  fi
+  install -d -m 0755 -o root -g root "${d}"
+done
+
+# Prove the migration actually took, rather than assuming it did.
+for d in "${APP_ROOT}/staging" "${APP_ROOT}/production"; do
+  if bad="$(find "${d}" \( ! -user root -o -perm /022 \) -print -quit 2>/dev/null)" && [[ -n "${bad}" ]]; then
+    echo "FATAL: ${bad} is not root-owned or is group/world writable after migration" >&2
+    exit 1
   fi
 done
 
@@ -114,6 +181,21 @@ systemctl enable --now docker
 systemctl enable --now caddy
 systemctl enable --now fail2ban
 dpkg-reconfigure -f noninteractive unattended-upgrades
+
+# ---------------------------------------------------------------------------
+# FINAL CUTOVER STEP. Everything above must have succeeded first.
+#
+# Membership of `docker` is equivalent to root, so leaving it would make the
+# forced command pointless. But removing it is the one irreversible step for
+# the OLD deploy path, so it goes last: if anything above failed, the script
+# has already exited and the previous deploy mechanism still works.
+# ---------------------------------------------------------------------------
+if id -nG "${DEPLOY_USER}" | tr ' ' '\n' | grep -qx docker; then
+  gpasswd -d "${DEPLOY_USER}" docker
+  echo "CUTOVER: removed ${DEPLOY_USER} from the docker group."
+else
+  echo "${DEPLOY_USER} is not in the docker group (already cut over)."
+fi
 
 echo "Provisioning complete. Copy env files to:"
 echo "  ${APP_ROOT}/staging/.env"
