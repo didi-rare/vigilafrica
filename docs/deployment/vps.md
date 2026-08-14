@@ -139,24 +139,41 @@ Both deploy workflows write `~/.ssh/known_hosts` from this secret and connect wi
 falling back — the workflows previously ran `ssh-keyscan` on every deploy, which trusts whatever
 answers on port 22 and therefore cannot detect the host substitution it appears to guard against.
 
-Generate the value **on the VPS console** — via the provider's web console or an already-trusted
-session, never over an unverified SSH connection, which would just re-learn a key you cannot vouch
-for:
+Read the key **from the VPS filesystem**, over the provider's web console or an already-trusted
+session. ⚠️ **Do not use `ssh-keyscan` for this, even on the VPS itself.** `ssh-keyscan` opens a
+network connection and prints whatever answers; it cannot authenticate the result no matter where
+it runs, so using it to *create* the pin just re-does the trust-on-first-use step this secret
+exists to eliminate. Read the configured public key file directly instead:
 
 ```bash
-ssh-keyscan -t ed25519 "$(hostname -f)"   # run ON the VPS; copy the output line verbatim
+# Run ON the VPS, via console or an already-trusted session.
+cat /etc/ssh/ssh_host_ed25519_key.pub        # -> "ssh-ed25519 AAAA... root@host"
+ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub   # fingerprint, to compare at the console
 ```
 
-The secret holds one or more full `known_hosts` lines, including the leading hostname:
+Take the **first two fields only** (`ssh-ed25519 AAAA...`, dropping the trailing comment) and
+prepend the hostname the workflow actually connects to, i.e. the exact value of `VPS_HOST`:
 
 ```
 vps.example.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA...
 ```
 
-The hostname in the line **must match the value of `VPS_HOST`** exactly — `known_hosts` matches on
-the string SSH was asked to connect to, so an IP in the secret will not match a DNS name in
-`VPS_HOST` (or vice versa). If SSH connects on a non-default port, the entry must be bracketed:
-`[vps.example.com]:2222 ssh-ed25519 AAAA...`.
+Confirm the fingerprint you printed at the console matches the one SSH reports on first contact
+before trusting it anywhere else.
+
+The hostname in the line **must match `VPS_HOST`** exactly — `known_hosts` matches on the string SSH
+was asked to connect to, so an IP in the secret will not match a DNS name in `VPS_HOST` (or vice
+versa). `hostname -f` on the VPS is **not** reliably that string; use `VPS_HOST` itself. The
+workflows verify this for you: they call `ssh-keygen -F "$VPS_HOST"` and fail if the pinned file
+contains no entry for that exact host.
+
+⚠️ **The workflows connect on the default port 22 only.** `known_hosts` syntax for a non-default
+port is `[vps.example.com]:2222 ssh-ed25519 AAAA...`, but neither workflow passes `-p`/`Port`, so a
+non-default port needs a workflow change (a `VPS_PORT` input threaded into both `ssh` calls and into
+the `ssh-keygen -F` lookup) — it is not configurable by the secret alone.
+
+The workflows also reject `@cert-authority` / `@revoked` records and wildcard host patterns: both
+broaden trust beyond the exact host this pin is meant to fix.
 
 Verify the pin is actually load-bearing by setting `VPS_HOST_KEY` on **staging** to a deliberately
 wrong key once and confirming the deploy **fails** with a host-key mismatch instead of warning and
@@ -179,10 +196,17 @@ alerts when it ages. Rotate it on a fixed schedule and immediately on any suspec
    must fail.
 
 ⚠️ Scope of the `production` required-reviewer gate: the rule exists, but the reviewer set is a
-single account (`didi-rare`) which is also the account that triggers releases. It is a deliberate
-confirmation step, **not** a separation-of-duties boundary, and it constrains only the *workflow*
-path — anyone holding `VPS_SSH_KEY` reaches the host without touching GitHub at all. The host-level
-boundary is the split deploy account, not this gate.
+single account (`didi-rare`) which is also the account that triggers releases, and
+`prevent_self_review` is `false`. It is a deliberate confirmation step, **not** a
+separation-of-duties boundary, and it constrains only the *workflow* path — anyone holding
+`VPS_SSH_KEY` reaches the host without touching GitHub at all.
+
+🚨 **There is no host-level boundary between staging and production today.** A single `deploy`
+account owns both environment directories and is in the `docker` group
+([`provision.sh:33-47`](../../deploy/provision.sh)), so one leaked `VPS_SSH_KEY` is root-equivalent
+on the box and reaches **both** environments. Nothing in this document should be read as saying
+production is isolated at the host level — it is not. Establishing that boundary is task 1.5
+(split the deploy account) of `chore-vps-access-hardening`, which is **not yet implemented**.
 
 ## Operational Checks
 

@@ -47,21 +47,13 @@ jobs:
         env:
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
           VPS_HOST_KEY: ${{ secrets.VPS_HOST_KEY }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
         run: |
           set -euo pipefail
           install -m 700 -d ~/.ssh
           printf '%s\n' "${VPS_SSH_KEY}" > ~/.ssh/vigilafrica_deploy
           chmod 600 ~/.ssh/vigilafrica_deploy
-          # Pin the host key from a secret. Never learn it at deploy time:
-          # ssh-keyscan trusts whatever answers, so it cannot detect the
-          # substitution it appears to protect against.
-          if [ -z "${VPS_HOST_KEY}" ]; then
-            echo "VPS_HOST_KEY is unset; refusing to deploy without a pinned host key." >&2
-            echo "Generate it on the VPS console (not over SSH) — see docs/deployment/vps.md." >&2
-            exit 1
-          fi
-          printf '%s\n' "${VPS_HOST_KEY}" > ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/known_hosts
+          bash "${GITHUB_WORKSPACE}/.github/scripts/write-known-hosts.sh"
 
       - name: Deploy API stack
         env:
@@ -72,6 +64,7 @@ jobs:
           ssh -i ~/.ssh/vigilafrica_deploy \
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" \
+            -o GlobalKnownHostsFile=/dev/null \
             "${VPS_USER}@${VPS_HOST}" bash -s -- "${DEPLOY_TAG}" <<'REMOTE'
             set -euo pipefail
             deploy_tag="$1"

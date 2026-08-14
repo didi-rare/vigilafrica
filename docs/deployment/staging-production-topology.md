@@ -64,12 +64,23 @@ The same dashboard-only constraint applies to `VITE_ENV`: it must be set per pro
 
 ## Operator Runbook
 
-Operator commands for inspecting and probing a deployed environment. Replace `staging` with `production` for the prod stack. SSH access requires that your key is on the VPS and you are listed in the relevant GitHub Environment reviewers.
+Operator commands for inspecting and probing a deployed environment. Replace `staging` with `production` for the prod stack.
+
+⚠️ **SSH access is governed solely by `authorized_keys` on the VPS.** GitHub Environment reviewers
+gate *workflow jobs and their secrets* — they place no restriction whatsoever on direct SSH. Anyone
+whose key is on the box gets in without GitHub's involvement, and today a single `deploy` account
+reaches **both** environments (see `chore-vps-access-hardening` task 1.5).
 
 ### SSH entry
 
+Verify the host key rather than accepting it on first use — the same pin the deploy workflows use
+(`VPS_HOST_KEY`, see [vps.md](vps.md)):
+
 ```bash
-ssh "$VPS_USER@$VPS_HOST"
+# One-off: record the key you verified at the provider console.
+ssh -o StrictHostKeyChecking=yes \
+    -o UserKnownHostsFile=~/.ssh/known_hosts_vigilafrica \
+    "$VPS_USER@$VPS_HOST"
 ```
 
 ### Tail all logs (live)
