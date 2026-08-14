@@ -66,20 +66,29 @@ The same dashboard-only constraint applies to `VITE_ENV`: it must be set per pro
 
 Operator commands for inspecting and probing a deployed environment. Replace `staging` with `production` for the prod stack.
 
-⚠️ **SSH access is governed solely by `authorized_keys` on the VPS.** GitHub Environment reviewers
-gate *workflow jobs and their secrets* — they place no restriction whatsoever on direct SSH. Anyone
-whose key is on the box gets in without GitHub's involvement, and today a single `deploy` account
-reaches **both** environments (see `chore-vps-access-hardening` task 1.5).
+⚠️ **GitHub Environment reviewers do not gate direct SSH.** They gate *workflow jobs and their
+secrets* only. Direct access is decided on the host — by `authorized_keys`, `sshd_config`, account
+state and the other authentication settings — with no involvement from GitHub. Today a single
+`deploy` account reaches **both** environments (see `chore-vps-access-hardening` task 1.5).
 
 ### SSH entry
 
-Verify the host key rather than accepting it on first use — the same pin the deploy workflows use
-(`VPS_HOST_KEY`, see [vps.md](vps.md)):
+Verify the host key rather than accepting it on first use — the same value the deploy workflows pin
+via `VPS_HOST_KEY` (see [vps.md](vps.md)).
+
+`StrictHostKeyChecking=yes` **refuses** an unknown host rather than enrolling it, so the file has to
+be written first — connecting with an empty known-hosts file just fails:
 
 ```bash
-# One-off: record the key you verified at the provider console.
+# 1. Write the line you verified at the provider console. Do this once.
+install -m 700 -d ~/.ssh
+printf '%s ssh-ed25519 AAAA...\n' "$VPS_HOST" > ~/.ssh/known_hosts_vigilafrica
+chmod 600 ~/.ssh/known_hosts_vigilafrica
+
+# 2. Then connect with strict checking against it.
 ssh -o StrictHostKeyChecking=yes \
     -o UserKnownHostsFile=~/.ssh/known_hosts_vigilafrica \
+    -o GlobalKnownHostsFile=/dev/null \
     "$VPS_USER@$VPS_HOST"
 ```
 

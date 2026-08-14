@@ -10,10 +10,12 @@ outside the box. Do it first, verify it with a second concurrent session, and do
 ## 1. Credential path — highest severity, no data risk
 
 > ⚠️ **Implementation vs rollout.** Tasks 1.1 and 1.3–1.6 need the live VPS for **migration and
-> verification**, not for authoring. The scripts, sudoers drop-ins, split-user provisioning and
-> `sshd_config` changes all live in [`deploy/provision.sh`](../../../deploy/provision.sh) and are
-> writable from a workstation; what cannot be done there is applying them and proving they work.
-> Do not read the deferral as "nothing here is implementable yet."
+> verification**, not for authoring. The forced-command script, sudoers drop-in, split-user
+> provisioning and `sshd_config` hardening do **not exist yet** — none of them are in
+> [`deploy/provision.sh`](../../../deploy/provision.sh) today — but all of them *can be written*
+> into repository-controlled provisioning assets from a workstation. What cannot be done there is
+> applying them to the host and proving they work. Do not read the deferral as "nothing here is
+> implementable yet", and do not read this note as "the code is already written".
 
 - [ ] 1.1 **Create and verify a separate administrative account before touching anything else.**
       [`provision.sh:33-47`](../../../deploy/provision.sh) creates only deploy accounts, so hardening

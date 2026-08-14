@@ -65,6 +65,10 @@ jobs:
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" \
             -o GlobalKnownHostsFile=/dev/null \
+            -o KnownHostsCommand=none \
+            -o VerifyHostKeyDNS=no \
+            -o CheckHostIP=no \
+            -o UpdateHostKeys=no \
             "${VPS_USER}@${VPS_HOST}" bash -s -- "${DEPLOY_TAG}" <<'REMOTE'
             set -euo pipefail
             deploy_tag="$1"

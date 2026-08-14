@@ -82,6 +82,14 @@ jobs:
       - name: Verify Container Image Pins
         run: node scripts/check-image-pins.js
 
+      - name: Verify Deploy Host-Key Pinning
+        # Guards the known_hosts validation the deploy workflows depend on.
+        # Without this the mechanism can regress silently while CI stays green.
+        run: |
+          bash -n .github/scripts/write-known-hosts.sh
+          bash -n .github/scripts/test-write-known-hosts.sh
+          bash .github/scripts/test-write-known-hosts.sh
+
       - name: Run Database Integration Tests
         run: |
           cd api

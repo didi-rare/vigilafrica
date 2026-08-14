@@ -140,16 +140,33 @@ falling back — the workflows previously ran `ssh-keyscan` on every deploy, whi
 answers on port 22 and therefore cannot detect the host substitution it appears to guard against.
 
 Read the key **from the VPS filesystem**, over the provider's web console or an already-trusted
-session. ⚠️ **Do not use `ssh-keyscan` for this, even on the VPS itself.** `ssh-keyscan` opens a
-network connection and prints whatever answers; it cannot authenticate the result no matter where
-it runs, so using it to *create* the pin just re-does the trust-on-first-use step this secret
-exists to eliminate. Read the configured public key file directly instead:
+session.
+
+⚠️ **`ssh-keyscan` must never be the authority for this value.** It opens a network connection and
+prints whatever answers, so its output is only as trustworthy as the network at that moment. It is
+not forbidden outright — comparing its output against a fingerprint you verified independently is a
+legitimate cross-check — but on its own, *including run on the VPS itself*, it cannot authenticate
+anything, and using it to create the pin just repeats the trust-on-first-use step this secret exists
+to eliminate.
+
+First confirm which key sshd actually offers. A host can have several configured host keys, and the
+`.pub` file sitting next to a private key is a convenience copy that may be stale or unused:
 
 ```bash
-# Run ON the VPS, via console or an already-trusted session.
-cat /etc/ssh/ssh_host_ed25519_key.pub        # -> "ssh-ed25519 AAAA... root@host"
-ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub   # fingerprint, to compare at the console
+# Run ON the VPS. Lists the host keys sshd is really configured with.
+sudo sshd -T | grep -i '^hostkey'
 ```
+
+Then read the public half of the key that list names — `/etc/ssh/ssh_host_ed25519_key` on a default
+Debian/Ubuntu install:
+
+```bash
+cat /etc/ssh/ssh_host_ed25519_key.pub               # -> "ssh-ed25519 AAAA... root@host"
+ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub    # fingerprint, to compare at the console
+```
+
+If `sshd -T` names a path whose `.pub` is missing, regenerate it from the private key with
+`ssh-keygen -y -f /etc/ssh/ssh_host_ed25519_key`.
 
 Take the **first two fields only** (`ssh-ed25519 AAAA...`, dropping the trailing comment) and
 prepend the hostname the workflow actually connects to, i.e. the exact value of `VPS_HOST`:
@@ -172,8 +189,10 @@ port is `[vps.example.com]:2222 ssh-ed25519 AAAA...`, but neither workflow passe
 non-default port needs a workflow change (a `VPS_PORT` input threaded into both `ssh` calls and into
 the `ssh-keygen -F` lookup) — it is not configurable by the secret alone.
 
-The workflows also reject `@cert-authority` / `@revoked` records and wildcard host patterns: both
-broaden trust beyond the exact host this pin is meant to fix.
+The workflows also reject wildcard host patterns and `@cert-authority` records — both trust more
+than the one host this pin is meant to fix — and `@revoked` records, which do the *opposite*
+(they refuse a key) and so cannot serve as the pin either. All three are configuration errors in
+this secret, and each is rejected with its own message so the cause is obvious.
 
 Verify the pin is actually load-bearing by setting `VPS_HOST_KEY` on **staging** to a deliberately
 wrong key once and confirming the deploy **fails** with a host-key mismatch instead of warning and
