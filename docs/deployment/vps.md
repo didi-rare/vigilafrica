@@ -129,8 +129,60 @@ Configure GitHub Environments:
 
 | Environment | Required secrets | Protection |
 |---|---|---|
-| `staging` | `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY` | none |
-| `production` | `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY` | required reviewer |
+| `staging` | `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`, `VPS_HOST_KEY` | none |
+| `production` | `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`, `VPS_HOST_KEY` | required reviewer |
+
+### Host-key pinning (`VPS_HOST_KEY`)
+
+Both deploy workflows write `~/.ssh/known_hosts` from this secret and connect with
+`StrictHostKeyChecking=yes`. **A missing or empty `VPS_HOST_KEY` fails the deploy** rather than
+falling back — the workflows previously ran `ssh-keyscan` on every deploy, which trusts whatever
+answers on port 22 and therefore cannot detect the host substitution it appears to guard against.
+
+Generate the value **on the VPS console** — via the provider's web console or an already-trusted
+session, never over an unverified SSH connection, which would just re-learn a key you cannot vouch
+for:
+
+```bash
+ssh-keyscan -t ed25519 "$(hostname -f)"   # run ON the VPS; copy the output line verbatim
+```
+
+The secret holds one or more full `known_hosts` lines, including the leading hostname:
+
+```
+vps.example.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA...
+```
+
+The hostname in the line **must match the value of `VPS_HOST`** exactly — `known_hosts` matches on
+the string SSH was asked to connect to, so an IP in the secret will not match a DNS name in
+`VPS_HOST` (or vice versa). If SSH connects on a non-default port, the entry must be bracketed:
+`[vps.example.com]:2222 ssh-ed25519 AAAA...`.
+
+Verify the pin is actually load-bearing by setting `VPS_HOST_KEY` on **staging** to a deliberately
+wrong key once and confirming the deploy **fails** with a host-key mismatch instead of warning and
+continuing. A control that has never been observed failing has not been tested.
+
+Rotate `VPS_HOST_KEY` whenever the VPS is rebuilt, restored from a snapshot, or its SSH host keys
+are regenerated — otherwise every deploy fails closed until it is updated.
+
+### Deploy-credential rotation
+
+`VPS_SSH_KEY` is a static secret with **no expiry**; nothing rotates it automatically and nothing
+alerts when it ages. Rotate it on a fixed schedule and immediately on any suspected exposure:
+
+1. Generate a new keypair (`ssh-keygen -t ed25519 -C 'vigilafrica-deploy-<yyyy-mm>'`).
+2. Append the new public key to the deploy account's `authorized_keys`.
+3. Update `VPS_SSH_KEY` in **both** environments and run a staging deploy to confirm it works.
+4. **Remove the old public key from `authorized_keys`** — this step is the rotation. Adding a new
+   key without removing the old one leaves the original credential valid.
+5. Confirm the retired key is refused: `ssh -i old_key -o IdentitiesOnly=yes "$VPS_USER@$VPS_HOST"`
+   must fail.
+
+⚠️ Scope of the `production` required-reviewer gate: the rule exists, but the reviewer set is a
+single account (`didi-rare`) which is also the account that triggers releases. It is a deliberate
+confirmation step, **not** a separation-of-duties boundary, and it constrains only the *workflow*
+path — anyone holding `VPS_SSH_KEY` reaches the host without touching GitHub at all. The host-level
+boundary is the split deploy account, not this gate.
 
 ## Operational Checks
 
