@@ -64,12 +64,39 @@ The same dashboard-only constraint applies to `VITE_ENV`: it must be set per pro
 
 ## Operator Runbook
 
-Operator commands for inspecting and probing a deployed environment. Replace `staging` with `production` for the prod stack. SSH access requires that your key is on the VPS and you are listed in the relevant GitHub Environment reviewers.
+Operator commands for inspecting and probing a deployed environment. Replace `staging` with `production` for the prod stack.
+
+⚠️ **GitHub Environment reviewers do not gate direct SSH.** They gate *workflow jobs and their
+secrets* only. Direct access is decided on the host — by `authorized_keys`, `sshd_config`, account
+state and the other authentication settings — with no involvement from GitHub. Today a single
+`deploy` account reaches **both** environments (see `chore-vps-access-hardening` task 1.5).
 
 ### SSH entry
 
+Verify the host key rather than accepting it on first use — the same value the deploy workflows pin
+via `VPS_HOST_KEY` (see [vps.md](vps.md)).
+
+`StrictHostKeyChecking=yes` **refuses** an unknown host rather than enrolling it, so the file has to
+be written first — connecting with an empty known-hosts file just fails:
+
 ```bash
-ssh "$VPS_USER@$VPS_HOST"
+# 1. Write the line you verified at the provider console. Do this once.
+install -m 700 -d ~/.ssh
+printf '%s ssh-ed25519 AAAA...\n' "$VPS_HOST" > ~/.ssh/known_hosts_vigilafrica
+chmod 600 ~/.ssh/known_hosts_vigilafrica
+
+# 2. Then connect with strict checking against it. The extra options close the
+#    other trust sources -- without them a configured KnownHostsCommand or a
+#    DNS SSHFP record can still supply a key, so the file you just wrote would
+#    not actually be the only thing trusted. Same set the deploy workflows use.
+ssh -o StrictHostKeyChecking=yes \
+    -o UserKnownHostsFile=~/.ssh/known_hosts_vigilafrica \
+    -o GlobalKnownHostsFile=/dev/null \
+    -o KnownHostsCommand=none \
+    -o VerifyHostKeyDNS=no \
+    -o CheckHostIP=no \
+    -o UpdateHostKeys=no \
+    "$VPS_USER@$VPS_HOST"
 ```
 
 ### Tail all logs (live)

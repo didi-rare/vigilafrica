@@ -15,7 +15,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
-          go-version: '1.26.5'        # Satisfies api/go.mod (go 1.26); pinned to the patch that fixes GO-2026-5856 (crypto/tls, 2026-07) — see ADR-008
+          go-version: '1.26.6'        # Satisfies api/go.mod (go 1.26); pinned to the patch that fixes 7 stdlib advisories reachable from our code (GO-2026-5026/5972/6088/6089/6090/6091/6218, 2026-08) — see ADR-008
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
@@ -81,6 +81,17 @@ jobs:
 
       - name: Verify Container Image Pins
         run: node scripts/check-image-pins.js
+
+      - name: Verify Deploy Host-Key Pinning
+        # Two separate things, both required:
+        #   - the validator behaves (test suite)
+        #   - the workflows still CALL it, with the trust-closing options
+        # The second matters because a perfect validator that nothing invokes
+        # is not a control, and the suite alone would stay green either way.
+        run: |
+          for s in .github/scripts/*.sh; do bash -n "$s"; done
+          bash .github/scripts/test-write-known-hosts.sh
+          bash .github/scripts/check-deploy-wiring.sh
 
       - name: Run Database Integration Tests
         run: |

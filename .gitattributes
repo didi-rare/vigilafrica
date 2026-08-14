@@ -1,0 +1,5 @@
+# Shell scripts must be checked out with LF regardless of platform. The deploy
+# workflows execute .github/scripts/*.sh on ubuntu-latest, and a CRLF checkout
+# fails there with an opaque `$'\r': command not found`. This repository is
+# maintained from Windows, so the guard is not theoretical.
+*.sh text eol=lf

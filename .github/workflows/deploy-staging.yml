@@ -13,11 +13,16 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
       - name: Configure SSH
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_HOST_KEY: ${{ secrets.VPS_HOST_KEY }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
         run: |
+          set -euo pipefail
           install -m 700 -d ~/.ssh
-          printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/vigilafrica_deploy
+          printf '%s\n' "${VPS_SSH_KEY}" > ~/.ssh/vigilafrica_deploy
           chmod 600 ~/.ssh/vigilafrica_deploy
-          ssh-keyscan -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
+          bash "${GITHUB_WORKSPACE}/.github/scripts/write-known-hosts.sh"
 
       - name: Deploy API stack
         env:
@@ -25,7 +30,15 @@ jobs:
           VPS_USER: ${{ secrets.VPS_USER }}
           GITHUB_SHA: ${{ github.sha }}
         run: |
-          ssh -i ~/.ssh/vigilafrica_deploy "${VPS_USER}@${VPS_HOST}" "
+          ssh -i ~/.ssh/vigilafrica_deploy \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" \
+            -o GlobalKnownHostsFile=/dev/null \
+            -o KnownHostsCommand=none \
+            -o VerifyHostKeyDNS=no \
+            -o CheckHostIP=no \
+            -o UpdateHostKeys=no \
+            "${VPS_USER}@${VPS_HOST}" "
             set -euo pipefail
             cd /opt/vigilafrica/staging
             git fetch --all --tags
