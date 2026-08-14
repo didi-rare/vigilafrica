@@ -25,7 +25,11 @@ comment and stayed invisible for versions.
 
 ### 1. Every operator command targets the wrong Compose file
 
-The runbook uses `/opt/vigilafrica/staging/docker-compose.yml` at lines 98, 104, 105, 106 and 112.
+Sections **"Tail all logs (live)"**, **"Per-service logs"** and **"Container status"** all use
+`/opt/vigilafrica/staging/docker-compose.yml` — five commands, at lines 78, 84, 85, 86 and 92 on
+`development` as of 2026-08-14. (Cited by section as well as line because
+`chore-vps-access-hardening` edits the same file and shifts the numbering.)
+
 That is the **development** Compose file. The staging stack is deployed from
 `docker-compose.staging.yml` (see `deploy-staging.yml`), and production from
 `docker-compose.prod.yml`.
@@ -40,12 +44,19 @@ Verified service names:
 
 So the documented commands fail in three distinct ways:
 
-- `logs db` — **there is no `db` service in any file** (dev calls it `postgres`)
-- `logs caddy` — **there is no `caddy` service in any file** (see item 2)
-- `logs api` — resolves against the *dev* file rather than the running staging/production project,
-  so at best it inspects the wrong Compose project and at worst reports nothing while appearing to work
+- `logs db` — **there is no `db` service in any Compose file** (the dev file calls it `postgres`)
+- `logs caddy` — **there is no `caddy` service in any Compose file** (see item 2)
+- `logs api` — `api` exists only in the *dev* file, while the running staging containers are
+  `staging-api` etc. The command therefore describes a service that is not what is deployed
 
-The last is the dangerous one: it produces plausible output instead of an error.
+⚠️ **Unverified:** the exact runtime behaviour of the `logs api` case has *not* been observed on the
+box. Because the deploy checks the repo out into `/opt/vigilafrica/staging`, the dev
+`docker-compose.yml` **does** exist at that path, so the command will not fail on a missing file;
+it resolves within the same Compose project name (`staging`, from the directory) but names a service
+that is not running. The likely outcome is an error or empty output rather than misleading data —
+but **that should be confirmed on the box, not assumed**, because "quietly returns nothing" and
+"errors loudly" have very different consequences at 3am. Do not repeat the stronger claim that it
+"returns plausible output" until someone has actually run it.
 
 **Fix:** use the environment-specific file and its real service names, and make the
 "replace `staging` with `production`" instruction explicit about the file *and* the service prefix,
@@ -73,11 +84,33 @@ next person will diff the two and assume the example is authoritative.
   file that task 1.7 and 2.5 will eventually revisit — worth doing **before** those, so they are not
   editing text that is already wrong.
 
+## Checked and found CORRECT — do not "fix" these
+
+Audited at the same time, so the next person knows what was covered rather than re-deriving it:
+
+- **Health-probe ports are right.** `localhost:8081` (staging) and `localhost:8080` (production)
+  match the published ports in `docker-compose.staging.yml` (`127.0.0.1:8081:8080`) and
+  `docker-compose.prod.yml` (`127.0.0.1:8080:8080`).
+- **The external health URLs are right**, and correctly described as exercising DNS/TLS/Caddy.
+- **The rollback section is right** — it defers to `release-process.md` and states rollback is a
+  redeploy of a previous tag, never an in-place VPS edit. ⚠️ Note `release-process.md` itself still
+  describes *checkout-based* rollback, which `chore-vps-access-hardening` task 2.5 will change; that
+  is 2.5's problem, not this one's.
+
+## Relationship to `chore-vps-access-hardening` (#231)
+
+#231 edits this same file and fixes exactly two adjacent things: the false claim that GitHub
+Environment reviewers gate direct SSH, and the unpinned `ssh` entry command. It changes **none** of
+the commands above, so this proposal is the precise complement — no overlap, and no gap between them.
+
+Verified by diffing `development` against the #231 branch for this file.
+
 ## Out of Scope
 
 - The host-level boundary and SSH-pinning corrections — already shipped in #231.
 - Anything in `chore-vps-access-hardening` groups 1–5.
 - Reconciling the live Caddyfile with the example (note it; do not attempt it here).
+- `release-process.md`'s checkout-based rollback — belongs to task 2.5.
 
 ## Verification
 
