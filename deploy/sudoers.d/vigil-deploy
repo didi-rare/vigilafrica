@@ -1,12 +1,30 @@
 # Install as /etc/sudoers.d/vigil-deploy, root:root 0440.
-# ALWAYS validate before reloading sshd/sudo:  visudo -cf /etc/sudoers.d/vigil-deploy
+# ALWAYS validate before installing:  visudo -cf <file>
 #
 # The deploy account may run exactly one program, as root, without a password.
-# It may pass arguments -- vigil-deploy-run re-validates them and derives every
-# path itself, so no argument names a file, a flag, or a compose target.
 #
-# ⚠️ Deliberately NOT a wildcard. `vigil-deploy-run *` would be equivalent to
-# granting root, because the helper's argv is the entire trust boundary.
+# ⚠️ REGEX, NOT WILDCARD -- and this distinction was measured, not assumed.
+#
+# sudoers(5) states plainly that `*` "matches any set of zero or more
+# characters (INCLUDING WHITE SPACE)". So the obvious-looking rule
+#
+#     /usr/local/sbin/vigil-deploy-run staging *
+#
+# does NOT restrict the argument list at all: it matches across word
+# boundaries. Verified empirically with `sudo -l -U` -- that form ALLOWS both
+# `staging abc1234 --extra-flag` and `staging ../../etc/passwd`, which is not
+# what "the exact sudo argv permitted" is supposed to mean.
+#
+# A `^...$` argument is matched as a regular expression instead (sudo >= 1.9.10),
+# which does constrain the whole argument string. The same probe shows this form
+# allowing `staging abc1234` while refusing both of the above.
+#
+# The comma inside {7,40} does NOT need escaping here even though `,` is the
+# Cmnd_List separator -- tested both ways, identical behaviour -- but it is left
+# escaped so the intent survives anyone reformatting this file.
+#
+# vigil-deploy-run still re-validates its own arguments. That is deliberate
+# defence in depth, and it is what keeps the pre-1.9.10 fallback rule safe.
 #
 # ⚠️ env_reset and secure_path are what stop the deploy account smuggling
 # behaviour in through the environment -- PATH, LD_PRELOAD, DOCKER_HOST,
@@ -18,5 +36,5 @@ Defaults:deploy     !requiretty
 Defaults:deploy     log_output
 Defaults:deploy     logfile="/var/log/sudo-vigil-deploy.log"
 
-deploy ALL=(root) NOPASSWD: /usr/local/sbin/vigil-deploy-run staging *, \
-                            /usr/local/sbin/vigil-deploy-run production *
+deploy ALL=(root) NOPASSWD: /usr/local/sbin/vigil-deploy-run ^staging [0-9a-f]{7\,40}$, \
+                            /usr/local/sbin/vigil-deploy-run ^production v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$

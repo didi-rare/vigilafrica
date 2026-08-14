@@ -1,0 +1,21 @@
+# FALLBACK for sudo < 1.9.10, which has no regex support in command arguments.
+# provision.sh installs this only when the regex form cannot work, and warns.
+#
+# ⚠️ THIS RULE IS WEAKER, and knowingly so. Per sudoers(5), `*` matches across
+# white space, so this permits extra arguments -- measured: it allows
+# `staging abc1234 --extra-flag` and `staging ../../etc/passwd`.
+#
+# What keeps that safe is vigil-deploy-run, which requires exactly two
+# arguments and re-validates both against the same patterns. On this sudo
+# version the argv restriction is enforced by the helper rather than by
+# sudoers, which is worth knowing during an incident.
+#
+# Prefer upgrading sudo to >= 1.9.10 and using the regex rule.
+Defaults:deploy     env_reset
+Defaults:deploy     secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Defaults:deploy     !requiretty
+Defaults:deploy     log_output
+Defaults:deploy     logfile="/var/log/sudo-vigil-deploy.log"
+
+deploy ALL=(root) NOPASSWD: /usr/local/sbin/vigil-deploy-run staging *, \
+                            /usr/local/sbin/vigil-deploy-run production *

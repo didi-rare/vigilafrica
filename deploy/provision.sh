@@ -52,13 +52,32 @@ fi
 install -m 0755 -o root -g root "${SCRIPT_DIR}/vigil-deploy"     /usr/local/bin/vigil-deploy
 install -m 0700 -o root -g root "${SCRIPT_DIR}/vigil-deploy-run" /usr/local/sbin/vigil-deploy-run
 
-install -m 0440 -o root -g root "${SCRIPT_DIR}/sudoers.d/vigil-deploy" /etc/sudoers.d/vigil-deploy
-# Never leave an unparseable sudoers file behind: it can lock out sudo entirely.
-if ! visudo -cf /etc/sudoers.d/vigil-deploy; then
-  rm -f /etc/sudoers.d/vigil-deploy
-  echo "sudoers file rejected by visudo; removed it rather than risk breaking sudo" >&2
+# Regex argument matching needs sudo >= 1.9.10. On older sudo the `^...$` rule
+# parses but never matches, so every deploy would fail -- safe, but broken and
+# confusing. Pick the form this host can actually enforce.
+SUDO_VER="$(sudo -V 2>/dev/null | sed -n '1s/.*version \([0-9.]*\).*/\1/p')"
+SUDOERS_SRC="${SCRIPT_DIR}/sudoers.d/vigil-deploy"
+if [[ -n "${SUDO_VER}" ]] &&
+   [[ "$(printf '%s\n1.9.10\n' "${SUDO_VER}" | sort -V | head -1)" != "1.9.10" ]] &&
+   [[ "${SUDO_VER}" != "1.9.10" ]]; then
+  SUDOERS_SRC="${SCRIPT_DIR}/sudoers.d/vigil-deploy.pre-1.9.10"
+  echo "WARNING: sudo ${SUDO_VER} predates regex argument matching (1.9.10)." >&2
+  echo "WARNING: installing the wildcard fallback, which does NOT restrict argv --" >&2
+  echo "WARNING: sudoers(5) '*' matches across white space. The argv restriction is" >&2
+  echo "WARNING: then enforced only by vigil-deploy-run. Upgrade sudo when you can." >&2
+fi
+
+# Validate BEFORE installing: an unparseable file in /etc/sudoers.d can break
+# sudo entirely, and this host's only rescue path is sudo via vigil-admin.
+TMP_SUDOERS="$(mktemp)"
+install -m 0440 -o root -g root "${SUDOERS_SRC}" "${TMP_SUDOERS}"
+if ! visudo -cf "${TMP_SUDOERS}"; then
+  rm -f "${TMP_SUDOERS}"
+  echo "sudoers file rejected by visudo; refusing to install it" >&2
   exit 1
 fi
+install -m 0440 -o root -g root "${TMP_SUDOERS}" /etc/sudoers.d/vigil-deploy
+rm -f "${TMP_SUDOERS}"
 
 if [[ -n "${SSH_PUBLIC_KEY}" ]]; then
   install -d -m 700 -o "${DEPLOY_USER}" -g "${DEPLOY_USER}" "/home/${DEPLOY_USER}/.ssh"
