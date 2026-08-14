@@ -149,13 +149,28 @@ legitimate cross-check — but on its own, *including run on the VPS itself*, it
 anything, and using it to create the pin just repeats the trust-on-first-use step this secret exists
 to eliminate.
 
-First confirm which key sshd actually offers. A host can have several configured host keys, and the
-`.pub` file sitting next to a private key is a convenience copy that may be stale or unused:
+First confirm which host keys are configured. A host can have several, and the `.pub` file sitting
+next to a private key is a convenience copy that may be stale or unused:
 
 ```bash
-# Run ON the VPS. Lists the host keys sshd is really configured with.
-sudo sshd -T | grep -i '^hostkey'
+# Run ON the VPS. Prints the effective CONFIGURED host-key paths.
+# Anchored to "hostkey " so it does not also match hostkeyalgorithms/hostkeyagent.
+sudo sshd -T | grep -i '^hostkey '
 ```
+
+⚠️ `sshd -T` prints the **effective configuration on disk**, which is not the same as what the
+**currently running** daemon offers — the config may have changed since the last reload. Confirm the
+live handshake separately and check it agrees with the file you read:
+
+```bash
+# The fingerprint the running daemon actually presents.
+ssh-keyscan -t ed25519 "$VPS_HOST" 2>/dev/null | ssh-keygen -lf -
+# Must equal:
+ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub
+```
+
+Used this way `ssh-keyscan` is a **cross-check against a value you already trust**, never the source
+of the pin.
 
 Then read the public half of the key that list names — `/etc/ssh/ssh_host_ed25519_key` on a default
 Debian/Ubuntu install:

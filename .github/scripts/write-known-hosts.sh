@@ -12,15 +12,24 @@
 # drift, and so the validation is testable outside CI
 # (see test-write-known-hosts.sh).
 #
-# Which checks below are actually load-bearing, measured by mutation-check.sh
-# rather than assumed: only the EXACT-HOST COMPARE and the KEY-MATERIAL PARSE
-# fail the suite when individually disabled. The @marker, wildcard/negation and
-# hashed-record rejections are subsumed by the exact-host compare -- none of
-# those host fields can ever equal VPS_HOST -- and the record count and the
-# final `ssh-keygen -F` are redundant with each other. They are kept because
-# they give an operator a specific, actionable message instead of a generic
-# "does not pin VPS_HOST exactly", not because each is an independent control.
-# Do not cite them as separate layers of defence.
+# Which checks below are load-bearing, measured with mutation-check.sh rather
+# than assumed: ALL TEN. Disabling any single one makes the test suite fail.
+#
+# ⚠️ An earlier revision of this comment claimed "only the exact-host compare
+# and the key-material parse are load-bearing; the rest are diagnostic-only".
+# That was FALSE, and false in the flattering direction -- it read as candour
+# while understating the validator. Independent review disproved it with two
+# cases the suite did not then cover:
+#
+#   - `<VPS_HOST> junk <valid-key>` is accepted by the per-record parse,
+#     because `ssh-keygen -lf` reads "junk <key>" as a known_hosts line for a
+#     host named "junk". Only the FINAL `ssh-keygen -F` rejects it.
+#   - if VPS_HOST is ITSELF "*" or contains "?", the exact-host compare matches
+#     a wildcard record. Only the wildcard/negation check rejects it.
+#
+# Both are now covered. Re-run mutation-check.sh before repeating any claim of
+# this shape -- and note that "the suite still passes without it" means the
+# SUITE is incomplete, not that the check is useless.
 set -euo pipefail
 
 : "${VPS_HOST_KEY:=}"

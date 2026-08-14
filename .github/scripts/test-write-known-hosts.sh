@@ -14,13 +14,28 @@
 #      13/13. Independent review found that by mutation. Cases below are kept
 #      minimal so a mutation to one check fails one case.
 #
-# ⚠️ Honest limit of this suite: run mutation-check.sh and you will see that
-# only the exact-host compare and the key-material parse fail it when disabled
-# individually. The @marker, wildcard and hashed-record cases below are really
-# re-testing the exact-host compare, because none of those host fields can
-# equal VPS_HOST. They are still worth keeping -- they pin the ERROR MESSAGE an
-# operator gets -- but this suite does not prove those checks are independent
-# controls, and nothing here should be quoted as if it did.
+# Limits of this suite, measured with mutation-check.sh rather than asserted.
+# Independently load-bearing (disabling any one makes this suite fail):
+#
+#   - exact-host compare
+#   - key-material parse
+#   - final `ssh-keygen -F`   <- catches "host junk <valid-key>", which the
+#                                per-record parse accepts, because
+#                                `ssh-keygen -lf` reads "junk <key>" as a
+#                                known_hosts line for a host called "junk"
+#   - wildcard/negation       <- the only check that rejects a wildcard record
+#                                when VPS_HOST is ITSELF "*" or contains "?"
+#   - leading-space trim, and both non-empty guards
+#
+# NOT independently proven: the @marker and hashed-record rejections. Those
+# host fields can never equal VPS_HOST, so the exact-host compare catches them
+# anyway. They are kept for the specific error an operator sees -- and that
+# claim is now enforced, not asserted: the cases below assert on stderr.
+#
+# ⚠️ An earlier revision of this comment claimed "only 2 of 7 are load-bearing".
+# That was wrong, and wrong in the flattering direction -- it sounded rigorous
+# while understating the validator. Re-run mutation-check.sh before repeating
+# any claim of this shape.
 #
 # Run on Linux/WSL -- it asserts on POSIX file modes, which do not survive a
 # Windows filesystem.
@@ -41,16 +56,37 @@ KEY="$(cut -d' ' -f1,2 "${keydir}/k.pub")"
 ssh-keygen -q -t rsa -b 2048 -N '' -C '' -f "${keydir}/r"
 KEY2="$(cut -d' ' -f1,2 "${keydir}/r.pub")"
 
+# run_case <accept|reject> <desc> <VPS_HOST> <secret> [expected-stderr-substring]
+#
+# The 5th argument is what makes the "these checks exist for their error
+# message" claim real. Without asserting on stderr, a case only proves the
+# script exited non-zero -- which any other check would also satisfy.
 run_case() {
-  local want="$1" desc="$2" host="$3" secret="$4"
+  local want="$1" desc="$2" host="$3" secret="$4" expect="${5:-}"
   local home out rc
   home="$(mktemp -d)"
   out="$(HOME="${home}" VPS_HOST="${host}" VPS_HOST_KEY="${secret}" bash "${SCRIPT}" 2>&1)"
   rc=$?
   rm -rf -- "${home}"
 
-  if { [ "${want}" = "accept" ] && [ "${rc}" -eq 0 ]; } ||
-     { [ "${want}" = "reject" ] && [ "${rc}" -ne 0 ]; }; then
+  local ok=1
+  if [ "${want}" = "accept" ]; then
+    [ "${rc}" -eq 0 ] || ok=0
+  else
+    [ "${rc}" -ne 0 ] || ok=0
+  fi
+  if [ -n "${expect}" ] && ! printf '%s' "${out}" | grep -qF -- "${expect}"; then
+    ok=0
+    if [ "${rc}" -ne 0 ]; then
+      printf '  FAIL %-24s rejected, but not with the documented message\n' "${desc}"
+      printf '       wanted: %s\n' "${expect}"
+      printf '       got:    %s\n' "$(printf '%s' "${out}" | head -1)"
+      fail=$((fail + 1))
+      return
+    fi
+  fi
+
+  if [ "${ok}" -eq 1 ]; then
     printf '  ok   %-24s (%s, exit %d)\n' "${desc}" "${want}" "${rc}"
     pass=$((pass + 1))
   else
@@ -61,22 +97,40 @@ run_case() {
 }
 
 echo "Rejections:"
-run_case reject "empty secret"        "${HOST}" ""
-run_case reject "whitespace only"     "${HOST}" "   "
-run_case reject "no VPS_HOST"         ""        "${HOST} ${KEY}"
+run_case reject "empty secret"        "${HOST}" "" \
+         "VPS_HOST_KEY is unset"
+run_case reject "whitespace only"     "${HOST}" "   " \
+         "no usable host-key records"
+run_case reject "no VPS_HOST"         ""        "${HOST} ${KEY}" \
+         "VPS_HOST is unset"
 run_case reject "hostname mismatch"   "${HOST}" "other.example.org ${KEY}"
 run_case reject "wildcard *"          "${HOST}" "* ${KEY}"
 run_case reject "wildcard suffix"     "${HOST}" "vps.* ${KEY}"
 run_case reject "negation only"       "${HOST}" "!other.example.org ${KEY}"
-run_case reject "cert-authority"      "${HOST}" "@cert-authority ${HOST} ${KEY}"
-run_case reject "revoked record"      "${HOST}" "@revoked ${HOST} ${KEY}"
-run_case reject "hashed record"       "${HOST}" "|1|abc=|def= ${KEY}"
+run_case reject "cert-authority"      "${HOST}" "@cert-authority ${HOST} ${KEY}" \
+         "not @cert-authority/@revoked markers"
+run_case reject "revoked record"      "${HOST}" "@revoked ${HOST} ${KEY}" \
+         "not @cert-authority/@revoked markers"
+run_case reject "hashed record"       "${HOST}" "|1|abc=|def= ${KEY}" \
+         "plain (unhashed) record"
 run_case reject "host,extra-host"     "${HOST}" "${HOST},other.example.org ${KEY}"
 run_case reject "extra host line"     "${HOST}" "$(printf '%s %s\nother.example.org %s' "${HOST}" "${KEY}" "${KEY}")"
 run_case reject "malformed key blob"  "${HOST}" "${HOST} ssh-ed25519 AAAAnotvalidbase64!!"
 run_case reject "key type only"       "${HOST}" "${HOST} ssh-ed25519"
 run_case reject "host only, no key"   "${HOST}" "${HOST}"
 run_case reject "mismatched type"     "${HOST}" "${HOST} ssh-rsa $(echo "${KEY}" | cut -d' ' -f2)"
+
+# Only the FINAL `ssh-keygen -F` rejects this. The per-record parse accepts it,
+# because `ssh-keygen -lf` happily reads "junk <key>" as a known_hosts line for
+# a host named "junk". Without this case the final lookup looks redundant.
+run_case reject "junk token before key" "${HOST}" "${HOST} junk ${KEY}"
+
+# Only the wildcard check rejects these. If VPS_HOST is itself a pattern, the
+# exact-host compare matches and every other check passes.
+run_case reject "VPS_HOST is *"       "*"       "* ${KEY}" \
+         "not a wildcard or negated pattern"
+run_case reject "VPS_HOST has ?"      "vps?.example.org" "vps?.example.org ${KEY}" \
+         "not a wildcard or negated pattern"
 
 echo "Controls (must be accepted):"
 run_case accept "exact match"         "${HOST}" "${HOST} ${KEY}"

@@ -85,10 +85,17 @@ install -m 700 -d ~/.ssh
 printf '%s ssh-ed25519 AAAA...\n' "$VPS_HOST" > ~/.ssh/known_hosts_vigilafrica
 chmod 600 ~/.ssh/known_hosts_vigilafrica
 
-# 2. Then connect with strict checking against it.
+# 2. Then connect with strict checking against it. The extra options close the
+#    other trust sources -- without them a configured KnownHostsCommand or a
+#    DNS SSHFP record can still supply a key, so the file you just wrote would
+#    not actually be the only thing trusted. Same set the deploy workflows use.
 ssh -o StrictHostKeyChecking=yes \
     -o UserKnownHostsFile=~/.ssh/known_hosts_vigilafrica \
     -o GlobalKnownHostsFile=/dev/null \
+    -o KnownHostsCommand=none \
+    -o VerifyHostKeyDNS=no \
+    -o CheckHostIP=no \
+    -o UpdateHostKeys=no \
     "$VPS_USER@$VPS_HOST"
 ```
 
