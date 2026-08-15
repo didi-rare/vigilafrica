@@ -91,7 +91,7 @@ outside the box. Do it first, verify it with a second concurrent session, and do
 
       Run 1 additionally confirms `VPS_HOST` is the IP `178.104.104.122`, which until then was
       inferred rather than known.
-- [ ] 1.3 **Forced-command deploy protocol — one atomic task.** ⚠️ The first revision split this in
+- [x] 1.3 **Forced-command deploy protocol — one atomic task.** ⚠️ The first revision split this in
       two and would have broken deployment: it installed
       `restrict,command="/usr/local/bin/vigil-deploy"` in task 1.1 while the script and its argument
       validation were deferred, **and** both workflows currently send remote shell programs
@@ -104,7 +104,7 @@ outside the box. Do it first, verify it with a second concurrent session, and do
       - **both workflows** converted to the fixed command protocol;
       - `SSH_ORIGINAL_COMMAND` parsed against an allowlist and **rejected** when unexpected;
       - attacker-controlled stdin discarded rather than executed.
-- [ ] 1.4 **Remove `deploy` from the `docker` group** ([`provision.sh:36`](../../../deploy/provision.sh))
+- [x] 1.4 **Remove `deploy` from the `docker` group** ([`provision.sh:36`](../../../deploy/provision.sh))
       and define the privilege boundary explicitly. ⚠️ "A `sudoers` rule for the script and nothing
       else" is **not sufficient on its own**: the forced command runs as the deploy user, and the
       checkout and `.env` it reads are deploy-owned — so elevating a helper that reads
@@ -116,6 +116,47 @@ outside the box. Do it first, verify it with a second concurrent session, and do
       - rejection tests for alternate compose paths, added mounts, extra flags, stdin, and
         environment injection.
       Depends on 1.3 — doing it first breaks deploys.
+
+      ✅ **1.3 AND 1.4 ROLLED OUT AND VERIFIED LIVE 2026-08-15**, via
+      [`forced-command-migration.md`](../../../docs/deployment/forced-command-migration.md).
+      Both shipped together, as this task required.
+
+      **Refusals, proven from a workstation with the real deploy key — not reasoned about:**
+
+      | attempt | result |
+      |---|---|
+      | interactive shell | `refused: this key is restricted to the deploy protocol; no shell` |
+      | `id` / `docker ps` / unknown verb | refused |
+      | `deploy-staging <sha>; id`, backticks, `$()` | `refused: command contains shell metacharacters` |
+      | extra argument | `refused: too many arguments` |
+      | production ref shape on the staging verb | `refused: production ref must be a SemVer tag` |
+      | **SFTP**, **SCP `/etc/passwd`** | `Connection closed` — nothing exfiltrated |
+      | **port forward → internal `:8081`** | `administratively prohibited`, `curl_http=000` |
+
+      **Accept path proven too**, which matters as much: a live `deploy-staging ed3bf23` completed
+      end to end **with `deploy` outside the `docker` group** — `vigil-deploy-run: staging now at
+      ed3bf23`, staging healthy, and a container start-time diff proving **production was untouched**.
+
+      **1.4's privilege boundary:** `deploy` is in no group but its own (`docker:x:988:` is empty);
+      `/home/deploy/.ssh` is `root:root 0755` so the account cannot create the `authorized_keys2`
+      that `sshd -T` revealed is also an effective key source; the trees are fresh **root-owned
+      clones** rather than re-owned checkouts, because `chown -R root` over a deploy-writable
+      checkout promotes `.git/hooks` and `.git/config` into root-trusted state; and sudo permits
+      exactly two regex-matched argv forms, verified by `sudo -l -U deploy` plus rejection tests for
+      alternate compose paths, added mounts, extra flags and `DOCKER_HOST` injection.
+
+      ⚠️ **The sudoers wildcard trap:** `sudoers(5)` `*` matches across whitespace, so
+      `vigil-deploy-run staging *` does **not** constrain argv — measured, it permitted
+      `staging abc1234 --extra-flag`. The regex form (`^...$`, sudo ≥ 1.9.10; this host runs
+      1.9.15p5) does. **Verify with `sudo -l -U`, never `visudo -c`** — the wildcard form parses
+      perfectly and permits everything.
+
+      ⚠️ **A bug only the host could find.** `exec 9> file 2>/dev/null` applies the redirection to
+      the **whole shell, permanently**, so it silenced stderr for the entire script: every `die`
+      went to `/dev/null` and deploys failed with exit 1 and no output. It survived three
+      independent review rounds because it is invisible until runtime and every offline test died
+      before reaching the lock line. Fixed in #239, with a regression test that deliberately gets
+      *past* the lock.
 - [ ] 1.5 **Split the deploy account in two, and retire the old one.** One user currently owns both
       environment directories, so production's reviewer gate is not a boundary at the host level.
       Create `deploy-staging` and `deploy-prod`, each owning only its own path, key, and forced
