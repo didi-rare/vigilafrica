@@ -1,6 +1,48 @@
 #!/usr/bin/env bash
-# Exercise migrate-forced-command.sh preflight guards. --check mutates nothing.
+#
+# Exercise migrate-forced-command.sh preflight guards.
+#
+# 🚨 THIS HARNESS IS DESTRUCTIVE. It creates and DELETES the `deploy` and
+# `vigil-admin` accounts and the whole of /opt/vigilafrica, because the script
+# under test hardcodes those paths and names. Run it ONLY on a disposable
+# machine -- a container or a throwaway WSL instance.
+#
+# Independent review rated the unguarded version P0: run on the VPS it would
+# overwrite both .env files, delete both deployment trees, and delete the
+# rescue account. The guards below exist so that cannot happen by accident.
 set -u
+
+REQUIRED_OPT_IN="i-understand-this-deletes-things"
+if [ "${VIGIL_DESTRUCTIVE_TEST:-}" != "${REQUIRED_OPT_IN}" ]; then
+  cat >&2 <<EOF
+REFUSING TO RUN.
+
+This harness deletes /opt/vigilafrica and the deploy / vigil-admin accounts.
+On a real host that destroys the deployment and the rescue account.
+
+Run it only on a disposable machine, then opt in explicitly:
+
+  VIGIL_DESTRUCTIVE_TEST=${REQUIRED_OPT_IN} sudo -E bash \$0
+EOF
+  exit 2
+fi
+
+# Refuse on anything that looks like a real host, even with the opt-in set.
+if [ -e /opt/vigilafrica ] && [ -n "$(ls -A /opt/vigilafrica 2>/dev/null)" ]; then
+  echo "REFUSING: /opt/vigilafrica already exists and is non-empty -- this looks like a real host." >&2
+  exit 2
+fi
+for u in deploy vigil-admin; do
+  if id -u "$u" >/dev/null 2>&1; then
+    echo "REFUSING: user '$u' already exists -- this harness would delete it. Not on a real host." >&2
+    exit 2
+  fi
+done
+if [ ! -f /.dockerenv ] && ! grep -qiE 'microsoft|wsl' /proc/version 2>/dev/null; then
+  echo "REFUSING: not obviously a container or WSL instance." >&2
+  echo "Set VIGIL_TEST_FORCE_HOST=1 as well if you are certain this machine is disposable." >&2
+  [ "${VIGIL_TEST_FORCE_HOST:-}" = "1" ] || exit 2
+fi
 S="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/migrate-forced-command.sh"
 R=/opt/vigilafrica
 pass=0; fail=0
