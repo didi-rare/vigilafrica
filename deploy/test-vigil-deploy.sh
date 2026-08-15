@@ -143,6 +143,38 @@ helper "staging given a tag"    staging v1.4.0
 helper "production given a sha" production abc1234
 helper "production bad tag"     production "v1.4.0;id"
 
+# ---- failures AFTER the lock must still be visible -------------------------
+#
+# ⚠️ Regression test for a live defect. The lock was originally acquired with
+#
+#     exec 9> "/run/lock/..." 2>/dev/null || exec 9> "/tmp/..."
+#
+# and `exec` with no command applies its redirections to the whole shell, so
+# that `2>/dev/null` silenced stderr for the REST OF THE SCRIPT. Every failure
+# past that point exited 1 with no output. It reached the production host and
+# was only found by running it there.
+#
+# The cases above cannot catch it: they all die during argument validation,
+# BEFORE the lock. This one deliberately gets past the lock and asserts a
+# diagnostic still reaches stderr.
+echo "Diagnostics survive past the lock:"
+fakeroot="${D}/approot"
+mkdir -p "${fakeroot}/staging"
+: > "${fakeroot}/staging/.env"
+chmod 0777 "${fakeroot}/staging"          # group/world writable -> guard must fire
+sed -e 's|^APP_ROOT=/opt/vigilafrica$|APP_ROOT='"${fakeroot}"'|' \
+    "${D}/helper" > "${D}/helper-approot"
+grep -q "APP_ROOT=${fakeroot}" "${D}/helper-approot" || { echo "  FATAL: APP_ROOT not rewritten"; fail=$((fail+1)); }
+
+out="$(bash "${D}/helper-approot" staging 0123456789abcdef0123456789abcdef01234567 2>&1)"; rc=$?
+if [ "${rc}" -ne 0 ] && [ -n "${out}" ]; then
+  printf '  ok   %-24s (exit %d, said: %s)\n' "post-lock failure speaks" "${rc}" "$(printf '%s' "${out}" | head -1 | cut -c1-58)"
+  pass=$((pass + 1))
+else
+  printf '  FAIL %-24s exit=%d but produced NO diagnostic -- stderr is being swallowed\n' "post-lock failure speaks" "${rc}"
+  fail=$((fail + 1))
+fi
+
 echo
 echo "${pass} passed, ${fail} failed"
 echo
