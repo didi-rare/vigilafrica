@@ -89,8 +89,11 @@ jobs:
         # The second matters because a perfect validator that nothing invokes
         # is not a control, and the suite alone would stay green either way.
         run: |
-          for s in .github/scripts/*.sh; do bash -n "$s"; done
+          for s in .github/scripts/*.sh deploy/*.sh deploy/vigil-deploy deploy/vigil-deploy-run; do
+            bash -n "$s"
+          done
           bash .github/scripts/test-write-known-hosts.sh
+          bash deploy/test-vigil-deploy.sh
           bash .github/scripts/check-deploy-wiring.sh
 
       - name: Run Database Integration Tests

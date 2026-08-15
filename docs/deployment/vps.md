@@ -221,13 +221,39 @@ are regenerated — otherwise every deploy fails closed until it is updated.
 `VPS_SSH_KEY` is a static secret with **no expiry**; nothing rotates it automatically and nothing
 alerts when it ages. Rotate it on a fixed schedule and immediately on any suspected exposure:
 
+🚨 **Never append a bare public key.** The deploy account's `authorized_keys` is root-owned and every
+entry carries `restrict,command="/usr/local/bin/vigil-deploy"`. A plain `>> authorized_keys` adds an
+**unrestricted** key that can open a shell, silently undoing the whole forced-command boundary — and
+nothing would fail or warn, because deploys would keep working.
+
+Rotate by **re-running the provisioner**, which rewrites the file with exactly one restricted entry:
+
 1. Generate a new keypair (`ssh-keygen -t ed25519 -C 'vigilafrica-deploy-<yyyy-mm>'`).
-2. Append the new public key to the deploy account's `authorized_keys`.
-3. Update `VPS_SSH_KEY` in **both** environments and run a staging deploy to confirm it works.
-4. **Remove the old public key from `authorized_keys`** — this step is the rotation. Adding a new
-   key without removing the old one leaves the original credential valid.
-5. Confirm the retired key is refused: `ssh -i old_key -o IdentitiesOnly=yes "$VPS_USER@$VPS_HOST"`
-   must fail.
+2. From an admin session on the VPS, re-run the provisioner with the new public key. It replaces
+   `authorized_keys` wholesale — old key gone, new key restricted — so there is no window with two
+   valid credentials and no way to forget step 4:
+
+   ```bash
+   sudo APP_ROOT=/opt/vigilafrica SSH_PUBLIC_KEY='ssh-ed25519 AAAA... vigilafrica-deploy-<yyyy-mm>' \
+     ./deploy/provision.sh
+   ```
+
+3. Update `VPS_SSH_KEY` in **both** GitHub environments, then run a staging deploy to confirm.
+4. Confirm the retired key is refused:
+   `ssh -i old_key -o IdentitiesOnly=yes "$VPS_USER@$VPS_HOST"` must fail.
+5. Confirm the new key is **restricted, not just working** — a key that deploys successfully may
+   still be unrestricted:
+
+   ```bash
+   ssh -i new_key "$VPS_USER@$VPS_HOST"          # must be refused, no shell
+   ssh -i new_key "$VPS_USER@$VPS_HOST" 'id'     # must be refused
+   ```
+
+If you must edit `authorized_keys` by hand, the entry format is:
+
+```
+restrict,command="/usr/local/bin/vigil-deploy" ssh-ed25519 AAAA... comment
+```
 
 ⚠️ Scope of the `production` required-reviewer gate: the rule exists, but the reviewer set is a
 single account (`didi-rare`) which is also the account that triggers releases, and
