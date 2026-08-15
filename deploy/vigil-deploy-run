@@ -63,8 +63,21 @@ cd "${workdir}" || die "missing workdir ${workdir}"
 # Serialize per environment. Without this, two deploys can interleave their
 # fetch/checkout/build steps and ship a tree from one request with the
 # APP_VERSION of another.
-exec 9> "/run/lock/vigil-deploy-${environment}.lock" 2>/dev/null \
-  || exec 9> "/tmp/vigil-deploy-${environment}.lock"
+# ⚠️ NEVER put a redirection on a bare `exec` here.
+#
+# The previous form was:
+#     exec 9> "/run/lock/..." 2>/dev/null || exec 9> "/tmp/..."
+#
+# `exec` with no command applies its redirections to the CURRENT SHELL,
+# permanently -- so that `2>/dev/null` silenced stderr for the whole script,
+# not just that line. Every `die` message went to /dev/null. Deploys failed
+# with exit 1 and no output at all, on the host, with nothing to debug from.
+# Three review rounds missed it because it only manifests at runtime.
+#
+# Choose the path first, then redirect once, unsuppressed.
+LOCKFILE="/run/lock/vigil-deploy-${environment}.lock"
+[ -d /run/lock ] && [ -w /run/lock ] || LOCKFILE="/tmp/vigil-deploy-${environment}.lock"
+exec 9> "${LOCKFILE}"
 flock -w 600 9 || die "another ${environment} deploy is in progress"
 
 # Refuse to run if ANYTHING here is writable by anyone but root: that would
