@@ -199,6 +199,32 @@ No sshd configuration is changed during this migration, and sshd must not be res
 
 ### 0.5 Inspect the current authorized key
 
+⚠️ **First, enumerate every file in `.ssh`, not just `authorized_keys`.**
+On this host `sshd -T` reports:
+
+```text
+authorizedkeysfile .ssh/authorized_keys .ssh/authorized_keys2
+```
+
+So `authorized_keys2` is an **effective second key source**. Locking down
+`authorized_keys` alone would leave the forced command bypassable by anything
+already in that file, and `/home/deploy/.ssh` is currently `deploy:deploy 700`
+— owned by the account being restricted.
+
+```bash
+ls -la /home/deploy/.ssh/
+```
+
+Expected output: `.`, `..`, and `authorized_keys` only.
+
+**Decision:** if `authorized_keys2` (or any other effective key file) exists,
+stop. Inspect it, establish where it came from, and move it into the rollback
+directory before continuing — do not simply delete it, and do not proceed
+assuming `authorized_keys` is the only way in.
+
+Phase 6.2 makes `.ssh` root-owned, which prevents `deploy` from creating such a
+file afterwards. That does not remove one that already exists.
+
 Run:
 
 ```bash
