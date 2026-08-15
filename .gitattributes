@@ -1,0 +1,13 @@
+# Shell scripts must be checked out with LF regardless of platform. The deploy
+# workflows execute .github/scripts/*.sh on ubuntu-latest, and a CRLF checkout
+# fails there with an opaque `$'\r': command not found`. This repository is
+# maintained from Windows, so the guard is not theoretical.
+*.sh text eol=lf
+
+# Executables installed on the VPS carry no extension, so *.sh does not cover
+# them. A CRLF checkout breaks them on Linux with an opaque `$'\r'` error --
+# and for the sudoers file it would be worse than opaque, since a malformed
+# /etc/sudoers.d entry can break sudo entirely.
+deploy/vigil-deploy         text eol=lf
+deploy/vigil-deploy-run     text eol=lf
+deploy/sudoers.d/*          text eol=lf

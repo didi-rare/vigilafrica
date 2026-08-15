@@ -1,0 +1,150 @@
+#!/usr/bin/env bash
+#
+# Privileged half of the deploy protocol. Installed as:
+#
+#   /usr/local/sbin/vigil-deploy-run   root:root 0700   (deploy CANNOT read or write it)
+#
+# Invoked only through the sudoers rule in deploy/sudoers.d/vigil-deploy, with
+# a fixed argv, by /usr/local/bin/vigil-deploy.
+#
+# ⚠️ This re-validates every argument. vigil-deploy already validated them, but
+# a privileged helper that trusts its caller is not a privilege boundary -- it
+# is a privilege laundering service.
+#
+# ⚠️ Why the deploy tree must be ROOT-OWNED.
+#
+# The compose files build the API from a Dockerfile inside the checkout
+# (docker-compose.prod.yml `build:` / `dockerfile: Dockerfile`). If the deploy
+# user could write that tree, then running compose as root would let them edit
+# the Dockerfile and execute arbitrary code as root -- so root-owning only the
+# compose file would be security theatre. The deploy user therefore writes
+# NOTHING under APP_ROOT; this script performs the git operations itself.
+#
+# That is also why removing the deploy account from the `docker` group is only
+# meaningful alongside this: membership of `docker` is equivalent to root.
+set -euo pipefail
+
+APP_ROOT=/opt/vigilafrica
+umask 077
+
+die() {
+  printf 'vigil-deploy-run: %s\n' "$1" >&2
+  logger -t vigil-deploy-run "FAILED: $1" 2>/dev/null || true
+  exit 1
+}
+
+[ "$(id -u)" -eq 0 ] || die "must run as root"
+[ "$#" -eq 2 ]       || die "expected exactly 2 arguments, got $#"
+
+environment="$1"
+ref="$2"
+
+# Re-validate. Do not trust the caller, even though the caller is ours.
+case "${environment}" in
+  staging)
+    [[ "${ref}" =~ ^[0-9a-f]{7,40}$ ]] || die "invalid staging ref"
+    workdir="${APP_ROOT}/staging"
+    compose="docker-compose.staging.yml"
+    ;;
+  production)
+    [[ "${ref}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || die "invalid production ref"
+    workdir="${APP_ROOT}/production"
+    compose="docker-compose.prod.yml"
+    ;;
+  *)
+    die "unknown environment '${environment}'"
+    ;;
+esac
+
+# The compose file is chosen HERE, from the environment name. It is never a
+# caller-supplied path, so an alternate compose file cannot be requested.
+cd "${workdir}" || die "missing workdir ${workdir}"
+
+# Serialize per environment. Without this, two deploys can interleave their
+# fetch/checkout/build steps and ship a tree from one request with the
+# APP_VERSION of another.
+# ⚠️ NEVER put a redirection on a bare `exec` here.
+#
+# The previous form was:
+#     exec 9> "/run/lock/..." 2>/dev/null || exec 9> "/tmp/..."
+#
+# `exec` with no command applies its redirections to the CURRENT SHELL,
+# permanently -- so that `2>/dev/null` silenced stderr for the whole script,
+# not just that line. Every `die` message went to /dev/null. Deploys failed
+# with exit 1 and no output at all, on the host, with nothing to debug from.
+# Three review rounds missed it because it only manifests at runtime.
+#
+# Choose the path first, then redirect once, unsuppressed.
+LOCKFILE="/run/lock/vigil-deploy-${environment}.lock"
+[ -d /run/lock ] && [ -w /run/lock ] || LOCKFILE="/tmp/vigil-deploy-${environment}.lock"
+exec 9> "${LOCKFILE}"
+flock -w 600 9 || die "another ${environment} deploy is in progress"
+
+# Refuse to run if ANYTHING here is writable by anyone but root: that would
+# reopen the Dockerfile-edit path this design exists to close.
+#
+# ⚠️ Checks the whole tree and the parent chain, not just the top directory.
+# An earlier revision checked only `stat` on ${workdir}, which passed while the
+# Dockerfile inside it was still deploy-owned. Its mode test was also wrong:
+# `case ${perms} in *[2367])` only inspects the LAST digit, so 0775 (group
+# writable) passed.
+check_parents() {
+  local p="$1"
+  while [ "${p}" != "/" ]; do
+    [ "$(stat -c '%U' "${p}")" = "root" ] \
+      || die "${p} is owned by $(stat -c '%U' "${p}"), expected root"
+    [ -z "$(find "${p}" -maxdepth 0 -perm /022)" ] \
+      || die "${p} is group/world writable ($(stat -c '%a' "${p}"))"
+    p="$(dirname "${p}")"
+  done
+}
+check_parents "${workdir}"
+
+unsafe="$(find "${workdir}" \( ! -user root -o -perm /022 -o -type l \) -print -quit 2>/dev/null || true)"
+[ -z "${unsafe}" ] || die "unsafe path in deploy tree: ${unsafe} (must be root-owned, not group/world writable, no symlinks)"
+
+# Scope safe.directory to this invocation. Appending to root's global gitconfig
+# on every deploy grows the file without bound and mutates state outside this
+# tree.
+GIT="git -c safe.directory=${workdir}"
+
+${GIT} fetch --force --prune origin '+refs/heads/*:refs/remotes/origin/*' '+refs/tags/*:refs/tags/*' \
+  || die "git fetch failed"
+
+if [ "${environment}" = "production" ]; then
+  # SERVER-SIDE release-branch ancestry check. The equivalent check in
+  # deploy-production.yml runs on the GitHub runner, so anyone holding the
+  # deploy key can simply not run the workflow. This one they cannot skip.
+  ${GIT} rev-parse -q --verify "refs/tags/${ref}" >/dev/null \
+    || die "tag ${ref} does not exist"
+  tag_sha="$(${GIT} rev-list -n 1 "refs/tags/${ref}")"
+  ${GIT} merge-base --is-ancestor "${tag_sha}" origin/release \
+    || die "tag ${ref} is not reachable from origin/release; refusing to deploy"
+  # ⚠️ Check out the SHA we just validated, not the tag NAME. Tags are mutable;
+  # re-resolving the name here would let a tag moved between the check and the
+  # checkout deploy something that was never validated.
+  target="${tag_sha}"
+  app_version="${ref}"
+else
+  ${GIT} merge-base --is-ancestor "${ref}" origin/main \
+    || die "commit ${ref} is not reachable from origin/main; refusing to deploy"
+  target="${ref}"
+  app_version="${ref:0:7}"
+fi
+
+# Preflight BEFORE mutating the working tree, so a missing manifest cannot
+# leave the checkout on a new ref while the old containers keep running.
+${GIT} cat-file -e "${target}:${compose}" 2>/dev/null \
+  || die "${compose} does not exist at ${target}"
+[ -f .env ] || die "missing .env in ${workdir} (root-owned, 0600)"
+
+${GIT} checkout --force "${target}" || die "checkout failed"
+
+[ -f "${compose}" ] || die "missing ${compose} after checkout"
+
+logger -t vigil-deploy-run "DEPLOY ${environment} ${ref}" 2>/dev/null || true
+
+APP_VERSION="${app_version}" docker compose -f "${compose}" up -d --build \
+  || die "compose up failed for ${environment}"
+
+echo "vigil-deploy-run: ${environment} now at ${app_version}"
