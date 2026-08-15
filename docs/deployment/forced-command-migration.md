@@ -6,10 +6,10 @@ Do **not** run either of these files:
 
 ```text
 deploy/provision.sh
-deploy/migrate-forced-command.sh
+
 ```
 
-`provision.sh` upgrades packages, changes firewall state, and restarts Docker and Caddy. The migration script is abandoned and contains a known-invalid root-side Git revision lookup.
+`provision.sh` upgrades packages, changes firewall state, and restarts Docker and Caddy. (`deploy/migrate-forced-command.sh` was an abandoned attempt at automating this procedure; it has been deleted, and this runbook replaces it.)
 
 ## Before you start
 
@@ -1436,34 +1436,34 @@ APP_VERSION=<staging-short-sha> docker compose --dry-run -f docker-compose.stagi
 
 Expected output: a dry-run build/deployment plan. It must not report that any running container will be recreated, restarted, removed, or newly created.
 
-Inspect for prohibited actions:
+Read the plan for actions against **containers**. This is advisory — it tells
+you where to look, and it is expected to produce output:
 
 ```bash
-grep -Ei 'recreat|restart|remove|create' "/root/staging-deploy-dry-run-$MIGRATION_STAMP.txt"
+grep -Ei 'container' "/root/staging-deploy-dry-run-$MIGRATION_STAMP.txt"
 ```
 
-Expected output: no output.
+Expected output: one line per staging container, each describing a no-op such
+as `Running`. Compose legitimately prints `Created`/`Creating` for networks and
+volumes that already exist, so a bare word match is not evidence of a problem —
+what matters is whether a line names a **running container** being recreated,
+restarted, removed or created.
 
-⚠️ **This grep is deliberately broad and has NOT been validated against real
-`docker compose --dry-run` output on this host.** Compose may legitimately
-print lines containing "Created" or "Creating" for networks or volumes that
-already exist, in which case this fires on a genuine no-op and would send you
-into an unnecessary rollback.
+⚠️ Do not treat this grep as the gate. Its exact output format varies by
+Compose version and has not been validated on this host. The decisive check is
+the start-time comparison below: it observes what actually happened rather than
+predicting it, and does not depend on Compose's wording.
 
-If it does produce output, read the lines before acting. The question that
-matters is whether any line names a **running container** being recreated,
-restarted, removed or created — not whether the word appears. Compare against
-the container list captured in 4.4. The authoritative check is the next
-command, which diffs actual container start times; treat that as decisive and
-this grep as a prompt to look.
-
-Confirm the dry-run itself did not change start times:
+**This is the gate.** Confirm the dry-run itself changed no start times:
 
 ```bash
 docker inspect -f '{{.Name}} {{.Id}} {{.State.StartedAt}}' $(docker ps -q) | sort | diff -u /root/container-started-before-forced-command.txt -
 ```
 
-Expected output: no output.
+Expected output: no output, and exit status zero.
+
+If this produces a diff, a container was touched. Stop and treat it as a
+failed step regardless of what the plan text said.
 
 **Decision:** if this Compose version does not support `--dry-run`, or the dry-run predicts any container change, do not use a live deploy request as a test. Reverse the host cutover and reschedule for a window in which a staging restart is explicitly allowed. Production must not be restarted as a side effect of testing.
 
