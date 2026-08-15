@@ -2,11 +2,10 @@
 
 This procedure migrates `vigilafrica-prod` (`178.104.104.122`) to the reviewed forced-command deployment protocol without restarting Docker, Caddy, or any running container.
 
-Do **not** run either of these files:
+Do **not** run:
 
 ```text
 deploy/provision.sh
-
 ```
 
 `provision.sh` upgrades packages, changes firewall state, and restarts Docker and Caddy. (`deploy/migrate-forced-command.sh` was an abandoned attempt at automating this procedure; it has been deleted, and this runbook replaces it.)
