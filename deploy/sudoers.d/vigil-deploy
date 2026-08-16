@@ -30,11 +30,35 @@
 # behaviour in through the environment -- PATH, LD_PRELOAD, DOCKER_HOST,
 # BASH_ENV. Without them the helper could be made to run an attacker's binary
 # while still "only" being the one permitted program.
-Defaults:deploy     env_reset
-Defaults:deploy     secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-Defaults:deploy     !requiretty
-Defaults:deploy     log_output
-Defaults:deploy     logfile="/var/log/sudo-vigil-deploy.log"
+# ⚠️ TASK 1.5 -- ONE ACCOUNT PER ENVIRONMENT. This file is the actual privilege
+# boundary between staging and production.
+#
+# The forced command in authorized_keys pins an environment too, but that is a
+# filter, not a boundary: it would fall to anyone who could rewrite
+# authorized_keys. These rules hold regardless, because sudo -- not our script
+# -- refuses the argv.
+#
+# So `deploy-staging` CANNOT deploy production even if its forced command, its
+# key, and vigil-deploy itself were all subverted. That is the separation the
+# production reviewer gate does not provide (task 1.7: the gate is a single
+# self-approving reviewer, and it constrains only the workflow path).
+#
+# ⚠️ Verify with `sudo -l -U deploy-staging` and `sudo -l -U deploy-prod`, NOT
+# with `visudo -c`. visudo checks syntax; only -l shows what is actually
+# permitted. The wildcard bug this file exists to fix parsed perfectly.
 
-deploy ALL=(root) NOPASSWD: /usr/local/sbin/vigil-deploy-run ^staging [0-9a-f]{7\,40}$, \
-                            /usr/local/sbin/vigil-deploy-run ^production v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$
+Defaults:deploy-staging     env_reset
+Defaults:deploy-staging     secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Defaults:deploy-staging     !requiretty
+Defaults:deploy-staging     log_output
+Defaults:deploy-staging     logfile="/var/log/sudo-vigil-deploy.log"
+
+Defaults:deploy-prod        env_reset
+Defaults:deploy-prod        secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Defaults:deploy-prod        !requiretty
+Defaults:deploy-prod        log_output
+Defaults:deploy-prod        logfile="/var/log/sudo-vigil-deploy.log"
+
+deploy-staging ALL=(root) NOPASSWD: /usr/local/sbin/vigil-deploy-run ^staging [0-9a-f]{7\,40}$
+
+deploy-prod    ALL=(root) NOPASSWD: /usr/local/sbin/vigil-deploy-run ^production v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$
