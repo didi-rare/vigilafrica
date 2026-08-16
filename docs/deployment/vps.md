@@ -21,15 +21,74 @@ Caddy:
   api.vigilafrica.org         -> 127.0.0.1:8080
 ```
 
+## Host Access Model
+
+Current as of **2026-08-16**, after tasks 1.1–1.6 of `chore-vps-access-hardening`. Every row below was
+verified against the running host, not inferred from the scripts.
+
+| Account | Purpose | Auth | Privilege |
+|---|---|---|---|
+| `vigil-admin` | human administration, rescue | ed25519 key only | `sudo` (password required) |
+| `deploy-staging` | staging deploys | ed25519 key, forced command | `vigil-deploy-run ^staging …` only |
+| `deploy-prod` | production deploys | ed25519 key, forced command | `vigil-deploy-run ^production …` only |
+| `deploy` | **retired** | none — locked, `nologin` | none |
+| `root` | — | **no SSH login** | — |
+
+**How a deploy actually runs.** The workflow sends a *request*, not a command:
+`ssh deploy-staging@host "deploy-staging <sha>"`. The forced command `/usr/local/bin/vigil-deploy
+<environment>` validates it unprivileged, then hands a fixed argv to the root helper
+`/usr/local/sbin/vigil-deploy-run` through a per-account sudoers rule. The deploy accounts have no
+shell, no port forwarding, no SFTP/SCP, no `docker` membership, and write nothing under
+`/opt/vigilafrica`.
+
+**Where each boundary lives** — worth knowing during an incident, because they fail independently:
+
+| Control | Enforced by | Task |
+|---|---|---|
+| No shell / no forwarding / no SFTP | `restrict,command=` in root-owned `authorized_keys` | 1.3 |
+| Only two verbs, argument shapes | `vigil-deploy` (unprivileged) | 1.3 |
+| **staging ≠ production** | **per-account sudoers rule** | **1.5** |
+| No root-equivalence via Docker | not in `docker`; trees root-owned | 1.4 |
+| Argument re-validation | `vigil-deploy-run` re-checks its own argv | 1.3 |
+| Host identity | `VPS_HOST_KEY` pin, `StrictHostKeyChecking=yes` | 1.2 |
+| No password / root SSH | `sshd_config.d/00-vigilafrica-hardening.conf` | 1.6 |
+| Recovery | `vigil-admin`, then provider console | 1.1 |
+
+⚠️ **`sshd` hardening lives in a drop-in, and the ordering is counter-intuitive.** `Include` sits near
+the top of `sshd_config` and OpenSSH uses the **first obtained value**, so drop-ins beat the main file
+and the **lowest** filename beats later ones. `00-` cannot be overridden by a later cloud-init `50-`.
+Rollback is removing that one file and `systemctl reload ssh`.
+
+⚠️ **`sshd -t` checks syntax, not effective policy.** Always confirm with `sshd -T`, and per-account
+with `sshd -T -C user=…,host=…,addr=…`.
+
+⚠️ **Recovery depends on `vigil-admin`'s sudo password.** It logs in by key but `sudo` prompts. An
+admin that cannot administer is not a rescue path — verify `sudo -v` before closing any root session.
+
 ## One-Time Provisioning
 
 Run the provisioning script as root after creating the VPS:
 
 ```bash
-sudo SSH_PUBLIC_KEY='ssh-ed25519 ...' ./deploy/provision.sh
+sudo SSH_PUBLIC_KEY_STAGING='ssh-ed25519 ... deploy-staging' \
+     SSH_PUBLIC_KEY_PROD='ssh-ed25519 ... deploy-prod' \
+     ./deploy/provision.sh
 ```
 
-The script installs Docker, Caddy, ufw, fail2ban, unattended upgrades, creates the `deploy` user, and prepares `/opt/vigilafrica/{staging,production}`.
+The script installs Docker, Caddy, ufw, fail2ban and unattended upgrades, creates the **two** deploy
+accounts (`deploy-staging` and `deploy-prod`), installs the forced-command protocol and per-account
+sudoers rules, hardens `sshd`, and prepares root-owned `/opt/vigilafrica/{staging,production}`.
+
+⚠️ **The two keys must be different.** The provisioner compares fingerprints and refuses identical
+ones: a single key on both accounts would leave the staging/production split cosmetic while every
+other check reported success.
+
+⚠️ `DEPLOY_USER` and `SSH_PUBLIC_KEY` no longer exist. The provisioner **rejects** them rather than
+ignoring them, so an old command line fails loudly instead of provisioning something unintended.
+
+⚠️ `sshd` hardening is **skipped with a warning** if no non-deploy account has a key-based login —
+the deploy accounts have no shell and cannot recover a host, so hardening before an admin account
+exists would lock you out. Create the admin account first (task 1.1).
 
 Clone the repo into both paths:
 
@@ -49,13 +108,23 @@ sudo systemctl reload caddy
 
 ## Runtime `.env` Files
 
-Create separate deploy-owned env files. The deploy workflows run `docker compose`
-as this user, so Compose must be able to read `.env` while the file remains
-private to the deploy account:
+Create separate **root-owned** env files, one per environment:
 
 ```bash
-sudo install -m 600 -o deploy -g deploy /dev/null /opt/vigilafrica/staging/.env
-sudo install -m 600 -o deploy -g deploy /dev/null /opt/vigilafrica/production/.env
+sudo install -m 600 -o root -g root /dev/null /opt/vigilafrica/staging/.env
+sudo install -m 600 -o root -g root /dev/null /opt/vigilafrica/production/.env
+```
+
+⚠️ **These were `deploy`-owned before task 1.4, and must not be any more.** `docker compose` is run
+by the **root helper** (`vigil-deploy-run`), not by a deploy account, so nothing but root needs to
+read them — and they hold database and API credentials. Making them readable by a deploy account
+would hand a leaked deploy key the database password, which is the exposure 1.4 and 1.5 exist to
+close.
+
+Verify after any change:
+
+```bash
+sudo stat -c '%U:%G %a %n' /opt/vigilafrica/{staging,production}/.env   # expect root:root 600
 ```
 
 Minimum variables per environment:
@@ -221,39 +290,61 @@ are regenerated — otherwise every deploy fails closed until it is updated.
 `VPS_SSH_KEY` is a static secret with **no expiry**; nothing rotates it automatically and nothing
 alerts when it ages. Rotate it on a fixed schedule and immediately on any suspected exposure:
 
-🚨 **Never append a bare public key.** The deploy account's `authorized_keys` is root-owned and every
-entry carries `restrict,command="/usr/local/bin/vigil-deploy"`. A plain `>> authorized_keys` adds an
-**unrestricted** key that can open a shell, silently undoing the whole forced-command boundary — and
-nothing would fail or warn, because deploys would keep working.
+🚨 **Never append a bare public key.** Each deploy account's `authorized_keys` is root-owned and its
+single entry carries `restrict,command="/usr/local/bin/vigil-deploy <environment>"`. A plain
+`>> authorized_keys` adds an **unrestricted** key that can open a shell, silently undoing the whole
+forced-command boundary — and nothing would fail or warn, because deploys would keep working.
 
-Rotate by **re-running the provisioner**, which rewrites the file with exactly one restricted entry:
+⚠️ **There are two accounts and two keys** (task 1.5). Rotate them **independently**; rotating one
+does not touch the other, and using one key for both would collapse the split while every check still
+passed.
 
-1. Generate a new keypair (`ssh-keygen -t ed25519 -C 'vigilafrica-deploy-<yyyy-mm>'`).
-2. From an admin session on the VPS, re-run the provisioner with the new public key. It replaces
-   `authorized_keys` wholesale — old key gone, new key restricted — so there is no window with two
-   valid credentials and no way to forget step 4:
+| Account | Environment | GitHub environment |
+|---|---|---|
+| `deploy-staging` | staging | `staging` |
+| `deploy-prod` | production | `production` |
+
+Rotate by **re-running the provisioner**, which rewrites both files with exactly one restricted entry
+each:
+
+1. Generate a new keypair for the account being rotated
+   (`ssh-keygen -t ed25519 -C 'vigilafrica deploy-staging <yyyy-mm>'`).
+2. From an admin session on the VPS, re-run the provisioner. It replaces `authorized_keys` wholesale
+   — old key gone, new key restricted — so there is no window with two valid credentials:
 
    ```bash
-   sudo APP_ROOT=/opt/vigilafrica SSH_PUBLIC_KEY='ssh-ed25519 AAAA... vigilafrica-deploy-<yyyy-mm>' \
-     ./deploy/provision.sh
+   sudo SSH_PUBLIC_KEY_STAGING='ssh-ed25519 AAAA... deploy-staging <yyyy-mm>' \
+        SSH_PUBLIC_KEY_PROD='ssh-ed25519 AAAA... deploy-prod <yyyy-mm>' \
+        ./deploy/provision.sh
    ```
 
-3. Update `VPS_SSH_KEY` in **both** GitHub environments, then run a staging deploy to confirm.
-4. Confirm the retired key is refused:
-   `ssh -i old_key -o IdentitiesOnly=yes "$VPS_USER@$VPS_HOST"` must fail.
-5. Confirm the new key is **restricted, not just working** — a key that deploys successfully may
-   still be unrestricted:
+   ⚠️ Both variables are required, and the provisioner **refuses two identical keys** by comparing
+   fingerprints. Pass the current value for whichever account you are not rotating.
+
+3. Update `VPS_SSH_KEY` in the **matching** GitHub environment, then deploy to confirm.
+4. Confirm the retired key is refused — it must fail at **authentication**:
+   `ssh -i old_key -o IdentitiesOnly=yes "$VPS_USER@$VPS_HOST"` → `Permission denied (publickey)`.
+5. Confirm the new key is **restricted, not merely working** — a key that deploys successfully may
+   still be unrestricted, and may still be pinned to the wrong environment:
 
    ```bash
-   ssh -i new_key "$VPS_USER@$VPS_HOST"          # must be refused, no shell
-   ssh -i new_key "$VPS_USER@$VPS_HOST" 'id'     # must be refused
+   ssh -i new_key "$VPS_USER@$VPS_HOST"                            # refused, no shell
+   ssh -i new_key "$VPS_USER@$VPS_HOST" 'id'                       # refused
+   ssh -i new_staging_key deploy-staging@"$VPS_HOST" 'deploy-production v1.0.0'  # refused: pinned
    ```
+
+   That last one is the important check: it is a **well-formed request the other account would
+   accept**, so a refusal proves the separation rather than a parsing accident.
 
 If you must edit `authorized_keys` by hand, the entry format is:
 
 ```
-restrict,command="/usr/local/bin/vigil-deploy" ssh-ed25519 AAAA... comment
+restrict,command="/usr/local/bin/vigil-deploy staging" ssh-ed25519 AAAA... comment
 ```
+
+⚠️ The environment argument is **required**. `vigil-deploy` fails closed without it — an entry left in
+the pre-1.5 form (`command="/usr/local/bin/vigil-deploy"`) authenticates and then refuses every
+deploy with `no environment pinned in the forced command`.
 
 ⚠️ Scope of the `production` required-reviewer gate: the rule exists, but the reviewer set is a
 single account (`didi-rare`) which is also the account that triggers releases, and
@@ -261,12 +352,26 @@ single account (`didi-rare`) which is also the account that triggers releases, a
 separation-of-duties boundary, and it constrains only the *workflow* path — anyone holding
 `VPS_SSH_KEY` reaches the host without touching GitHub at all.
 
-🚨 **There is no host-level boundary between staging and production today.** A single `deploy`
-account owns both environment directories and is in the `docker` group
-([`provision.sh:33-47`](../../deploy/provision.sh)), so one leaked `VPS_SSH_KEY` is root-equivalent
-on the box and reaches **both** environments. Nothing in this document should be read as saying
-production is isolated at the host level — it is not. Establishing that boundary is task 1.5
-(split the deploy account) of `chore-vps-access-hardening`, which is **not yet implemented**.
+✅ **A host-level boundary between staging and production now exists** (task 1.5, applied and verified
+2026-08-16). `deploy-staging` and `deploy-prod` hold **separate keys** and separate authority, so a
+leaked staging credential cannot reach production.
+
+**The boundary is sudoers, not the forced command.** Each account's sudoers rule permits only its own
+argv, so `deploy-staging` cannot deploy production even if its key, its forced command and
+`vigil-deploy` itself were all subverted. The environment pinned in `authorized_keys` is the first
+filter; it would fall to anyone able to rewrite that file, and the sudo rule would still hold.
+
+Verify with `sudo -l -U deploy-staging` and `sudo -l -U deploy-prod` — **not** `visudo -c`, which
+checks syntax only. The wildcard bug these rules were written to fix parsed perfectly.
+
+⚠️ **What this boundary does NOT do.** It does not make a leaked production key harmless — that key
+still deploys production without touching GitHub, and per the note above the reviewer gate constrains
+only the workflow path. What changed is blast radius: one credential now reaches **one** environment.
+
+Related hardening in place: forced command with no shell and no port forwarding (1.3), neither
+account in the `docker` group and both environment trees root-owned (1.4), and password/root SSH
+login disabled (1.6). The old single `deploy` account is **retired** — locked, no key, no sudoers
+entry, and refused at authentication.
 
 ## Operational Checks
 

@@ -157,7 +157,7 @@ outside the box. Do it first, verify it with a second concurrent session, and do
       independent review rounds because it is invisible until runtime and every offline test died
       before reaching the lock line. Fixed in #239, with a regression test that deliberately gets
       *past* the lock.
-- [ ] 1.5 **Split the deploy account in two, and retire the old one.** One user currently owns both
+- [x] 1.5 **Split the deploy account in two, and retire the old one.** One user currently owns both
       environment directories, so production's reviewer gate is not a boundary at the host level.
       Create `deploy-staging` and `deploy-prod`, each owning only its own path, key, and forced
       command. ⚠️ **Creating the new principals does not remove the old one** — the original
@@ -166,6 +166,32 @@ outside the box. Do it first, verify it with a second concurrent session, and do
       and docker-group membership, transfer ownership, and **prove the old key reaches neither
       environment.** `DEPLOY_USER` is a single variable with a single default — this is a
       restructure, not a find-and-replace.
+      **DONE 2026-08-16**, runbook at [`docs/deployment/deploy-account-split.md`](../../../docs/deployment/deploy-account-split.md).
+      ⚠️ **"each owning only its own path" no longer applies** — after 1.3/1.4 **neither account owns
+      any path; root does**, and the helper does all the writing. Re-owning per account would undo
+      1.4. What was actually split is **credentials and authority**.
+      `deploy-staging` (uid 1002) and `deploy-prod` (uid 1003) exist, each in **only its own group**,
+      neither in `docker`, each with its **own** key — `SHA256:eeBSUU…` / `SHA256:2gVnPK…`, distinct
+      by fingerprint (`provision.sh` now refuses identical ones; a string compare would pass two
+      copies of one key with different comments).
+      The environment is pinned in the root-owned forced command; the **boundary** is sudoers, proven
+      by `sudo -l -U`: `deploy-staging` → staging rule only, `deploy-prod` → production rule only.
+      ⚠️ **The split was proven with WELL-FORMED requests the other account would accept**, so a
+      refusal is separation rather than a parse error: staging key → `deploy-production v1.5.0` and
+      prod key → `deploy-staging 48d0b09` both gave `refused: key is pinned to …`.
+      Both environments then deployed for real through the new accounts: staging run 31957826770
+      (`4edd382`, health `ok`) and production run 31957880766 (redeploy of the running `v1.5.0`, gate
+      approved, health `ok`, NG+GH `success`).
+      **Old account retired:** `authorized_keys` removed, out of `docker`, `usermod -L -s nologin`
+      (`passwd -S` → `L`), no sudoers entry. Old key now fails at **authentication** —
+      `Permission denied (publickey)` — not at the forced command.
+      ⚠️ Remaining `deploy`-owned files are confined to
+      `/opt/vigilafrica/.forced-command-rollback-20260815T132945Z`, which is `root:root 0700` and
+      therefore unreachable; `/etc/sudoers*` carries no `deploy` reference.
+      ⚠️ **`VPS_USER` and `VPS_SSH_KEY` were already per-environment secrets**, so the workflows
+      needed **no change** — only four secret values. `vigil-deploy-run` was unchanged too.
+      Incidental confirmation: `vigil-deploy-run` now appears **unmasked** in Actions logs, where it
+      previously rendered `vigil-***-run` because `VPS_USER` was literally `deploy`.
 - [x] 1.6 **Harden `sshd_config`** — `provision.sh` never touches it, leaving password auth and root
       login at image defaults. Set `PasswordAuthentication no`, `KbdInteractiveAuthentication no`,
       `PermitRootLogin no`. ⚠️ **Requires 1.1 verified first.** ⚠️ `sshd -t` checks **syntax, not
@@ -189,7 +215,7 @@ outside the box. Do it first, verify it with a second concurrent session, and do
       Also folded into `provision.sh` so a rebuild cannot regress it — **guarded**: it refuses to
       harden when no non-deploy account has a key-based login, since the deploy accounts have no
       shell and cannot recover a host. Rollback is `rm` of the one drop-in plus `systemctl reload ssh`.
-- [ ] 1.7 **Confirm the reviewer set and document key rotation.** ✅ The `production` environment's
+- [x] 1.7 **Confirm the reviewer set and document key rotation.** ✅ The `production` environment's
       required-reviewer rule **has been verified to exist** via the public GitHub environments API,
       so it is no longer an unverified premise — but the *reviewer set* has not been checked, and
       `VPS_SSH_KEY` is a static secret with no expiry. Confirm both, then update
@@ -202,8 +228,19 @@ outside the box. Do it first, verify it with a second concurrent session, and do
       the case for 1.5** — the host-level account split has to be the boundary, because this is not.
       Key rotation documented in `vps.md` with the retire-the-old-key step called out, since adding
       a new key without removing the old one is the usual way rotation silently fails.
-      **Left open deliberately:** the task also requires documenting tasks 1.1–1.6, and 1.1/1.3–1.6
-      are not implemented. Ticking this now would document a host state that does not exist.
+      ~~**Left open deliberately:** the task also requires documenting tasks 1.1–1.6, and 1.1/1.3–1.6
+      are not implemented. Ticking this now would document a host state that does not exist.~~
+      **DONE 2026-08-16** — 1.1–1.6 are now all implemented and host-verified, so `vps.md` documents
+      a state that actually exists. Added a **Host Access Model** section (account table, how a deploy
+      runs, and a control→enforcer→task table so an incident responder can see which boundaries fail
+      independently), and rewrote **Deploy-credential rotation** for two accounts and two keys.
+      ⚠️ **Three stale claims corrected, found while writing it:**
+      (1) *"There is no host-level boundary between staging and production today"* — false since 1.5.
+      (2) The provisioning command still advertised the removed `SSH_PUBLIC_KEY`/`DEPLOY_USER`.
+      (3) **The `.env` section instructed `install -o deploy -g deploy`** — actively wrong since 1.4,
+      and it would hand a leaked deploy key the database password. The **host is correct**
+      (`root:root 600`, verified live); only the documentation was stale, so the risk was to the next
+      person provisioning a host rather than to the running one.
 
 ## 2. Move the build off production
 

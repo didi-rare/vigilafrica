@@ -304,11 +304,24 @@ Expect `Permission denied (publickey)` — refused at authentication now, not by
 Then check nothing else on the host still refers to it:
 
 ```bash
-grep -rn '\bdeploy\b' /etc/sudoers /etc/sudoers.d/ 2>/dev/null
-find / -xdev -user deploy -print -quit 2>/dev/null
+grep -rn 'deploy' /etc/sudoers /etc/sudoers.d/ 2>/dev/null | grep -vE 'deploy-staging|deploy-prod|vigil-deploy'
+find / -xdev -path /home/deploy -prune -o -user deploy -print 2>/dev/null | head
 ```
 
-The first must show only `deploy-staging` / `deploy-prod` lines; the second must print nothing.
+Both must print nothing.
+
+⚠️ **An earlier draft had `find / -xdev -user deploy` and claimed it must print nothing — that was
+wrong**, because `/home/deploy` is owned by `deploy` and would always match. Pruning its own home is
+the check actually intended: *no `deploy`-owned files outside its home directory*.
+
+⚠️ **Expect a hit under `/opt/vigilafrica/.forced-command-rollback-<timestamp>/` if you have not yet
+retired that material** — it holds the pre-1.3/1.4 deploy-owned checkouts on purpose. That is
+containment, not leakage, **provided the rollback directory is `root:root 0700`**, which makes its
+contents unreachable regardless of ownership. Verify rather than assume:
+
+```bash
+stat -c '%U:%G %a %n' /opt/vigilafrica/.forced-command-rollback-*
+```
 
 **Deleting the account** (`userdel -r deploy`) is optional and irreversible. Locked-plus-no-key is
 already sufficient, and keeping the home directory preserves any forensic material. If you do delete
