@@ -166,7 +166,7 @@ outside the box. Do it first, verify it with a second concurrent session, and do
       and docker-group membership, transfer ownership, and **prove the old key reaches neither
       environment.** `DEPLOY_USER` is a single variable with a single default — this is a
       restructure, not a find-and-replace.
-- [ ] 1.6 **Harden `sshd_config`** — `provision.sh` never touches it, leaving password auth and root
+- [x] 1.6 **Harden `sshd_config`** — `provision.sh` never touches it, leaving password auth and root
       login at image defaults. Set `PasswordAuthentication no`, `KbdInteractiveAuthentication no`,
       `PermitRootLogin no`. ⚠️ **Requires 1.1 verified first.** ⚠️ `sshd -t` checks **syntax, not
       effective policy** — OpenSSH takes the first obtained value, so an earlier cloud-image
@@ -174,6 +174,21 @@ outside the box. Do it first, verify it with a second concurrent session, and do
       Verify with `sshd -T -C user=…,host=…,addr=…` for every relevant account, then **empirically**:
       key login succeeds, password login is refused, root login is refused — all proven **before**
       closing the rescue session. Document the console/rescue rollback path.
+      **DONE 2026-08-16**, runbook at [`docs/deployment/sshd-hardening.md`](../../../docs/deployment/sshd-hardening.md).
+      Applied as a **low-sorted drop-in** `/etc/ssh/sshd_config.d/00-vigilafrica-hardening.conf`, not
+      an edit to the main file: `Include` sits at line 12 and OpenSSH takes the **first** obtained
+      value, so drop-ins beat the main file and the *lowest* filename beats later ones — `00-` cannot
+      be overridden by a future cloud-init `50-`. The familiar "99 = wins" convention is backwards.
+      Before: `passwordauthentication yes`, `permitrootlogin without-password`
+      (so root-by-key was live, and `/root/.ssh/authorized_keys` existed).
+      After, confirmed by `sshd -T` and per-account `sshd -T -C` for `vigil-admin`/`deploy`/`root`:
+      all three directives `no`. `kbdinteractiveauthentication` was **already** `no` at line 71.
+      Proven empirically from the workstation, and re-verified independently: key login `KEY_LOGIN_OK`;
+      offered methods now `publickey` alone (was `publickey,password`); `root` → `Permission denied
+      (publickey)` despite holding a key; deploy forced command unchanged (`refused: unknown verb`).
+      Also folded into `provision.sh` so a rebuild cannot regress it — **guarded**: it refuses to
+      harden when no non-deploy account has a key-based login, since the deploy accounts have no
+      shell and cannot recover a host. Rollback is `rm` of the one drop-in plus `systemctl reload ssh`.
 - [ ] 1.7 **Confirm the reviewer set and document key rotation.** ✅ The `production` environment's
       required-reviewer rule **has been verified to exist** via the public GitHub environments API,
       so it is no longer an unverified premise — but the *reviewer set* has not been checked, and
