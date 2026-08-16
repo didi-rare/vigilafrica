@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.5.0](https://github.com/didi-rare/vigilafrica/compare/v1.4.0...v1.5.0) (2026-08-16)
+
+
+### Features
+
+* **deploy:** add a focused migration script for the forced-command cutover ([6e006ef](https://github.com/didi-rare/vigilafrica/commit/6e006efd040a2ef4630775cd0a74455fdefaa38a))
+* **deploy:** forced-command deploy protocol and privilege boundary (1.3 + 1.4) ([62ea67c](https://github.com/didi-rare/vigilafrica/commit/62ea67c0e7ee7214ffbd7df87067de3eb545750b))
+* **deploy:** forced-command deploy protocol and privilege boundary (tasks 1.3 + 1.4) ([e43b646](https://github.com/didi-rare/vigilafrica/commit/e43b646f5b35a4c08ba11458538141e219d0e950))
+
+
+### Bug Fixes
+
+* **ci:** bump Go toolchain to 1.26.6 to clear 7 reachable stdlib advisories ([d1d0977](https://github.com/didi-rare/vigilafrica/commit/d1d0977708932eed413ffdb60f133adf09466a53))
+* **ci:** bump Go toolchain to 1.26.6 to clear 7 reachable stdlib advisories ([00a673c](https://github.com/didi-rare/vigilafrica/commit/00a673cfb0f98de60fe4c7388b6a4f7d618cebe1))
+* **ci:** correct a false "honest limitation" and close the wiring gap ([287f0ef](https://github.com/didi-rare/vigilafrica/commit/287f0ef4b5b20c691754b08637d2eb083d5986a3))
+* **ci:** correct host-key enrollment and validate the pinned known_hosts ([416980c](https://github.com/didi-rare/vigilafrica/commit/416980cc329eb561b382febc3d7d4a8f81dfe20d))
+* **ci:** pin the VPS host key instead of relearning it every deploy ([e40f661](https://github.com/didi-rare/vigilafrica/commit/e40f661fd2a776d5c8d67767261c18438e3bf440))
+* **ci:** pin the VPS host key instead of relearning it every deploy ([5b77225](https://github.com/didi-rare/vigilafrica/commit/5b772259ff8343b042cc1e80a60c340c5d68c0b4))
+* **ci:** strengthen known_hosts validation after round-2 review ([59c4e51](https://github.com/didi-rare/vigilafrica/commit/59c4e51f7fed6e3daebd76f3b34ee9f9abfa4714))
+* **deploy:** guard the destructive test harness (P0) ([8deebc2](https://github.com/didi-rare/vigilafrica/commit/8deebc2feefa539a3c3c1cf1c9f035b2b5a86e87))
+* **deploy:** ownership migration was a silent no-op; fix rollout order and locking ([af83234](https://github.com/didi-rare/vigilafrica/commit/af8323440f301be6e64764216cb8298a96de6f14))
+* **deploy:** re-clone instead of re-owning; close all round-1 migration findings ([e733262](https://github.com/didi-rare/vigilafrica/commit/e73326207187d90fe360a9028d288e86bc966513))
+* **deploy:** sudoers wildcard did not restrict argv — use regex matching ([53a3071](https://github.com/didi-rare/vigilafrica/commit/53a3071e51b5f4efef9513c912adecdb89cd9f12))
+* **deploy:** vigil-deploy-run swallowed every error message ([f0d24db](https://github.com/didi-rare/vigilafrica/commit/f0d24db6b151c5159e452ccd54b1c2bbb66b0517))
+* **deploy:** vigil-deploy-run swallowed every error message ([b0399f0](https://github.com/didi-rare/vigilafrica/commit/b0399f0cef3a35375874c9fd63bdf6dda53166e9))
+
 ## [1.4.0](https://github.com/didi-rare/vigilafrica/compare/v1.3.7...v1.4.0) (2026-08-12)
 
 
