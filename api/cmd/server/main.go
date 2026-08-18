@@ -106,6 +106,13 @@ func main() {
 	rateLimitLog := slog.Default().With("subsystem", "ratelimit")
 	contextHandler := handlers.NewContextHandler(repo, geoLookup, handlers.LoadContextConfig(contextLog), contextLog)
 
+	// Drift detector for TRUSTED_PROXY_CIDRS (chore-vps-access-hardening 5.2).
+	// Logs ERROR — deliberately does NOT exit. A wrong trust list degrades
+	// geolocation and rate-limit bucketing; refusing to boot over it would turn a
+	// degradation into an outage, and would strand the operator with no service to
+	// read the diagnosis from.
+	handlers.VerifyGatewayTrusted(handlers.LoadProxyConfig(rateLimitLog), rateLimitLog)
+
 	// ── Router ────────────────────────────────────────────────────────────────
 	// v1 sub-mux: all /v1/* routes go through rate limiting.
 	// /health, /live, /ready, and docs are also covered by a lighter global limiter.
