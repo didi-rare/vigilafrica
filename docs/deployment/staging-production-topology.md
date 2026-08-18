@@ -99,24 +99,54 @@ ssh -o StrictHostKeyChecking=yes \
     "$VPS_USER@$VPS_HOST"
 ```
 
-### Tail all logs (live)
+### Reading logs and container state
+
+⚠️ **`sudo` is not optional here.** No human account is in the `docker` group — `vigil-admin` gets
+`permission denied while trying to connect to the docker API` without it — and the per-environment
+`.env` that Compose interpolates is `root:root 0600`. Every command in this section needs `sudo`.
+
+⚠️ **Each environment has its own Compose file, and it is not `docker-compose.yml`.** That file is the
+*development* stack and it exists in the checkout, so naming it does not fail — it quietly resolves to
+services that are not what is deployed. `vigil-deploy-run` selects the file from the environment name:
+staging deploys `docker-compose.staging.yml`, production `docker-compose.prod.yml`.
+
+| | staging | production |
+|---|---|---|
+| Directory | `/opt/vigilafrica/staging` | `/opt/vigilafrica/production` |
+| Compose file | `docker-compose.staging.yml` | `docker-compose.prod.yml` |
+| Compose project | `staging` | `production` |
+| Services | `staging-db`, `staging-api`, `staging-geoipupdate`, `staging-umami` | `prod-db`, `prod-api`, `prod-geoipupdate`, `prod-umami` |
+| Containers | `vigilafrica-staging-{db,api,geoip,umami}` | `vigilafrica-prod-{db,api,geoip,umami}` |
+
+There is **no `caddy` service and no `db` service** in either stack. Caddy runs on the host (see
+[Caddy reload](#caddy-reload)); the database service is `staging-db` / `prod-db`.
+
+⚠️ The GeoIP service and its container are **not** named the same: service `staging-geoipupdate`,
+container `vigilafrica-staging-geoip`.
 
 ```bash
-docker compose -f /opt/vigilafrica/staging/docker-compose.yml logs -f --tail=200
+# Tail everything (staging shown; substitute the directory, file AND prefix for production)
+cd /opt/vigilafrica/staging
+sudo docker compose -f docker-compose.staging.yml logs -f --tail=200
+
+# Per service
+sudo docker compose -f docker-compose.staging.yml logs staging-api --tail=200
+sudo docker compose -f docker-compose.staging.yml logs staging-db  --tail=200
+
+# Container status
+sudo docker compose -f docker-compose.staging.yml ps
 ```
 
-### Per-service logs
+Passing an absolute path instead of `cd`-ing is safe: Compose derives the project name from the
+directory *containing the compose file*, not the working directory, so
+`-f /opt/vigilafrica/staging/docker-compose.staging.yml` still resolves to project `staging`.
+
+**Fastest path at 3am** — the containers have explicit `container_name` values, so this needs no
+file, directory or project name to be correct:
 
 ```bash
-docker compose -f /opt/vigilafrica/staging/docker-compose.yml logs api   --tail=200
-docker compose -f /opt/vigilafrica/staging/docker-compose.yml logs caddy --tail=200
-docker compose -f /opt/vigilafrica/staging/docker-compose.yml logs db    --tail=200
-```
-
-### Container status
-
-```bash
-docker compose -f /opt/vigilafrica/staging/docker-compose.yml ps
+sudo docker logs --tail=200 -f vigilafrica-prod-api
+sudo docker ps --format '{{.Names}}	{{.Status}}'
 ```
 
 ### Health probe
@@ -137,7 +167,28 @@ curl -sS https://api.vigilafrica.org/health | jq
 
 ### Caddy reload
 
-Caddy auto-reloads on config change inside the compose stack — see the existing `Caddyfile` deploy step in [release-process.md](./release-process.md). Do not restart Caddy manually unless that procedure fails.
+⚠️ **Caddy is a host service, not a container.** It is not defined in any of the three Compose files.
+`provision.sh` installs it from the Cloudsmith apt repository and runs it under systemd
+(`systemctl enable --now caddy`), reading `/etc/caddy/Caddyfile`. Nothing about a deploy reloads it,
+so a Compose command will never show it and never restart it.
+
+Validate before reloading — a bad Caddyfile takes down every vhost at once, and `reload` keeps the
+old config if validation fails:
+
+```bash
+sudo caddy validate --config /etc/caddy/Caddyfile
+sudo systemctl reload caddy          # graceful; prefer over restart
+sudo systemctl status caddy --no-pager
+sudo journalctl -u caddy -n 100 --no-pager
+```
+
+The live `/etc/caddy/Caddyfile` is **not** generated from
+[`deploy/Caddyfile.example`](../../deploy/Caddyfile.example) — the example is a starting point that is
+installed by hand, so the two drift. As of 2026-08-18 the drift is cosmetic: the two `analytics.*`
+blocks appear in the opposite order with trimmed comments, plus tab/space differences. **The
+`api.vigilafrica.org` and `api.staging.vigilafrica.org` blocks are identical**, including the
+`header_up X-Forwarded-For {remote_host}` line that makes the API's client-IP trust policy meaningful.
+Diff them before assuming either is authoritative.
 
 ### Rollback
 
