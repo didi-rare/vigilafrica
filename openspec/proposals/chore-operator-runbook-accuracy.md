@@ -1,7 +1,7 @@
 ---
 id: chore-operator-runbook-accuracy
-status: proposed
-branch: tbd
+status: in-progress
+branch: fix/operator-runbook-accuracy
 ---
 
 # Proposal: Fix the Operator Runbook Commands That Do Not Work (chore-operator-runbook-accuracy)
@@ -120,4 +120,28 @@ Not "read it again" — each command must be **executed** against the real stack
       the staging stack specifically.
 - [ ] `logs`, `ps`, and the Caddy reload procedure each demonstrated, with the exact service names
       as written.
-- [ ] A grep confirms no remaining reference to `/opt/vigilafrica/*/docker-compose.yml`.
+- [x] A grep confirms no remaining reference to `/opt/vigilafrica/*/docker-compose.yml`. ✅ The only
+      surviving occurrence of the string is the warning that explains why that file is the wrong one.
+
+⚠️ **The corrections shipped in `fix/operator-runbook-accuracy`; the two execution boxes above are
+deliberately still open.** They require a root session on the VPS — no human account is in the
+`docker` group and the per-environment `.env` is `root:root 0600` — so they could not be demonstrated
+from the authoring session. **Do not archive this proposal until someone has actually run them.**
+Marking a runbook correct because it was re-read is the failure mode this proposal exists to fix.
+
+### What the fix was built from, so the re-run has something to check against
+
+Every value was taken from a source, not from the previous text:
+
+| Claim | Source |
+|---|---|
+| Compose file per environment | `deploy/vigil-deploy-run:47,52` |
+| Service names | `docker-compose.staging.yml` / `docker-compose.prod.yml` |
+| Container names | the `container_name:` keys in those files |
+| Compose project resolves from the file's directory, not `cwd` | run locally: `docker compose -f <abs>/docker-compose.staging.yml config` → `name: staging` |
+| Caddy is a host systemd service | `deploy/provision.sh:66-73,311`; confirmed on the host as `/usr/bin/caddy run --config /etc/caddy/Caddyfile` |
+| `sudo` is required | confirmed on the host: `vigil-admin` gets `permission denied while trying to connect to the docker API` |
+| Caddyfile drift is cosmetic | diffed the live `/etc/caddy/Caddyfile` against `deploy/Caddyfile.example` on 2026-08-18 |
+
+⚠️ **A fourth defect, not in the original list:** every command in the section was written without
+`sudo`, so as documented they fail outright for the only account a human logs in with. Fixed here.
