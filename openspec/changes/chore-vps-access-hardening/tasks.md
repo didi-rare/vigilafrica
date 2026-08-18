@@ -366,6 +366,59 @@ not migration preparation.
       forge a client IP on **either** path, and that two distinct clients through a trusted proxy
       land in distinct rate-limit buckets.
 - [ ] 5.2 **Measure the real peer address, narrow `TRUSTED_PROXY_CIDRS` to it, and build a gate that
+      can actually detect the failure.**
+      🔵 **IMPLEMENTED 2026-08-18 in `feat/narrow-trusted-proxy-cidrs`; deliberately NOT ticked — it
+      is unproven until it has been deployed.** The code is written and tested; the boundary it
+      describes does not exist until staging and production actually run it.
+
+      **The measurement, which is the part that was missing.** Read from inside the production API
+      container's own network namespace, not inferred from the host:
+      `nsenter -t <pid> -n ss -tn state established '( sport = :8080 )'` → peer
+      **`[::ffff:172.19.0.1]:38090`**. So the peer is the compose bridge gateway, **172.19.0.1** for
+      production and **172.18.0.1** for staging (`docker inspect`), and it arrives as an
+      **IPv4-mapped IPv6 address**, not a dotted quad.
+
+      ⚠️ **`172.16.0.0/12` was worse than "broad".** The same bridge holds `prod-umami`
+      (172.19.0.3), which is publicly reachable through Caddy, and `prod-db` (172.19.0.5). Four
+      addresses were trusted where one is needed, and one of them accepts traffic from the internet.
+
+      ⚠️ **The narrowing only works because of a subtlety worth stating.** `net.IPNet.Contains`
+      normalizes IPv4-mapped addresses, so `::ffff:172.19.0.1` does match `172.19.0.1/32` — verified
+      by running it, and pinned by `TestIPv4MappedPeerMatchesIPv4CIDR`. A refactor that "simplifies"
+      the parsing would break production while every dotted-quad unit test kept passing.
+
+      ⚠️ **A `/32` is unsafe without a pinned subnet, and this was the real trap.** Neither network
+      declared one, so Docker assigned from a dynamic pool; a recreated network could land on another
+      range and the failure would be **silent** — the API stops trusting Caddy, falls back to the
+      unresolvable private peer, returns a null location, and `/health` still says `ok`. Both compose
+      files now pin the subnet. Verified locally that adding a pin to a live network makes Compose
+      recreate the network and its containers automatically (exit 0, no manual `docker network rm`),
+      and that the pin yields the intended gateway.
+
+      **The gate, in three parts** — the task rejected "extend the smoke test" because one runner
+      address cannot distinguish one global bucket from correct per-client buckets:
+      1. `handlers.VerifyGatewayTrusted` at startup reads the container's own default gateway from
+         `/proc/net/route` and logs **ERROR** if it is outside `TRUSTED_PROXY_CIDRS`. This is the
+         drift detector, and it is server-side and machine-checkable. It logs rather than exits: a
+         wrong trust list is a degradation, and refusing to boot would convert it into an outage.
+      2. `deploy/verify-proxy-trust.sh <env>` speaks to the API from **two different peers** — a
+         throwaway container on the bridge forging `X-Forwarded-For` (must be disbelieved) and a real
+         request through Caddy (must still be believed). Checking only the first would pass with the
+         trust list empty, which breaks every real client, so both directions are asserted.
+      3. Unit tests covering the drifted gateway, a bridge neighbour, and the IPv4-mapped form.
+
+      ⚠️ **`/proc/net/route` is little-endian**: `010013AC` is 172.19.0.1, not 1.0.19.172. The first
+      version of the parser got this backwards and returned a plausible wrong address; it is now
+      pinned by a test against the measured value.
+
+      **Still required before this can be ticked:**
+      - [ ] Deploy to staging; confirm the log line `trusted-proxy check passed` with
+            `gateway=172.18.0.1`, and that `/v1/context` still returns a real location.
+      - [ ] Run `deploy/verify-proxy-trust.sh staging` and get `RESULT: PASS`.
+      - [ ] Repeat both on production after promotion. ⚠️ The subnet pin recreates the network, so
+            the production deploy restarts the whole stack rather than just the API.
+
+      ~~Original text:~~ can actually detect the failure.
       can actually detect the failure.** `172.16.0.0/12` was a broad guess never checked against the
       running stack. Log the observed peer so the value is observable rather than inferred.
       ⚠️ **"Extend the production smoke test" is not by itself an executable gate.** A GitHub runner
