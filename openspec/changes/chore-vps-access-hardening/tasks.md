@@ -440,17 +440,20 @@ not migration preparation.
       `--force-recreate`. So the first production deploy carrying the pin reproduces this on
       `prod-api` and `prod-umami`, i.e. **a real production outage**, not a blip.
 
-      **Required production rollout — one of these, decided before promoting:**
-      - [ ] **(a) One-time manual recreate**, preferred. The pin is a one-off; once the network
+      **Required production rollout — ✅ DECIDED 2026-08-19: option (a).**
+      - [x] **(a) One-time manual recreate — CHOSEN.** The pin is a one-off; once the network
             carries it, later deploys see no network diff and no recreation. Deploy the tag, then
             immediately on the box:
             `cd /opt/vigilafrica/production && sudo docker compose -f docker-compose.prod.yml up -d --force-recreate`
             ⚠️ The deploy's own smoke test will fail first, because the API is crash-looping when it
             runs. That failure is expected here and is not a second fault.
-      - [ ] **(b) Add `--force-recreate` to `vigil-deploy-run`.** Removes the trap permanently but
-            recreates every container on *every* deploy, including `prod-db`. Slower deploys and a
-            database restart each time — a real cost that should be decided deliberately, not by
-            default.
+      - [ ] ~~**(b) Add `--force-recreate` to `vigil-deploy-run`.**~~ **NOT chosen.** It would remove
+            the trap permanently but recreate every container on *every* deploy, including `prod-db` —
+            a database restart on each release, which is a standing cost to remove a one-off hazard.
+            ⚠️ **The trap therefore still exists in the deploy path.** Any future change to a network's
+            IPAM settings reproduces it. That risk is accepted knowingly, and the runbook section
+            "Containers crash-looping on `server misbehaving` after a deploy" is what makes it
+            recoverable.
 
       ⚠️ **A separate, independently real defect found the same night:** the staging smoke test ran
       **0.5 s** after `Container vigilafrica-staging-api Started` and could not have passed even on a
