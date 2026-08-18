@@ -44,15 +44,28 @@ grep -q "sudo-stub" "${D}/vigil-deploy" || { echo "FATAL: sudo stub not injected
 
 pass=0; fail=0
 
-run() {  # run <accept|reject> <desc> <SSH_ORIGINAL_COMMAND> [expected-argv]
-  local want="$1" desc="$2" cmd="$3" expect_argv="${4:-}"
+run() {  # run <accept|reject> <desc> <SSH_ORIGINAL_COMMAND> [expected-argv] [pin]
+  local want="$1" desc="$2" cmd="$3" expect_argv="${4:-}" pin="${5:-}"
   local rc argv
   export SUDO_ARGV_FILE="${D}/argv" SUDO_STDIN_FILE="${D}/stdin"
   : > "${SUDO_ARGV_FILE}"; : > "${SUDO_STDIN_FILE}"
 
+  # ⚠️ Default the pinned environment to the one the VERB implies, so each case
+  # still tests what its name claims. Pinning everything to staging would make
+  # the four production cases below pass because the pin mismatched -- never
+  # reaching the ref validation they exist to exercise. That is the vacuous-test
+  # failure this suite has been bitten by twice. Pass an explicit 5th argument
+  # only for the deliberate cross-environment cases.
+  if [ -z "${pin}" ]; then
+    case "${cmd}" in
+      deploy-production*) pin=production ;;
+      *)                  pin=staging ;;
+    esac
+  fi
+
   # Feed stdin deliberately: the script must discard it.
   SSH_ORIGINAL_COMMAND="${cmd}" SSH_CLIENT="203.0.113.7 1234 22" \
-    bash "${D}/vigil-deploy" > /dev/null 2>&1 <<< "echo pwned; rm -rf /"
+    bash "${D}/vigil-deploy" "${pin}" > /dev/null 2>&1 <<< "echo pwned; rm -rf /"
   rc=$?
   argv="$(cat "${SUDO_ARGV_FILE}" 2>/dev/null || true)"
 
@@ -96,6 +109,56 @@ run reject "production given a sha"        "deploy-production abc1234"
 run reject "production tag malformed"      "deploy-production 1.4.0"
 run reject "production tag with slash"     "deploy-production v1.4.0/../../x"
 
+echo "Task 1.5 — one account per environment; a key may not cross over:"
+# These are the whole point of the split. Both requests are WELL-FORMED and
+# would be accepted by the other account -- they are refused solely because the
+# key is pinned elsewhere.
+run reject "staging key wants production"  "deploy-production v1.4.0"  "" staging
+run reject "prod key wants staging"        "deploy-staging abc1234"    "" production
+
+# ⚠️ The pin WHITELIST is not an authorization gate, and saying otherwise would
+# be a false claim in a security test.
+#
+# `environment` is only ever `staging` or `production` (the verb case sets it),
+# so the cross-environment check above already refuses every malformed pin. The
+# whitelist cannot change any accept/reject outcome -- proven by mutation:
+# deleting it leaves the suite green. What it DOES do is refuse earlier and name
+# the actual fault, which is what an operator reads at 3am.
+#
+# So assert the REASON, not the verdict. Asserting only the verdict is how this
+# suite previously certified a check that did nothing.
+expect_msg() {  # expect_msg <desc> <pin> <cmd> <expected stderr substring>
+  local desc="$1" pin="$2" cmd="$3" want="$4" err rc
+  export SUDO_ARGV_FILE="${D}/argv" SUDO_STDIN_FILE="${D}/stdin"
+  : > "${SUDO_ARGV_FILE}"
+  err="$(SSH_ORIGINAL_COMMAND="${cmd}" SSH_CLIENT="203.0.113.7 1234 22" \
+          bash "${D}/vigil-deploy" "${pin}" 2>&1 >/dev/null <<< "")"
+  rc=$?
+  if [ "${rc}" -ne 0 ] && [ ! -s "${SUDO_ARGV_FILE}" ] && [[ "${err}" == *"${want}"* ]]; then
+    printf '  ok   %-34s (said: %s)\n' "${desc}" "${want}"; pass=$((pass+1))
+  else
+    printf '  FAIL %-34s rc=%d err=[%s]\n' "${desc}" "${rc}" "${err}"; fail=$((fail+1))
+  fi
+}
+
+expect_msg "invalid pin names the fault"  "both"             "deploy-staging abc1234" "invalid pinned environment"
+expect_msg "path-shaped pin names it too" "../../etc/passwd" "deploy-staging abc1234" "invalid pinned environment"
+
+# Fail closed: a forced command left at the pre-1.5 form passes NO argument.
+# The account must lose its authority rather than keep both environments.
+export SUDO_ARGV_FILE="${D}/argv" SUDO_STDIN_FILE="${D}/stdin"
+: > "${SUDO_ARGV_FILE}"
+SSH_ORIGINAL_COMMAND="deploy-staging abc1234" SSH_CLIENT="203.0.113.7 1234 22" \
+  bash "${D}/vigil-deploy" > /dev/null 2>&1 <<< ""
+rc=$?
+if [ "${rc}" -ne 0 ] && [ ! -s "${SUDO_ARGV_FILE}" ]; then
+  printf '  ok   %-34s (refused, helper never reached)\n' "legacy forced command, no pin"
+  pass=$((pass+1))
+else
+  printf '  FAIL %-34s rc=%d argv=[%s]\n' "legacy forced command, no pin" "${rc}" "$(cat "${SUDO_ARGV_FILE}")"
+  fail=$((fail+1))
+fi
+
 echo "Controls — the real protocol must work:"
 # The stub consumes sudo's leading -n, so expectations start at the helper path.
 run accept "staging short sha"   "deploy-staging abc1234"                  "/usr/local/sbin/vigil-deploy-run staging abc1234"
@@ -108,7 +171,7 @@ run accept "production prerelease" "deploy-production v1.4.0-rc.1"         "/usr
 export SUDO_ARGV_FILE="${D}/argv" SUDO_STDIN_FILE="${D}/stdin"
 : > "${SUDO_STDIN_FILE}"
 SSH_ORIGINAL_COMMAND="deploy-staging abc1234" SSH_CLIENT="203.0.113.7 1234 22" \
-  bash "${D}/vigil-deploy" > /dev/null 2>&1 <<< "echo pwned; rm -rf /"
+  bash "${D}/vigil-deploy" staging > /dev/null 2>&1 <<< "echo pwned; rm -rf /"
 if [ -s "${SUDO_STDIN_FILE}" ]; then
   printf '  FAIL %-24s client stdin reached the helper: %s\n' "stdin discarded" "$(head -1 "${SUDO_STDIN_FILE}")"
   fail=$((fail+1))
