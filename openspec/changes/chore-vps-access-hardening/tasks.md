@@ -1,6 +1,6 @@
 # Tasks: Harden the VPS Deploy Path
 
-**21 tasks.** Ordered so that **no task removes something a later task depends on** — the first
+**21 tasks — 8 done, 13 open** (last counted 2026-08-18). Ordered so that **no task removes something a later task depends on** — the first
 revision had two such defects (a forced command installed before its script existed, and a repo
 checkout deleted while a later control still needed it). Both are resolved below.
 
@@ -341,7 +341,24 @@ outside the box. Do it first, verify it with a second concurrent session, and do
 The only group touching `api/internal/`. **Surfaced by independent review** — a live defect today,
 not migration preparation.
 
-- [ ] 5.1 **Unify the two IP-resolution policies behind one trusted-proxy-aware resolver.**
+- [x] 5.1 **Unify the two IP-resolution policies behind one trusted-proxy-aware resolver.**
+      ✅ **Shipped in v1.4.0 (#225) as `fix-unify-client-ip-resolution`, 47/47 — verified against the
+      code on 2026-08-18, not self-certified.** `extractIP()` no longer exists. Both call sites now
+      route through one resolver: `/v1/context` via `h.cfg.Proxy.ClientIP(r)`
+      ([`context.go:150`](../../../api/internal/handlers/context.go)) and rate limiting via
+      `proxies.ClientIP(r)` ([`middleware.go:432`](../../../api/internal/handlers/middleware.go)),
+      both landing in `clientIPWithTrustedProxies` ([`middleware.go:302`](../../../api/internal/handlers/middleware.go)).
+      Both tests this task requires exist and were located by name, not assumed:
+      the forged-header case on **both** paths — `TestGetContextIgnoresForgedHeadersFromUntrustedPeer`
+      (`context_test.go:104`) and `TestClientIPIgnoresSpoofedForwardedForFromUntrustedPeer`
+      (`middleware_test.go:40`) — and the distinct-bucket case,
+      `TestRateLimitBucketsAreDistinctPerForwardedClient` (`ratelimit_identity_test.go:67`),
+      alongside `TestRateLimitIdentityCannotBeForgedByUntrustedPeer` (`:89`).
+      That change is archived at
+      `openspec/changes/archive/2026-08-18-fix-unify-client-ip-resolution/`.
+      ⚠️ **This does not close group 5.** Until 5.2 narrows the CIDR list, the bar is raised only from
+      *any peer* to *anything on the Docker bridge* — which includes the public-facing `prod-umami`.
+      ~~Original text:~~
       `/v1/context` uses `extractIP()` ([`context.go:74-94`](../../../api/internal/handlers/context.go)),
       which honours `X-Forwarded-For` and `X-Real-IP` from **any** peer, while rate limiting uses
       `clientIP()` ([`middleware.go:386`](../../../api/internal/handlers/middleware.go)), which
