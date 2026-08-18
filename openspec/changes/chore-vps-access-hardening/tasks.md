@@ -411,12 +411,50 @@ not migration preparation.
       version of the parser got this backwards and returned a plausible wrong address; it is now
       pinned by a test against the measured value.
 
-      **Still required before this can be ticked:**
-      - [ ] Deploy to staging; confirm the log line `trusted-proxy check passed` with
-            `gateway=172.18.0.1`, and that `/v1/context` still returns a real location.
-      - [ ] Run `deploy/verify-proxy-trust.sh staging` and get `RESULT: PASS`.
-      - [ ] Repeat both on production after promotion. ⚠️ The subnet pin recreates the network, so
-            the production deploy restarts the whole stack rather than just the API.
+      **Staging, deployed 2026-08-18 (`9a4324c`) — the trust change itself works:**
+      - [x] `trusted-proxy check passed ... gateway=172.18.0.1
+            trusted_proxy_cidrs=["127.0.0.0/8","::1/128","172.18.0.1/32"]` in the container log.
+      - [x] `/v1/context` still returns a real location (`location_source: "ip"`, Nigeria/Lagos), so
+            **narrowing did not break geolocation** — the silent failure mode this task feared.
+      - [ ] `deploy/verify-proxy-trust.sh staging` → `RESULT: PASS` (needs a root session; not yet run).
+
+      🚨 **THE STAGING DEPLOY TOOK STAGING DOWN, AND PRODUCTION WILL BREAK THE SAME WAY.**
+      **Do not promote this to production until the rollout below is followed.**
+
+      **What happened.** Pinning the subnet makes Compose remove and recreate the network. Compose
+      then *recreated* only the container whose definition changed (`staging-api`) and merely
+      **stopped and started** the rest. Containers that are only restarted come back attached to the
+      old network state, and **Docker's embedded DNS at 127.0.0.11 no longer resolves sibling service
+      names.** The API crash-looped for six minutes on:
+
+      `failed to connect to host=staging-db: hostname resolving error: lookup staging-db on
+      127.0.0.11:53: server misbehaving`
+
+      `staging-umami` crash-looped identically. `staging-db` and `staging-geoipupdate` survived
+      **because neither resolves another service by name** — which is exactly why the symptom looked
+      like a networking fault rather than a DNS one.
+
+      ⚠️ **`up -d` does NOT repair this. `up -d --force-recreate` does**, and restored staging fully.
+
+      ⚠️ **`vigil-deploy-run` runs `docker compose -f "${compose}" up -d --build`** — no
+      `--force-recreate`. So the first production deploy carrying the pin reproduces this on
+      `prod-api` and `prod-umami`, i.e. **a real production outage**, not a blip.
+
+      **Required production rollout — one of these, decided before promoting:**
+      - [ ] **(a) One-time manual recreate**, preferred. The pin is a one-off; once the network
+            carries it, later deploys see no network diff and no recreation. Deploy the tag, then
+            immediately on the box:
+            `cd /opt/vigilafrica/production && sudo docker compose -f docker-compose.prod.yml up -d --force-recreate`
+            ⚠️ The deploy's own smoke test will fail first, because the API is crash-looping when it
+            runs. That failure is expected here and is not a second fault.
+      - [ ] **(b) Add `--force-recreate` to `vigil-deploy-run`.** Removes the trap permanently but
+            recreates every container on *every* deploy, including `prod-db`. Slower deploys and a
+            database restart each time — a real cost that should be decided deliberately, not by
+            default.
+
+      ⚠️ **A separate, independently real defect found the same night:** the staging smoke test ran
+      **0.5 s** after `Container vigilafrica-staging-api Started` and could not have passed even on a
+      healthy deploy. It needs a readiness wait, not a longer sleep.
 
       ~~Original text:~~ can actually detect the failure.
       can actually detect the failure.** `172.16.0.0/12` was a broad guess never checked against the
