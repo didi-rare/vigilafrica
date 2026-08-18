@@ -165,6 +165,30 @@ curl -sS https://api.staging.vigilafrica.org/health | jq
 curl -sS https://api.vigilafrica.org/health | jq
 ```
 
+### Containers crash-looping on `server misbehaving` after a deploy
+
+If the API or Umami restart in a loop with:
+
+```text
+hostname resolving error: lookup staging-db on 127.0.0.11:53: server misbehaving
+```
+
+the container has lost Docker's embedded DNS. This happens when the Compose **network** was removed
+and recreated — for example because its subnet or other IPAM settings changed. Compose recreates only
+the containers whose own definition changed and merely restarts the others, and a merely-restarted
+container comes back unable to resolve its siblings by service name.
+
+⚠️ **`up -d` does not repair it.** Force every container to be rebuilt against the new network:
+
+```bash
+cd /opt/vigilafrica/staging      # or /opt/vigilafrica/production
+sudo docker compose -f docker-compose.staging.yml up -d --force-recreate
+```
+
+⚠️ **The database and the GeoIP updater will look healthy throughout**, because neither resolves
+another service by name. Do not let that steer you toward a networking fault — check whether the
+*failing* containers can resolve their peers. Observed on staging 2026-08-18.
+
 ### Caddy reload
 
 ⚠️ **Caddy is a host service, not a container.** It is not defined in any of the three Compose files.
