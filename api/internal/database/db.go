@@ -4,10 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/golang-migrate/migrate/v4"
-	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	// The migration driver is deliberately pgx, not golang-migrate's default
+	// "postgres" driver. That default is built on github.com/lib/pq, which is
+	// unmaintained: govulncheck reports five reachable advisories against
+	// v1.10.9 (GO-2026-6166, -6168, -6170, -6171, -6172) and every one of them
+	// is "Fixed in: N/A". Since the application pool already speaks pgx, this
+	// import removes lib/pq from the build entirely rather than suppressing it.
+	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -51,7 +58,12 @@ func NewRepository(ctx context.Context, databaseURL string) (Repository, error) 
 		return nil, fmt.Errorf("failed to load migration files: %w", err)
 	}
 
-	m, err := migrate.NewWithSourceInstance("iofs", d, databaseURL)
+	migrateURL, err := migrateDSN(databaseURL)
+	if err != nil {
+		return nil, err
+	}
+
+	m, err := migrate.NewWithSourceInstance("iofs", d, migrateURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize migrate instance: %w", err)
 	}
@@ -83,6 +95,31 @@ func NewRepository(ctx context.Context, databaseURL string) (Repository, error) 
 	}
 
 	return &pgRepo{pool: pool}, nil
+}
+
+// migrateDSN rewrites the connection URL's scheme to the one golang-migrate's
+// pgx/v5 driver registers itself under ("pgx5"). Only the scheme changes; the
+// credentials, host, database and query parameters are carried over untouched,
+// and the application pool keeps using the original URL.
+//
+// The rewrite is required, not cosmetic: golang-migrate dispatches on scheme,
+// so a "postgres://" URL would resolve to the lib/pq-backed driver that this
+// package no longer imports, and fail at run time with an unknown-driver error
+// rather than at compile time.
+func migrateDSN(databaseURL string) (string, error) {
+	u, err := url.Parse(databaseURL)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse database DSN: %w", err)
+	}
+
+	switch u.Scheme {
+	case "postgres", "postgresql", "pgx", "pgx5":
+		u.Scheme = "pgx5"
+	default:
+		return "", fmt.Errorf("unsupported database URL scheme %q: expected postgres:// or postgresql://", u.Scheme)
+	}
+
+	return u.String(), nil
 }
 
 // UpsertEvent implements the idempotent UPSERT strategy for EONET events.

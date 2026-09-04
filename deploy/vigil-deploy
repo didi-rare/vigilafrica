@@ -39,6 +39,30 @@ deny() {
   exit 1
 }
 
+# ---------------------------------------------------------------------------
+# Which environment may THIS key deploy? (task 1.5)
+#
+# Pinned by the forced command in authorized_keys, e.g.
+#
+#   restrict,command="/usr/local/bin/vigil-deploy staging" ssh-ed25519 AAAA...
+#
+# authorized_keys is root:root 0644 and lives in a root-owned .ssh directory, so
+# the deploy account cannot widen its own authority by editing this argument.
+#
+# ⚠️ This is the FIRST filter, not the boundary. The boundary is the per-account
+# sudoers rule, which permits only that environment's argv -- see
+# deploy/sudoers.d/vigil-deploy. A forced command alone would be bypassable if
+# authorized_keys were ever made writable; the sudo rule would still hold.
+#
+# ⚠️ Fail closed: no argument means no authority. There is deliberately no
+# "both environments" mode -- that is the exposure task 1.5 exists to remove.
+allowed_env="${1:-}"
+case "${allowed_env}" in
+  staging|production) ;;
+  '') deny "no environment pinned in the forced command" ;;
+  *)  deny "invalid pinned environment" ;;
+esac
+
 cmd="${SSH_ORIGINAL_COMMAND:-}"
 
 # An interactive login attempt arrives with no original command. That is the
@@ -79,7 +103,15 @@ case "${verb}" in
     ;;
 esac
 
-logger -t vigil-deploy "ACCEPTED: ${verb} ${ref} | peer=${SSH_CLIENT%% *}" 2>/dev/null || true
+# The cross-environment check. A staging key that asks for a production deploy
+# reaches here with a well-formed request and is refused anyway.
+#
+# ⚠️ Refuse BEFORE logging ACCEPTED, or the log records an acceptance that never
+# happened -- the journal is the incident record, so it must not lie.
+[ "${environment}" = "${allowed_env}" ] \
+  || deny "key is pinned to ${allowed_env}, refused ${verb}"
+
+logger -t vigil-deploy "ACCEPTED: ${verb} ${ref} | env=${allowed_env} | peer=${SSH_CLIENT%% *}" 2>/dev/null || true
 
 # Fixed argv. No shell, no globbing, no caller-supplied paths or flags.
 exec "${SUDO}" -n "${HELPER}" "${environment}" "${ref}"

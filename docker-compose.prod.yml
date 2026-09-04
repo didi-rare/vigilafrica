@@ -39,7 +39,12 @@ services:
       - CORS_ORIGIN=${CORS_ORIGIN}
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - API_DOCS_ENABLED=${API_DOCS_ENABLED:-false}
-      - TRUSTED_PROXY_CIDRS=${TRUSTED_PROXY_CIDRS:-127.0.0.1/8,::1/128,172.16.0.0/12}
+      # Only the bridge gateway is trusted. Caddy runs on the HOST and reaches this
+      # container through the published port, so the peer the API sees is the gateway —
+      # measured from inside this container on 2026-08-18 as [::ffff:172.19.0.1]:38090.
+      # The old 172.16.0.0/12 also trusted prod-umami (172.19.0.3), which is publicly
+      # reachable through Caddy, and prod-db (172.19.0.5). See chore-vps-access-hardening 5.2.
+      - TRUSTED_PROXY_CIDRS=${TRUSTED_PROXY_CIDRS:-127.0.0.1/8,::1/128,172.19.0.1/32}
       - INGEST_INTERVAL_MIN=${INGEST_INTERVAL_MIN:-60}
       - RATE_LIMIT_RPM=${RATE_LIMIT_RPM:-60}
       - GLOBAL_RATE_LIMIT_RPM=${GLOBAL_RATE_LIMIT_RPM:-300}
@@ -134,4 +139,13 @@ volumes:
   prod-maxmind-data:
 
 networks:
+  # The subnet is PINNED so the gateway address above is deterministic. Without a
+  # pin Docker assigns from a dynamic pool, and a network recreated onto a
+  # different range would silently break geolocation: the API would stop trusting
+  # Caddy, fall back to the unresolvable private peer, and return a null location
+  # while /health still reported ok. The API logs an ERROR at startup if its own
+  # default gateway ever falls outside TRUSTED_PROXY_CIDRS.
   prod-internal:
+    ipam:
+      config:
+        - subnet: 172.19.0.0/16

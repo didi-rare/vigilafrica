@@ -1,6 +1,6 @@
 # Tasks: Harden the VPS Deploy Path
 
-**21 tasks.** Ordered so that **no task removes something a later task depends on** — the first
+**21 tasks — 8 done, 13 open** (last counted 2026-08-18). Ordered so that **no task removes something a later task depends on** — the first
 revision had two such defects (a forced command installed before its script existed, and a repo
 checkout deleted while a later control still needed it). Both are resolved below.
 
@@ -157,7 +157,7 @@ outside the box. Do it first, verify it with a second concurrent session, and do
       independent review rounds because it is invisible until runtime and every offline test died
       before reaching the lock line. Fixed in #239, with a regression test that deliberately gets
       *past* the lock.
-- [ ] 1.5 **Split the deploy account in two, and retire the old one.** One user currently owns both
+- [x] 1.5 **Split the deploy account in two, and retire the old one.** One user currently owns both
       environment directories, so production's reviewer gate is not a boundary at the host level.
       Create `deploy-staging` and `deploy-prod`, each owning only its own path, key, and forced
       command. ⚠️ **Creating the new principals does not remove the old one** — the original
@@ -166,7 +166,33 @@ outside the box. Do it first, verify it with a second concurrent session, and do
       and docker-group membership, transfer ownership, and **prove the old key reaches neither
       environment.** `DEPLOY_USER` is a single variable with a single default — this is a
       restructure, not a find-and-replace.
-- [ ] 1.6 **Harden `sshd_config`** — `provision.sh` never touches it, leaving password auth and root
+      **DONE 2026-08-16**, runbook at [`docs/deployment/deploy-account-split.md`](../../../docs/deployment/deploy-account-split.md).
+      ⚠️ **"each owning only its own path" no longer applies** — after 1.3/1.4 **neither account owns
+      any path; root does**, and the helper does all the writing. Re-owning per account would undo
+      1.4. What was actually split is **credentials and authority**.
+      `deploy-staging` (uid 1002) and `deploy-prod` (uid 1003) exist, each in **only its own group**,
+      neither in `docker`, each with its **own** key — `SHA256:eeBSUU…` / `SHA256:2gVnPK…`, distinct
+      by fingerprint (`provision.sh` now refuses identical ones; a string compare would pass two
+      copies of one key with different comments).
+      The environment is pinned in the root-owned forced command; the **boundary** is sudoers, proven
+      by `sudo -l -U`: `deploy-staging` → staging rule only, `deploy-prod` → production rule only.
+      ⚠️ **The split was proven with WELL-FORMED requests the other account would accept**, so a
+      refusal is separation rather than a parse error: staging key → `deploy-production v1.5.0` and
+      prod key → `deploy-staging 48d0b09` both gave `refused: key is pinned to …`.
+      Both environments then deployed for real through the new accounts: staging run 31957826770
+      (`4edd382`, health `ok`) and production run 31957880766 (redeploy of the running `v1.5.0`, gate
+      approved, health `ok`, NG+GH `success`).
+      **Old account retired:** `authorized_keys` removed, out of `docker`, `usermod -L -s nologin`
+      (`passwd -S` → `L`), no sudoers entry. Old key now fails at **authentication** —
+      `Permission denied (publickey)` — not at the forced command.
+      ⚠️ Remaining `deploy`-owned files are confined to
+      `/opt/vigilafrica/.forced-command-rollback-20260815T132945Z`, which is `root:root 0700` and
+      therefore unreachable; `/etc/sudoers*` carries no `deploy` reference.
+      ⚠️ **`VPS_USER` and `VPS_SSH_KEY` were already per-environment secrets**, so the workflows
+      needed **no change** — only four secret values. `vigil-deploy-run` was unchanged too.
+      Incidental confirmation: `vigil-deploy-run` now appears **unmasked** in Actions logs, where it
+      previously rendered `vigil-***-run` because `VPS_USER` was literally `deploy`.
+- [x] 1.6 **Harden `sshd_config`** — `provision.sh` never touches it, leaving password auth and root
       login at image defaults. Set `PasswordAuthentication no`, `KbdInteractiveAuthentication no`,
       `PermitRootLogin no`. ⚠️ **Requires 1.1 verified first.** ⚠️ `sshd -t` checks **syntax, not
       effective policy** — OpenSSH takes the first obtained value, so an earlier cloud-image
@@ -174,7 +200,22 @@ outside the box. Do it first, verify it with a second concurrent session, and do
       Verify with `sshd -T -C user=…,host=…,addr=…` for every relevant account, then **empirically**:
       key login succeeds, password login is refused, root login is refused — all proven **before**
       closing the rescue session. Document the console/rescue rollback path.
-- [ ] 1.7 **Confirm the reviewer set and document key rotation.** ✅ The `production` environment's
+      **DONE 2026-08-16**, runbook at [`docs/deployment/sshd-hardening.md`](../../../docs/deployment/sshd-hardening.md).
+      Applied as a **low-sorted drop-in** `/etc/ssh/sshd_config.d/00-vigilafrica-hardening.conf`, not
+      an edit to the main file: `Include` sits at line 12 and OpenSSH takes the **first** obtained
+      value, so drop-ins beat the main file and the *lowest* filename beats later ones — `00-` cannot
+      be overridden by a future cloud-init `50-`. The familiar "99 = wins" convention is backwards.
+      Before: `passwordauthentication yes`, `permitrootlogin without-password`
+      (so root-by-key was live, and `/root/.ssh/authorized_keys` existed).
+      After, confirmed by `sshd -T` and per-account `sshd -T -C` for `vigil-admin`/`deploy`/`root`:
+      all three directives `no`. `kbdinteractiveauthentication` was **already** `no` at line 71.
+      Proven empirically from the workstation, and re-verified independently: key login `KEY_LOGIN_OK`;
+      offered methods now `publickey` alone (was `publickey,password`); `root` → `Permission denied
+      (publickey)` despite holding a key; deploy forced command unchanged (`refused: unknown verb`).
+      Also folded into `provision.sh` so a rebuild cannot regress it — **guarded**: it refuses to
+      harden when no non-deploy account has a key-based login, since the deploy accounts have no
+      shell and cannot recover a host. Rollback is `rm` of the one drop-in plus `systemctl reload ssh`.
+- [x] 1.7 **Confirm the reviewer set and document key rotation.** ✅ The `production` environment's
       required-reviewer rule **has been verified to exist** via the public GitHub environments API,
       so it is no longer an unverified premise — but the *reviewer set* has not been checked, and
       `VPS_SSH_KEY` is a static secret with no expiry. Confirm both, then update
@@ -187,8 +228,19 @@ outside the box. Do it first, verify it with a second concurrent session, and do
       the case for 1.5** — the host-level account split has to be the boundary, because this is not.
       Key rotation documented in `vps.md` with the retire-the-old-key step called out, since adding
       a new key without removing the old one is the usual way rotation silently fails.
-      **Left open deliberately:** the task also requires documenting tasks 1.1–1.6, and 1.1/1.3–1.6
-      are not implemented. Ticking this now would document a host state that does not exist.
+      ~~**Left open deliberately:** the task also requires documenting tasks 1.1–1.6, and 1.1/1.3–1.6
+      are not implemented. Ticking this now would document a host state that does not exist.~~
+      **DONE 2026-08-16** — 1.1–1.6 are now all implemented and host-verified, so `vps.md` documents
+      a state that actually exists. Added a **Host Access Model** section (account table, how a deploy
+      runs, and a control→enforcer→task table so an incident responder can see which boundaries fail
+      independently), and rewrote **Deploy-credential rotation** for two accounts and two keys.
+      ⚠️ **Three stale claims corrected, found while writing it:**
+      (1) *"There is no host-level boundary between staging and production today"* — false since 1.5.
+      (2) The provisioning command still advertised the removed `SSH_PUBLIC_KEY`/`DEPLOY_USER`.
+      (3) **The `.env` section instructed `install -o deploy -g deploy`** — actively wrong since 1.4,
+      and it would hand a leaked deploy key the database password. The **host is correct**
+      (`root:root 600`, verified live); only the documentation was stale, so the risk was to the next
+      person provisioning a host rather than to the running one.
 
 ## 2. Move the build off production
 
@@ -289,7 +341,24 @@ outside the box. Do it first, verify it with a second concurrent session, and do
 The only group touching `api/internal/`. **Surfaced by independent review** — a live defect today,
 not migration preparation.
 
-- [ ] 5.1 **Unify the two IP-resolution policies behind one trusted-proxy-aware resolver.**
+- [x] 5.1 **Unify the two IP-resolution policies behind one trusted-proxy-aware resolver.**
+      ✅ **Shipped in v1.4.0 (#225) as `fix-unify-client-ip-resolution`, 47/47 — verified against the
+      code on 2026-08-18, not self-certified.** `extractIP()` no longer exists. Both call sites now
+      route through one resolver: `/v1/context` via `h.cfg.Proxy.ClientIP(r)`
+      ([`context.go:150`](../../../api/internal/handlers/context.go)) and rate limiting via
+      `proxies.ClientIP(r)` ([`middleware.go:432`](../../../api/internal/handlers/middleware.go)),
+      both landing in `clientIPWithTrustedProxies` ([`middleware.go:302`](../../../api/internal/handlers/middleware.go)).
+      Both tests this task requires exist and were located by name, not assumed:
+      the forged-header case on **both** paths — `TestGetContextIgnoresForgedHeadersFromUntrustedPeer`
+      (`context_test.go:104`) and `TestClientIPIgnoresSpoofedForwardedForFromUntrustedPeer`
+      (`middleware_test.go:40`) — and the distinct-bucket case,
+      `TestRateLimitBucketsAreDistinctPerForwardedClient` (`ratelimit_identity_test.go:67`),
+      alongside `TestRateLimitIdentityCannotBeForgedByUntrustedPeer` (`:89`).
+      That change is archived at
+      `openspec/changes/archive/2026-08-18-fix-unify-client-ip-resolution/`.
+      ⚠️ **This does not close group 5.** Until 5.2 narrows the CIDR list, the bar is raised only from
+      *any peer* to *anything on the Docker bridge* — which includes the public-facing `prod-umami`.
+      ~~Original text:~~
       `/v1/context` uses `extractIP()` ([`context.go:74-94`](../../../api/internal/handlers/context.go)),
       which honours `X-Forwarded-For` and `X-Real-IP` from **any** peer, while rate limiting uses
       `clientIP()` ([`middleware.go:386`](../../../api/internal/handlers/middleware.go)), which
@@ -297,6 +366,100 @@ not migration preparation.
       forge a client IP on **either** path, and that two distinct clients through a trusted proxy
       land in distinct rate-limit buckets.
 - [ ] 5.2 **Measure the real peer address, narrow `TRUSTED_PROXY_CIDRS` to it, and build a gate that
+      can actually detect the failure.**
+      🔵 **IMPLEMENTED 2026-08-18 in `feat/narrow-trusted-proxy-cidrs`; deliberately NOT ticked — it
+      is unproven until it has been deployed.** The code is written and tested; the boundary it
+      describes does not exist until staging and production actually run it.
+
+      **The measurement, which is the part that was missing.** Read from inside the production API
+      container's own network namespace, not inferred from the host:
+      `nsenter -t <pid> -n ss -tn state established '( sport = :8080 )'` → peer
+      **`[::ffff:172.19.0.1]:38090`**. So the peer is the compose bridge gateway, **172.19.0.1** for
+      production and **172.18.0.1** for staging (`docker inspect`), and it arrives as an
+      **IPv4-mapped IPv6 address**, not a dotted quad.
+
+      ⚠️ **`172.16.0.0/12` was worse than "broad".** The same bridge holds `prod-umami`
+      (172.19.0.3), which is publicly reachable through Caddy, and `prod-db` (172.19.0.5). Four
+      addresses were trusted where one is needed, and one of them accepts traffic from the internet.
+
+      ⚠️ **The narrowing only works because of a subtlety worth stating.** `net.IPNet.Contains`
+      normalizes IPv4-mapped addresses, so `::ffff:172.19.0.1` does match `172.19.0.1/32` — verified
+      by running it, and pinned by `TestIPv4MappedPeerMatchesIPv4CIDR`. A refactor that "simplifies"
+      the parsing would break production while every dotted-quad unit test kept passing.
+
+      ⚠️ **A `/32` is unsafe without a pinned subnet, and this was the real trap.** Neither network
+      declared one, so Docker assigned from a dynamic pool; a recreated network could land on another
+      range and the failure would be **silent** — the API stops trusting Caddy, falls back to the
+      unresolvable private peer, returns a null location, and `/health` still says `ok`. Both compose
+      files now pin the subnet. Verified locally that adding a pin to a live network makes Compose
+      recreate the network and its containers automatically (exit 0, no manual `docker network rm`),
+      and that the pin yields the intended gateway.
+
+      **The gate, in three parts** — the task rejected "extend the smoke test" because one runner
+      address cannot distinguish one global bucket from correct per-client buckets:
+      1. `handlers.VerifyGatewayTrusted` at startup reads the container's own default gateway from
+         `/proc/net/route` and logs **ERROR** if it is outside `TRUSTED_PROXY_CIDRS`. This is the
+         drift detector, and it is server-side and machine-checkable. It logs rather than exits: a
+         wrong trust list is a degradation, and refusing to boot would convert it into an outage.
+      2. `deploy/verify-proxy-trust.sh <env>` speaks to the API from **two different peers** — a
+         throwaway container on the bridge forging `X-Forwarded-For` (must be disbelieved) and a real
+         request through Caddy (must still be believed). Checking only the first would pass with the
+         trust list empty, which breaks every real client, so both directions are asserted.
+      3. Unit tests covering the drifted gateway, a bridge neighbour, and the IPv4-mapped form.
+
+      ⚠️ **`/proc/net/route` is little-endian**: `010013AC` is 172.19.0.1, not 1.0.19.172. The first
+      version of the parser got this backwards and returned a plausible wrong address; it is now
+      pinned by a test against the measured value.
+
+      **Staging, deployed 2026-08-18 (`9a4324c`) — the trust change itself works:**
+      - [x] `trusted-proxy check passed ... gateway=172.18.0.1
+            trusted_proxy_cidrs=["127.0.0.0/8","::1/128","172.18.0.1/32"]` in the container log.
+      - [x] `/v1/context` still returns a real location (`location_source: "ip"`, Nigeria/Lagos), so
+            **narrowing did not break geolocation** — the silent failure mode this task feared.
+      - [ ] `deploy/verify-proxy-trust.sh staging` → `RESULT: PASS` (needs a root session; not yet run).
+
+      🚨 **THE STAGING DEPLOY TOOK STAGING DOWN, AND PRODUCTION WILL BREAK THE SAME WAY.**
+      **Do not promote this to production until the rollout below is followed.**
+
+      **What happened.** Pinning the subnet makes Compose remove and recreate the network. Compose
+      then *recreated* only the container whose definition changed (`staging-api`) and merely
+      **stopped and started** the rest. Containers that are only restarted come back attached to the
+      old network state, and **Docker's embedded DNS at 127.0.0.11 no longer resolves sibling service
+      names.** The API crash-looped for six minutes on:
+
+      `failed to connect to host=staging-db: hostname resolving error: lookup staging-db on
+      127.0.0.11:53: server misbehaving`
+
+      `staging-umami` crash-looped identically. `staging-db` and `staging-geoipupdate` survived
+      **because neither resolves another service by name** — which is exactly why the symptom looked
+      like a networking fault rather than a DNS one.
+
+      ⚠️ **`up -d` does NOT repair this. `up -d --force-recreate` does**, and restored staging fully.
+
+      ⚠️ **`vigil-deploy-run` runs `docker compose -f "${compose}" up -d --build`** — no
+      `--force-recreate`. So the first production deploy carrying the pin reproduces this on
+      `prod-api` and `prod-umami`, i.e. **a real production outage**, not a blip.
+
+      **Required production rollout — ✅ DECIDED 2026-08-19: option (a).**
+      - [x] **(a) One-time manual recreate — CHOSEN.** The pin is a one-off; once the network
+            carries it, later deploys see no network diff and no recreation. Deploy the tag, then
+            immediately on the box:
+            `cd /opt/vigilafrica/production && sudo docker compose -f docker-compose.prod.yml up -d --force-recreate`
+            ⚠️ The deploy's own smoke test will fail first, because the API is crash-looping when it
+            runs. That failure is expected here and is not a second fault.
+      - [ ] ~~**(b) Add `--force-recreate` to `vigil-deploy-run`.**~~ **NOT chosen.** It would remove
+            the trap permanently but recreate every container on *every* deploy, including `prod-db` —
+            a database restart on each release, which is a standing cost to remove a one-off hazard.
+            ⚠️ **The trap therefore still exists in the deploy path.** Any future change to a network's
+            IPAM settings reproduces it. That risk is accepted knowingly, and the runbook section
+            "Containers crash-looping on `server misbehaving` after a deploy" is what makes it
+            recoverable.
+
+      ⚠️ **A separate, independently real defect found the same night:** the staging smoke test ran
+      **0.5 s** after `Container vigilafrica-staging-api Started` and could not have passed even on a
+      healthy deploy. It needs a readiness wait, not a longer sleep.
+
+      ~~Original text:~~ can actually detect the failure.
       can actually detect the failure.** `172.16.0.0/12` was a broad guess never checked against the
       running stack. Log the observed peer so the value is observable rather than inferred.
       ⚠️ **"Extend the production smoke test" is not by itself an executable gate.** A GitHub runner
