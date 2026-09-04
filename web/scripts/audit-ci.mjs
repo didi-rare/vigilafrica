@@ -23,17 +23,81 @@ const ALLOWLIST = [
 const SEVERITY_RANK = { info: 1, low: 2, moderate: 3, high: 4, critical: 5 }
 const THRESHOLD = SEVERITY_RANK.moderate // mirror the previous --audit-level=moderate
 
+// ⚠️ This gate USED TO FAIL OPEN, and that is the bug this block exists to stop.
+//
+// When npm cannot reach its advisory endpoint it still prints valid JSON — an
+// object shaped `{"error":{...}}` rather than a report. The old code parsed that
+// happily, found no `vulnerabilities` key, and printed "audit:ci passed" with
+// exit 0. A dependency audit that cannot run was therefore indistinguishable
+// from one that ran and found nothing.
+//
+// That is not hypothetical: npm's bulk advisory endpoint was intermittently
+// timing out on 2026-09-04, falling back to the `/security/audits/quick`
+// endpoint being decommissioned, which answers 400. Reproduced by stubbing npm:
+// the gate printed "audit:ci passed" and exited 0 against an error payload.
+//
+// So: retry transport failures, and if the report is not a real report, FAIL.
+// A gate that could not run must never report as a gate that passed.
+
+const ATTEMPTS = 3
+const TRANSPORT_HINT = /audit endpoint returned an error|ECONNRESET|ETIMEDOUT|network timeout|audits\/quick|EAI_AGAIN|socket hang up/i
+
+function runNpmAudit() {
+  // stderr is captured, not discarded: npm reports transport trouble there, and
+  // discarding it is what made this failure mode invisible in the first place.
+  try {
+    const stdout = execSync('npm audit --json --fetch-timeout=45000 --fetch-retries=0', {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    return { stdout, stderr: '' }
+  } catch (err) {
+    // `npm audit` exits non-zero whenever vulnerabilities exist, but still prints
+    // the JSON report to stdout — parse that rather than treating it as failure.
+    return { stdout: err.stdout ? err.stdout.toString() : '', stderr: err.stderr ? err.stderr.toString() : String(err.message || '') }
+  }
+}
+
+// A genuine npm audit report always carries these. An error payload carries
+// neither, which is exactly how a failed run gets caught instead of passing.
+function isRealReport(r) {
+  return !!r && typeof r === 'object' && !r.error && (r.vulnerabilities !== undefined || r.metadata !== undefined)
+}
+
 let report
-try {
-  report = JSON.parse(execSync('npm audit --json', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }))
-} catch (err) {
-  // `npm audit` exits non-zero whenever vulnerabilities exist, but still prints
-  // the JSON report to stdout — parse that rather than treating it as failure.
-  if (!err.stdout) {
-    console.error('audit:ci — could not run `npm audit --json`:', err.message)
+for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
+  const { stdout, stderr } = runNpmAudit()
+
+  let parsed = null
+  try {
+    parsed = JSON.parse(stdout)
+  } catch {
+    parsed = null
+  }
+
+  if (isRealReport(parsed)) {
+    report = parsed
+    break
+  }
+
+  const detail = (parsed && parsed.error && (parsed.error.summary || parsed.error.detail || parsed.error.code)) || stderr.trim().slice(0, 200) || 'no audit report returned'
+  const transport = TRANSPORT_HINT.test(detail) || TRANSPORT_HINT.test(stderr)
+
+  console.error(`audit:ci — attempt ${attempt}/${ATTEMPTS} did not produce an audit report: ${detail}`)
+
+  if (!transport || attempt === ATTEMPTS) {
+    console.error('')
+    console.error('audit:ci FAILED — `npm audit` did not return a usable report.')
+    console.error('This is NOT a clean audit: the gate did not run, so it is reported as a')
+    console.error("failure rather than a pass. If npm's advisory endpoint is degraded, re-run")
+    console.error("once it recovers. Do NOT rebuild the lockfile because of npm's")
+    console.error(`"Invalid package tree" message: that is the retired endpoint's generic 400 body.`)
     process.exit(2)
   }
-  report = JSON.parse(err.stdout.toString())
+
+  const backoffMs = 10000 * attempt
+  console.error(`  retrying in ${backoffMs / 1000}s`)
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, backoffMs) // sleep, synchronously
 }
 
 const allowed = new Map(ALLOWLIST.map((a) => [a.ghsa, a]))
