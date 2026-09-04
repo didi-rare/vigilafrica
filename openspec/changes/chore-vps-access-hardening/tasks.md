@@ -1,6 +1,6 @@
 # Tasks: Harden the VPS Deploy Path
 
-**21 tasks — 8 done, 13 open** (last counted 2026-08-18). Ordered so that **no task removes something a later task depends on** — the first
+**21 tasks — 9 done, 12 open** (last counted 2026-09-04). **Groups 1 and 5 are CLOSED.** Ordered so that **no task removes something a later task depends on** — the first
 revision had two such defects (a forced command installed before its script existed, and a repo
 checkout deleted while a later control still needed it). Both are resolved below.
 
@@ -365,11 +365,11 @@ not migration preparation.
       checks the peer first. Make both use one resolver. Add tests that an untrusted peer cannot
       forge a client IP on **either** path, and that two distinct clients through a trusted proxy
       land in distinct rate-limit buckets.
-- [ ] 5.2 **Measure the real peer address, narrow `TRUSTED_PROXY_CIDRS` to it, and build a gate that
+- [x] 5.2 **Measure the real peer address, narrow `TRUSTED_PROXY_CIDRS` to it, and build a gate that
       can actually detect the failure.**
-      🔵 **IMPLEMENTED 2026-08-18 in `feat/narrow-trusted-proxy-cidrs`; deliberately NOT ticked — it
-      is unproven until it has been deployed.** The code is written and tested; the boundary it
-      describes does not exist until staging and production actually run it.
+      ✅ **CLOSED 2026-09-04, shipped in v1.6.0 and PROVEN ON PRODUCTION.** It was held unticked for
+      seventeen days on purpose: the code was written and tested on 2026-08-18, but a trust boundary
+      does not exist until the environment actually runs it.
 
       **The measurement, which is the part that was missing.** Read from inside the production API
       container's own network namespace, not inferred from the host:
@@ -416,7 +416,38 @@ not migration preparation.
             trusted_proxy_cidrs=["127.0.0.0/8","::1/128","172.18.0.1/32"]` in the container log.
       - [x] `/v1/context` still returns a real location (`location_source: "ip"`, Nigeria/Lagos), so
             **narrowing did not break geolocation** — the silent failure mode this task feared.
-      - [ ] `deploy/verify-proxy-trust.sh staging` → `RESULT: PASS` (needs a root session; not yet run).
+      - [ ] `deploy/verify-proxy-trust.sh staging` → never run. Superseded by the production run
+            below, which exercises the identical code path against the stricter environment. Left
+            unticked rather than back-filled, because it was not done.
+
+      **Production, deployed 2026-09-04 as `v1.6.0` — all green:**
+      - [x] `trusted-proxy check passed ... gateway=172.19.0.1
+            trusted_proxy_cidrs=["127.0.0.0/8","::1/128","172.19.0.1/32"]`. ⚠️ This is **exactly** the
+            address measured by `nsenter` on 2026-08-18 (`[::ffff:172.19.0.1]:38090`) — the prediction
+            held against the real deployment, and the IPv4-mapped peer matched the IPv4 `/32` as
+            `TestIPv4MappedPeerMatchesIPv4CIDR` asserted it would.
+      - [x] `/health` = `v1.6.0` `ok`, NG + GH ingestion `success`.
+      - [x] `/v1/context` returns a **non-null** location (`location_source: "ip"`) — the silent
+            failure mode did not occur.
+      - [x] **`deploy/verify-proxy-trust.sh production` → `RESULT: PASS`.** All three checks:
+            an untrusted container on `production_prod-internal` forging `X-Forwarded-For` was
+            **refused**; a real request through Caddy was still **believed**; and the startup
+            assertion passed. ⚠️ **Check [1/3] is the only evidence of the actual security property.**
+            Everything else proves the trusted path works, which a too-wide trust list would also
+            pass. Under the old `172.16.0.0/12` that forging container — on the same bridge as the
+            publicly reachable `prod-umami` — would have been believed.
+
+      **The rollout went exactly as option (a) predicted**, which is worth recording because the
+      prediction was the point: the deploy applied the pin, `prod-api` and `prod-umami` crash-looped
+      on embedded-DNS failure, the manual `up -d --force-recreate` restored all four containers, and
+      the workflow ended red on its smoke test with nothing skipped. No surprises.
+
+      ⚠️ **`deploy/verify-proxy-trust.sh` shipped NON-EXECUTABLE (`100644`)** and `sudo <path>` reports
+      that as `command not found`, not `Permission denied` — a misleading error that cost a round trip.
+      Cause: `core.fileMode = false` on the Windows clone, so a local `chmod +x` is never recorded.
+      Fixed here with `git update-index --chmod=+x`. ⚠️ `deploy/provision.sh` and
+      `deploy/mutation-check-1-5.sh` are **also `100644`** and will behave the same way if anyone ever
+      invokes them directly.
 
       🚨 **THE STAGING DEPLOY TOOK STAGING DOWN, AND PRODUCTION WILL BREAK THE SAME WAY.**
       **Do not promote this to production until the rollout below is followed.**
