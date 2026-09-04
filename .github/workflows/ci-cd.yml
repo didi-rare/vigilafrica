@@ -69,7 +69,18 @@ jobs:
           govulncheck ./...
 
       - name: Run Root Dependency Audit
-        run: npm audit --audit-level=moderate
+        # Wrapped in a retry because npm's bulk advisory endpoint is intermittently
+        # slow, and npm's fallback lands on the legacy /security/audits/quick
+        # endpoint it is decommissioning, which answers 400 with the misleading body
+        # "Invalid package tree, run npm install to rebuild your package-lock.json".
+        # That blocked three consecutive PRs on 2026-09-04 while status.npm.com
+        # reported all systems operational.
+        #
+        # ⚠️ Transport failures ONLY are retried. A genuine advisory still fails on
+        # the first attempt, and if the endpoint is unreachable on every attempt the
+        # step FAILS — a gate that could not run must never report as a gate that
+        # passed.
+        run: ./scripts/npm-audit-retry.sh moderate
 
       - name: Run Web Dependency Audit
         # Wrapper over `npm audit --audit-level=moderate` that carries a narrow,
