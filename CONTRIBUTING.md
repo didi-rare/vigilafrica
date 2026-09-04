@@ -197,6 +197,33 @@ All frontend code in `web/` follows [`docs/standards/developers-react.md`](docs/
 
 Both documents are **living standards**: if you hit a case the rules don't cover, or disagree with one, open a PR updating them alongside your code change. Each rule states whether it is enforced by CI, by a local-only script, or by review alone — check that before assuming a gate will catch a mistake for you.
 
+### Committing shell scripts (Windows contributors especially)
+
+⚠️ **`chmod +x` is not enough.** Most clones here have `core.fileMode = false` — always true on
+Windows — so Git ignores the executable bit on disk and commits the script as `100644`. Nothing warns
+you, CI does not check it, and the script works fine locally because you run it as `bash script.sh`.
+
+It fails on the server, with an error that points at the wrong thing:
+
+```
+$ sudo /opt/vigilafrica/production/deploy/verify-proxy-trust.sh production
+sudo: /opt/.../verify-proxy-trust.sh: command not found
+```
+
+**`command not found` for a path that plainly exists means the file is not executable** — `sudo`
+resolves commands and reports a non-executable target this way rather than saying
+`Permission denied`. (The other cause of that message is a CRLF shebang, where the kernel looks for
+an interpreter literally named `bash`. Check both: `git ls-tree HEAD path` for the mode,
+`head -1 path | od -c` for the line ending.)
+
+This cost a round trip during a live production deploy on 2026-09-04. Set the bit **in the index**,
+which works regardless of `core.fileMode`:
+
+```bash
+git update-index --chmod=+x path/to/script.sh
+git ls-files -s path/to/script.sh    # expect 100755, not 100644
+```
+
 ### Branches
 
 | Branch | Purpose |
