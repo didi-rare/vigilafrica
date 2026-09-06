@@ -1,7 +1,10 @@
 # Tasks: Stop Ingesting Transposed EONET Polygon Geometry
 
-⚠️ **This task list was REWRITTEN on 2026-09-06 after an independent adversarial
-review (`gpt-5.6-sol`) returned BLOCK on the first implementation.** The review
+⚠️ **TWO independent adversarial reviews (`gpt-5.6-sol`) both returned BLOCK.**
+Round 1 found three P0s. Round 2, run against the rewrite, found three more —
+including an **over-correction of a round-1 fix** and a defect the round-1 fix had
+**moved rather than removed**. That is the whole argument for reviewing a fix as
+a new claim rather than treating it as settled. §6 and §7 record both rounds. The review
 found three P0s. Two of them were things the author had asserted the opposite of
 in prose, in comments, and in a PR description. They are recorded in §6 rather
 than quietly corrected, because the pattern — a confident claim no test asserted
@@ -185,3 +188,75 @@ call from `eonet.go` entirely would have left every test passing.
 The new tests assert **caller-level outcomes** — what reached `UpsertEvent`, and
 what the migration did to a seeded transposed row — so removing the fix fails
 them.
+
+
+## 7. Round 2 — what reviewing the fix caught
+
+The rewrite was itself wrong in three ways. None would have been found by
+re-reading it, because each was a *consequence* of a round-1 fix rather than an
+oversight.
+
+- [x] 7.1 **The skip over-corrected.** Round 1 stored bad geometry; the rewrite
+      skipped the event entirely — and with it the title, status, category and
+      dates, none of which depend on coordinates. ⚠️ **A flood that had since
+      CLOSED would have stayed `open` in our data for as long as GDACS was
+      unreachable.** On an early-warning product that is worse than a wrong
+      location, and worse than round 1. Fixed with `UpdateEventMetadata`, which
+      refreshes an existing row's non-geometry fields while leaving `geom`
+      untouched; a genuinely new event with unverifiable geometry is still not
+      invented. Pinned by
+      `TestRunIngest_UnresolvedGeometryStillRefreshesMetadata`, both branches.
+
+- [x] 7.2 **The episode match was still not proof.** Round 1's defect was matching
+      on vertex count; the rewrite added a bounding-box check and called it
+      settled. ⚠️ **An envelope is not a shape** — a concave outline, a ring with
+      holes, a square symmetric under transposition, or the same ring reordered
+      all satisfy it. Now every vertex is compared, and **exactly one** candidate
+      episode must match: zero or several is an ambiguity we refuse rather than
+      resolve by guessing. The tolerance also dropped from 1e-3 (~111m, roughly
+      20x the rounding it was meant to absorb) to 2e-4, derived from GDACS's 4dp
+      precision. Pinned by `TestPositionsCorrespond`, including the identical-
+      envelope-different-shape case.
+
+- [x] 7.3 **The budget fix moved the defect.** The 90-second ceiling was created
+      inside `processEONETBody`, which runs **twice per country** (open and closed
+      queries). The real ceiling was 180s per country and 360s for NG+GH —
+      overrunning both `schedulerLockTTL` and the standalone ingestor's 2-minute
+      deadline, i.e. the exact failure the budget existed to prevent. One budget
+      per `Ingest` call now spans both responses. Pinned by
+      `TestRunIngest_GDACSBudgetIsSharedAcrossBothResponses`.
+
+- [x] 7.4 **The marker could sit outside its own polygon.** `positionsCentroid`
+      averaged boundary vertices, so it was weighted by sampling density and could
+      land outside a concave shape — a flood along a river bend is exactly that.
+      Replaced with `representativePoint`, which mirrors `ST_PointOnSurface` and is
+      inside by construction. ✅ Sanity check: for 1104078 it computes
+      (9.413907, 4.602700), matching GDACS's own published centroid `[9.414,
+      4.6027]` to 4dp. Pinned by `TestRepresentativePointIsInsideConcavePolygon`.
+
+- [x] 7.5 **Four smaller corrections.** The GDACS source is now selected wherever
+      it appears rather than assuming `Sources[0]` (40/40 GDACS-first today is an
+      observation, not an API contract); `geom_type` is set to what is actually
+      stored rather than what EONET declared; `bboxesIntersect` was renamed
+      `envelopesOverlap` and documented as the deliberate permissive
+      approximation it is, with the precise test left to PostGIS; and
+      **MultiPolygon is now rejected explicitly** rather than half-supported —
+      EONET has never been observed emitting one, and a claim of support that no
+      test exercises is worse than an honest refusal.
+
+## 8. Deliberately NOT done, and why
+
+- [ ] 8.1 **Persisted degraded run status and alerting.** ⚠️ Real gap, honestly
+      stated: when geometry resolution fails systematically the run still records
+      `success`, `/health` still reports `ok`, and nothing pages. The counters and
+      warnings exist only in logs, and this change has already demonstrated that
+      **a counter nobody reads is not a control**. Deferred because it is a new
+      subsystem — persisted per-run status, typed failure reasons, and alert
+      routing — not because it is unimportant. Until it lands, a GDACS outage
+      degrades coverage quietly.
+
+- [ ] 8.2 **MultiPolygon end-to-end support.** Rejected rather than half-built.
+      Supporting it properly means the resolver, the `geometry_type` enum in
+      `openapi.yaml`, and both web consumers, for a geometry EONET has never sent.
+      The normalizer now refuses it explicitly instead of silently dropping it, so
+      if one ever arrives it will be visible rather than invisible.

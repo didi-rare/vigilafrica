@@ -27,6 +27,9 @@ import (
 type Repository interface {
 	// Event methods
 	UpsertEvent(ctx context.Context, e models.Event, geoJSON string) error
+	// UpdateEventMetadata updates everything EXCEPT geometry on an event that
+	// already exists, and reports whether a row was found. It never inserts.
+	UpdateEventMetadata(ctx context.Context, e models.Event) (bool, error)
 	ListEvents(ctx context.Context, filters EventFilters) ([]models.Event, int, error)
 	GetEventByID(ctx context.Context, id uuid.UUID) (*models.Event, error)
 	GetNearbyEvents(ctx context.Context, lat, lng float64, radiusKm float64, limit int) ([]models.Event, error)
@@ -168,6 +171,43 @@ func (r *pgRepo) UpsertEvent(ctx context.Context, e models.Event, geoJSON string
 		return fmt.Errorf("failed to upsert event %s: %w", e.SourceID, err)
 	}
 	return nil
+}
+
+// UpdateEventMetadata updates the non-geometry columns of an existing event and
+// reports whether a row matched. It NEVER inserts, and it never touches geom,
+// geom_type, latitude or longitude.
+//
+// ⚠️ This exists because "skip the event entirely when its geometry cannot be
+// verified" throws away changes that have nothing to do with geometry. Status is
+// the one that matters: a flood that has since closed would stay `open` in our
+// data for as long as GDACS was unreachable, which on an early-warning product
+// is a worse failure than a wrong location. Title, category, dates and the raw
+// payload are equally trustworthy — none of them depend on the coordinates.
+//
+// Geometry is deliberately excluded rather than merely unchanged: the caller
+// reaches this path precisely when the incoming geometry is known-suspect, and
+// the stored geometry may already have been corrected by migration 000015.
+func (r *pgRepo) UpdateEventMetadata(ctx context.Context, e models.Event) (bool, error) {
+	query := `
+		UPDATE events SET
+			source      = $2,
+			title       = $3,
+			category    = $4,
+			status      = $5,
+			event_date  = $6,
+			source_url  = $7,
+			raw_payload = $8,
+			ingested_at = NOW()
+		WHERE source_id = $1;`
+
+	tag, err := r.pool.Exec(ctx, query,
+		e.SourceID, e.Source, e.Title, e.Category, e.Status,
+		e.EventDate, e.SourceURL, e.RawPayload,
+	)
+	if err != nil {
+		return false, fmt.Errorf("failed to update metadata for event %s: %w", e.SourceID, err)
+	}
+	return tag.RowsAffected() > 0, nil
 }
 
 func (r *pgRepo) Close() {

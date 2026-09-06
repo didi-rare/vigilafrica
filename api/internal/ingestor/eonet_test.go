@@ -52,10 +52,26 @@ func installHTTPClient(t *testing.T, c *http.Client) func() {
 
 // mockRepo satisfies database.Repository without a real DB.
 // Declared once here; all tests in this package share it.
-type mockRepo struct{}
+type mockRepo struct {
+	// metadataUpdates records source_ids passed to UpdateEventMetadata; a test
+	// uses it to prove an unresolvable geometry still refreshed status and title
+	// rather than dropping the event.
+	metadataUpdates []string
+	// metadataRowExists controls whether the update reports a matching row, i.e.
+	// whether the event already existed.
+	metadataRowExists bool
+}
 
 func (m *mockRepo) UpsertEvent(ctx context.Context, e models.Event, geoJSON string) error {
 	return nil
+}
+
+// metadataUpdates records source_ids passed to UpdateEventMetadata, and exists
+// so a test can prove that an unresolvable geometry still refreshed status/title
+// rather than silently dropping the event.
+func (m *mockRepo) UpdateEventMetadata(ctx context.Context, e models.Event) (bool, error) {
+	m.metadataUpdates = append(m.metadataUpdates, e.SourceID)
+	return m.metadataRowExists, nil
 }
 func (m *mockRepo) ListEvents(ctx context.Context, filters database.EventFilters) ([]models.Event, int, error) {
 	return nil, 0, nil
@@ -1013,5 +1029,127 @@ func TestRunIngest_IngestsClosedFloodEvent(t *testing.T) {
 	}
 	if result.EventsSkippedBBox != 0 {
 		t.Errorf("Lagos is inside the Nigeria bbox and must not be skipped, got %d", result.EventsSkippedBBox)
+	}
+}
+
+// TestRunIngest_UnresolvedGeometryStillRefreshesMetadata is the regression test
+// for the round-2 P0: the previous fix over-corrected.
+//
+// Skipping the whole event when geometry could not be verified also discarded
+// changes that have nothing to do with geometry. ⚠️ Status is the one that
+// matters — a flood that has since CLOSED would stay `open` in our data for as
+// long as GDACS was unreachable, which on an early-warning product is worse than
+// a wrong location.
+func TestRunIngest_UnresolvedGeometryStillRefreshesMetadata(t *testing.T) {
+	const body = `{
+		"events": [
+			{
+				"id": "EONET_22248",
+				"title": "Flood in Cameroon 1104078",
+				"closed": "2026-08-06T00:00:00Z",
+				"categories": [{"id": "floods"}],
+				"sources": [{"id": "GDACS", "url": "https://www.gdacs.org/report.aspx?eventtype=FL&eventid=1104078"}],
+				"geometry": [{"date": "2026-08-03T20:00:00Z", "type": "Polygon", "coordinates": [[[4.377,9.216],[4.828,9.216],[4.828,9.569],[4.377,9.569],[4.377,9.216]]]}]
+			}
+		]
+	}`
+
+	srv := httptest.NewServer(closedQueryStub(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, body)
+	}))
+	defer srv.Close()
+	defer installTestServer(t, srv)()
+
+	gdacs := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer gdacs.Close()
+	swapGDACSURLs(t, gdacs.URL, gdacs.URL)
+
+	t.Run("an EXISTING row has its metadata refreshed, geometry untouched", func(t *testing.T) {
+		repo := &recordingRepo{mockRepo: &mockRepo{metadataRowExists: true}}
+		result, err := runIngest(context.Background(), repo, testCountry)
+		if err != nil {
+			t.Fatalf("runIngest returned err: %v", err)
+		}
+
+		// Still no geometry write — that property must not regress.
+		if len(repo.upserts) != 0 {
+			t.Errorf("geometry must NOT be written, got %d upserts", len(repo.upserts))
+		}
+		if len(repo.mockRepo.metadataUpdates) != 1 {
+			t.Fatalf("expected 1 metadata-only update, got %v", repo.mockRepo.metadataUpdates)
+		}
+		if result.EventsMetadataOnly != 1 {
+			t.Errorf("EventsMetadataOnly = %d, want 1", result.EventsMetadataOnly)
+		}
+		if result.EventsGeomUnresolved != 1 {
+			t.Errorf("EventsGeomUnresolved = %d, want 1", result.EventsGeomUnresolved)
+		}
+	})
+
+	t.Run("a NEW row is not invented with unverified geometry", func(t *testing.T) {
+		repo := &recordingRepo{mockRepo: &mockRepo{metadataRowExists: false}}
+		result, err := runIngest(context.Background(), repo, testCountry)
+		if err != nil {
+			t.Fatalf("runIngest returned err: %v", err)
+		}
+		if len(repo.upserts) != 0 {
+			t.Errorf("a new unverifiable event must not be inserted, got %d", len(repo.upserts))
+		}
+		if result.EventsMetadataOnly != 0 {
+			t.Errorf("EventsMetadataOnly = %d, want 0 (no row existed)", result.EventsMetadataOnly)
+		}
+		if result.EventsGeomUnresolved != 1 {
+			t.Errorf("EventsGeomUnresolved = %d, want 1", result.EventsGeomUnresolved)
+		}
+	})
+}
+
+// TestRunIngest_GDACSBudgetIsSharedAcrossBothResponses pins the round-2 finding
+// that the previous budget fix moved the defect instead of removing it.
+//
+// runIngest issues TWO requests (open and closed). A budget created per response
+// silently doubles the ceiling to 180s per country — 360s for NG+GH — overrunning
+// both schedulerLockTTL and the standalone ingestor's deadline.
+func TestRunIngest_GDACSBudgetIsSharedAcrossBothResponses(t *testing.T) {
+	// Distinct polygons in each response, so caching cannot mask a second budget.
+	openBody := `{"events":[{"id":"E1","title":"a","categories":[{"id":"floods"}],
+		"sources":[{"id":"GDACS","url":"https://www.gdacs.org/report.aspx?eventtype=FL&eventid=1"}],
+		"geometry":[{"date":"2026-08-03T20:00:00Z","type":"Polygon","coordinates":[[[4.1,9.1],[4.2,9.1],[4.2,9.2],[4.1,9.1]]]}]}]}`
+	closedBody := `{"events":[{"id":"E2","title":"b","categories":[{"id":"floods"}],
+		"sources":[{"id":"GDACS","url":"https://www.gdacs.org/report.aspx?eventtype=FL&eventid=2"}],
+		"geometry":[{"date":"2026-08-03T20:00:00Z","type":"Polygon","coordinates":[[[5.1,9.1],[5.2,9.1],[5.2,9.2],[5.1,9.1]]]}]}]}`
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		if r.URL.Query().Get("status") == "closed" {
+			fmt.Fprint(w, closedBody)
+			return
+		}
+		fmt.Fprint(w, openBody)
+	}))
+	defer srv.Close()
+	defer installTestServer(t, srv)()
+
+	var gdacsCalls int
+	gdacs := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		gdacsCalls++
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer gdacs.Close()
+	swapGDACSURLs(t, gdacs.URL, gdacs.URL)
+
+	repo := &recordingRepo{mockRepo: &mockRepo{}}
+	if _, err := runIngest(context.Background(), repo, testCountry); err != nil {
+		t.Fatalf("runIngest returned err: %v", err)
+	}
+
+	// Two distinct events, one budgeted call each. The assertion that matters is
+	// that a SINGLE budget spans both responses; if each response built its own,
+	// the remaining allowance would have been reset in between.
+	if gdacsCalls != 2 {
+		t.Errorf("expected 2 GDACS attempts across both responses, got %d", gdacsCalls)
 	}
 }

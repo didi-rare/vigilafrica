@@ -108,9 +108,21 @@ func Normalize(raw RawEONETEvent, rawPayload []byte) (models.Event, string, erro
 
 	// Determine source URL if available. Upstream URLs are treated as untrusted
 	// data; only HTTPS links from known public data providers are retained.
-	if len(raw.Sources) > 0 {
-		if sourceURL, ok := validatedSourceURL(raw.Sources[0].URL); ok {
+	// ⚠️ Prefer a GDACS source wherever it appears, not merely the first entry.
+	// Geometry resolution depends on finding the GDACS reference, and EONET does
+	// not contract that GDACS comes first — the current sample is 40/40
+	// GDACS-first, which is an observation about today's data, not a guarantee.
+	for _, src := range raw.Sources {
+		sourceURL, ok := validatedSourceURL(src.URL)
+		if !ok {
+			continue
+		}
+		if evt.SourceURL == nil {
 			evt.SourceURL = &sourceURL
+		}
+		if strings.Contains(strings.ToLower(sourceURL), "gdacs.org") {
+			evt.SourceURL = &sourceURL
+			break
 		}
 	}
 
@@ -135,11 +147,7 @@ func Normalize(raw RawEONETEvent, rawPayload []byte) (models.Event, string, erro
 				// Construct simple GeoJSON
 				geoJSON = fmt.Sprintf(`{"type":"Point","coordinates":[%f,%f]}`, lon, lat)
 			}
-		} else if geom.Type == "Polygon" || geom.Type == "MultiPolygon" {
-			// MultiPolygon is handled explicitly rather than falling through to
-			// "no geometry". EONET has not been observed emitting one, but the
-			// silent-drop behaviour meant we could never have noticed if it did:
-			// the event would simply vanish with a generic warning.
+		} else if geom.Type == "Polygon" {
 			// ⚠️ Reject a polygon whose coordinates cannot be [lon, lat] at all.
 			//
 			// EONET republishes GDACS polygons with the pair order reversed, so the
@@ -158,7 +166,7 @@ func Normalize(raw RawEONETEvent, rawPayload []byte) (models.Event, string, erro
 			}
 			// Construct GeoJSON from the raw coordinates interface array
 			coordsBytes, _ := json.Marshal(geom.Coordinates)
-			geoJSON = fmt.Sprintf(`{"type":%q,"coordinates":%s}`, geom.Type, string(coordsBytes))
+			geoJSON = fmt.Sprintf(`{"type":"Polygon","coordinates":%s}`, string(coordsBytes))
 			// lon/lat stay nil here. The ingestor resolves an authoritative point for
 			// GDACS-sourced polygons; until it does, containment is unverifiable.
 		}

@@ -120,7 +120,12 @@ type IngestResult struct {
 	// outage overwrite a corrected row via the source_id upsert. Such events are
 	// now skipped, so a rising value here means events are MISSING, not wrong.
 	EventsGeomUnresolved int
-	Run                  *models.IngestionRun
+
+	// EventsMetadataOnly counts events whose geometry could not be verified but
+	// which already existed, so their non-geometry fields were refreshed while the
+	// stored geometry was left untouched.
+	EventsMetadataOnly int
+	Run                *models.IngestionRun
 }
 
 // Ingest pulls events from NASA EONET for the given country, upserts them
@@ -178,6 +183,7 @@ func Ingest(ctx context.Context, repo database.Repository, country CountryConfig
 			"events_skipped_bbox", result.EventsSkippedBBox,
 			"events_geom_unresolved", result.EventsGeomUnresolved,
 			"events_geom_resolved", result.EventsGeomResolved,
+			"events_metadata_only", result.EventsMetadataOnly,
 			"err", ingestErr,
 		)
 		return result, ingestErr
@@ -192,6 +198,7 @@ func Ingest(ctx context.Context, repo database.Repository, country CountryConfig
 		"events_skipped_bbox", result.EventsSkippedBBox,
 		"events_geom_unresolved", result.EventsGeomUnresolved,
 		"events_geom_resolved", result.EventsGeomResolved,
+		"events_metadata_only", result.EventsMetadataOnly,
 	)
 	return result, nil
 }
@@ -223,6 +230,14 @@ func runIngest(ctx context.Context, repo database.Repository, country CountryCon
 		country.BBox[2], country.BBox[3],
 	)
 
+	// ⚠️ ONE budget for the whole Ingest call, not one per response. runIngest
+	// issues TWO requests (open and closed), so a per-response budget silently
+	// doubles the ceiling — 180s per country, 360s for NG+GH, which overruns both
+	// the 5-minute schedulerLockTTL and the standalone ingestor's 2-minute
+	// deadline. An earlier revision made exactly that mistake while fixing an
+	// unbounded-work defect: the fix moved the problem instead of removing it.
+	budget := newGDACSBudget()
+
 	// No days window on the open query — long-burning wildfires must not be dropped.
 	openURL := fmt.Sprintf("%s?bbox=%s&category=floods,wildfires&status=open", eonetURL, bbox)
 	closedURL := fmt.Sprintf("%s?bbox=%s&category=floods,wildfires&status=closed&days=%d",
@@ -238,7 +253,7 @@ func runIngest(ctx context.Context, repo database.Repository, country CountryCon
 		if err != nil {
 			return result, err
 		}
-		if err := processEONETBody(ctx, repo, country, body, result); err != nil {
+		if err := processEONETBody(ctx, repo, country, body, result, &budget); err != nil {
 			return result, err
 		}
 	}
@@ -382,6 +397,7 @@ func processEONETBody(
 	country CountryConfig,
 	body []byte,
 	result *IngestResult,
+	gdacsBudget *gdacsBudget,
 ) error {
 	var root struct {
 		Events []normalizer.RawEONETEvent `json:"events"`
@@ -392,12 +408,6 @@ func processEONETBody(
 
 	result.EventsFetched += len(root.Events)
 	slog.Info("ingestion: events fetched", "country", country.Code, "count", len(root.Events))
-
-	// Per-response budget for GDACS resolution. Bounded and cached so a slow
-	// upstream cannot multiply into an unbounded run: without this the worst case
-	// is (client timeout x episodes x polygon count), which can outlive the
-	// scheduler's lease and let a second replica start a concurrent run (§3.5).
-	gdacsBudget := newGDACSBudget()
 
 	for _, rawEvt := range root.Events {
 		rawEvtBytes, _ := json.Marshal(rawEvt)
@@ -454,17 +464,51 @@ func processEONETBody(
 
 			resolved, ok := gdacsBudget.resolve(ctx, source, positions)
 			if !ok {
-				slog.Warn("ingestion: skipping event whose geometry could not be verified against GDACS",
-					"country", country.Code,
-					"source_id", event.SourceID,
-					"vertices", len(positions),
-				)
 				result.EventsGeomUnresolved++
+
+				// ⚠️ Do NOT drop the whole event. Its geometry is suspect; its
+				// title, status, category and dates are not, and they do not depend
+				// on the coordinates. Discarding them would leave an existing row
+				// stale — most damagingly, a flood that has since CLOSED would stay
+				// `open` in our data for as long as GDACS was unreachable, which on
+				// an early-warning product is worse than a wrong location.
+				//
+				// Geometry is deliberately excluded from this update: the stored
+				// geometry may already have been corrected (migration 000015), and
+				// the incoming geometry is exactly what we distrust.
+				updated, err := repo.UpdateEventMetadata(ctx, event)
+				if err != nil {
+					slog.Error("ingestion: metadata-only update failed",
+						"country", country.Code, "source_id", event.SourceID, "err", err)
+					continue
+				}
+				if updated {
+					result.EventsMetadataOnly++
+					slog.Warn("ingestion: geometry unverified; updated metadata and KEPT existing geometry",
+						"country", country.Code,
+						"source_id", event.SourceID,
+						"vertices", len(positions),
+					)
+				} else {
+					// A new event we cannot place. Inserting it with unverified
+					// geometry is what this whole change forbids, so it is skipped —
+					// and counted, because that is coverage we are missing.
+					slog.Warn("ingestion: skipping NEW event whose geometry could not be verified",
+						"country", country.Code,
+						"source_id", event.SourceID,
+						"vertices", len(positions),
+					)
+				}
 				continue
 			}
 
 			geoJSON = resolved.GeoJSON
 			positions = polygonPositionsFromGeoJSON(geoJSON)
+			// The stored geometry is GDACS's polygon, so geom_type must say so —
+			// it previously kept whatever EONET declared, which could disagree with
+			// what was actually written and with the OpenAPI enum.
+			polygon := "Polygon"
+			event.GeomType = &polygon
 			event.Longitude = &resolved.Lon
 			event.Latitude = &resolved.Lat
 			result.EventsGeomResolved++
@@ -478,7 +522,7 @@ func processEONETBody(
 			// Containment for a polygon is an INTERSECTION test, not a centroid
 			// test. A flood straddling the border legitimately belongs to this
 			// country even when its centroid sits outside the box.
-			if !bboxesIntersect(country.BBox, positionsBBox(positions)) {
+			if !envelopesOverlap(country.BBox, positionsBBox(positions)) {
 				slog.Warn("ingestion: skipping polygon event outside country bbox",
 					"country", country.Code, "source_id", event.SourceID)
 				result.EventsSkippedBBox++

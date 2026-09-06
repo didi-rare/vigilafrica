@@ -297,23 +297,23 @@ func TestGDACSBudgetCachesAndBounds(t *testing.T) {
 	})
 }
 
-func TestBBoxesIntersect(t *testing.T) {
+func TestEnvelopesOverlap(t *testing.T) {
 	ng := [4]float64{2.0, 4.0, 15.0, 14.0}
 
 	// ⚠️ The case that a centroid test gets wrong: a polygon straddling the
 	// border belongs to the country it reaches, even when its centre does not.
 	straddling := [4]float64{14.5, 13.5, 16.0, 15.0}
-	if !bboxesIntersect(ng, straddling) {
+	if !envelopesOverlap(ng, straddling) {
 		t.Error("a polygon overlapping the country box must be kept")
 	}
 	if withinBBox(ng, 15.25, 14.25) {
 		t.Error("precondition: that polygon's centroid is outside the box, which is the point")
 	}
 
-	if bboxesIntersect(ng, [4]float64{-84.6, 30.0, -84.5, 30.1}) {
+	if envelopesOverlap(ng, [4]float64{-84.6, 30.0, -84.5, 30.1}) {
 		t.Error("a Florida polygon must not intersect the Nigeria box")
 	}
-	if !bboxesIntersect(ng, ng) {
+	if !envelopesOverlap(ng, ng) {
 		t.Error("a box intersects itself")
 	}
 }
@@ -356,31 +356,92 @@ func TestResolveGDACSPolygonRejectsCoincidentalVertexMatch(t *testing.T) {
 	}
 }
 
-// TestExtentsCorrespond pins that BOTH orientations are accepted.
-//
-// The transposed case is what matches today. The direct case is what will match
-// if EONET repairs its feed — and accepting it is why this keeps working then,
-// where a blanket coordinate swap would silently start corrupting data.
-func TestExtentsCorrespond(t *testing.T) {
-	eonetTransposed := [4]float64{4.377, 9.216, 4.828, 9.569}
-	gdacs := [4]float64{9.2156, 4.377, 9.5688, 4.8284}
+// TestPositionsCorrespond pins geometry identity, not envelope similarity.
+func TestPositionsCorrespond(t *testing.T) {
+	eonet := [][2]float64{{4.377, 9.216}, {4.828, 9.216}, {4.828, 9.569}, {4.377, 9.569}, {4.377, 9.216}}
+	gdacsSwapped := [][2]float64{{9.216, 4.377}, {9.216, 4.828}, {9.569, 4.828}, {9.569, 4.377}, {9.216, 4.377}}
 
-	if !extentsCorrespond(eonetTransposed, gdacs) {
-		t.Error("the transposed pair must be recognised as the same geometry")
+	t.Run("recognises the transposed publication", func(t *testing.T) {
+		transposed, ok := positionsCorrespond(eonet, gdacsSwapped)
+		if !ok || !transposed {
+			t.Errorf("expected a transposed match, got transposed=%v ok=%v", transposed, ok)
+		}
+	})
+
+	t.Run("recognises an already-correct feed", func(t *testing.T) {
+		// What a repaired EONET would look like. Accepting this is why the fix
+		// survives upstream being corrected, where a blanket swap would not.
+		transposed, ok := positionsCorrespond(eonet, eonet)
+		if !ok || transposed {
+			t.Errorf("expected a direct match, got transposed=%v ok=%v", transposed, ok)
+		}
+	})
+
+	// ⚠️ THE CASE BOUNDING BOXES GET WRONG. Same vertex count, same envelope,
+	// different shape — the previous extent-only check accepted this, which is how
+	// a different episode could still be substituted.
+	t.Run("rejects a different shape with an identical envelope", func(t *testing.T) {
+		sameBoxDifferentShape := [][2]float64{
+			{9.216, 4.377}, {9.569, 4.377}, {9.216, 4.828}, {9.569, 4.828}, {9.216, 4.377},
+		}
+		if _, ok := positionsCorrespond(eonet, sameBoxDifferentShape); ok {
+			t.Error("an envelope match is not a geometry match and must be refused")
+		}
+	})
+
+	t.Run("rejects differing lengths and empty input", func(t *testing.T) {
+		if _, ok := positionsCorrespond(eonet, gdacsSwapped[:3]); ok {
+			t.Error("different vertex counts must not correspond")
+		}
+		if _, ok := positionsCorrespond(nil, gdacsSwapped); ok {
+			t.Error("empty input must not correspond")
+		}
+	})
+
+	t.Run("tolerance absorbs GDACS rounding but not a real difference", func(t *testing.T) {
+		// GDACS publishes 4dp; observed production deltas were ~5e-5.
+		rounded := make([][2]float64, len(gdacsSwapped))
+		for i, c := range gdacsSwapped {
+			rounded[i] = [2]float64{c[0] + 5e-5, c[1] - 5e-5}
+		}
+		if _, ok := positionsCorrespond(eonet, rounded); !ok {
+			t.Error("4-decimal rounding must still correspond")
+		}
+
+		shifted := make([][2]float64, len(gdacsSwapped))
+		for i, c := range gdacsSwapped {
+			shifted[i] = [2]float64{c[0] + 0.01, c[1]}
+		}
+		if _, ok := positionsCorrespond(eonet, shifted); ok {
+			t.Error("a ~1km shift must NOT correspond")
+		}
+	})
+}
+
+// TestRepresentativePointIsInsideConcavePolygon pins the property the arithmetic
+// mean did not have.
+func TestRepresentativePointIsInsideConcavePolygon(t *testing.T) {
+	// A "U" shape. The mean of its boundary vertices falls in the gap between the
+	// arms — outside the polygon — which would put the map marker where the flood
+	// is not.
+	u := [][2]float64{
+		{0, 0}, {3, 0}, {3, 3}, {2, 3}, {2, 1}, {1, 1}, {1, 3}, {0, 3}, {0, 0},
 	}
-	if !extentsCorrespond(gdacs, gdacs) {
-		t.Error("an already-correct feed must also be recognised")
+	lon, lat := representativePoint(u)
+	if !pointInPolygon(lon, lat, u) {
+		t.Errorf("representative point (%v, %v) is outside its own polygon", lon, lat)
 	}
-	if extentsCorrespond([4]float64{0, 0, 1, 1}, gdacs) {
-		t.Error("unrelated extents must not correspond")
+
+	// Demonstrate the defect it replaces, so the test documents WHY.
+	var mlon, mlat float64
+	for _, c := range u {
+		mlon += c[0]
+		mlat += c[1]
 	}
-	// Tolerance exists for GDACS's 4-decimal precision, not for sloppiness:
-	// ~11m is fine, a whole degree is not.
-	if !extentsCorrespond([4]float64{4.3770, 9.2156, 4.8284, 9.5688}, gdacs) {
-		t.Error("rounding-level differences must still correspond")
-	}
-	if extentsCorrespond([4]float64{5.377, 9.216, 5.828, 9.569}, gdacs) {
-		t.Error("a one-degree difference must NOT correspond")
+	mlon /= float64(len(u))
+	mlat /= float64(len(u))
+	if pointInPolygon(mlon, mlat, u) {
+		t.Log("note: the arithmetic mean happens to be inside for this shape")
 	}
 }
 
@@ -408,4 +469,18 @@ func TestGDACSBudgetRespectsWallClockDeadline(t *testing.T) {
 	if b.remaining != maxGDACSCallsPerRun {
 		t.Errorf("an expired budget consumed call allowance: remaining=%d", b.remaining)
 	}
+}
+
+// pointInPolygon is a ray-cast containment test, used only to verify that the
+// representative point really lies inside its polygon.
+func pointInPolygon(x, y float64, poly [][2]float64) bool {
+	inside := false
+	for i, j := 0, len(poly)-1; i < len(poly); j, i = i, i+1 {
+		xi, yi := poly[i][0], poly[i][1]
+		xj, yj := poly[j][0], poly[j][1]
+		if (yi > y) != (yj > y) && x < (xj-xi)*(y-yi)/(yj-yi)+xi {
+			inside = !inside
+		}
+	}
+	return inside
 }

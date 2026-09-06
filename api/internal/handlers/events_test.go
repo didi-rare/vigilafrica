@@ -29,6 +29,10 @@ func (r *listEventsTestRepo) UpsertEvent(context.Context, models.Event, string) 
 	return nil
 }
 
+func (r *listEventsTestRepo) UpdateEventMetadata(ctx context.Context, e models.Event) (bool, error) {
+	return false, nil
+}
+
 func (r *listEventsTestRepo) ListEvents(ctx context.Context, filters database.EventFilters) ([]models.Event, int, error) {
 	r.called = true
 	r.filters = filters

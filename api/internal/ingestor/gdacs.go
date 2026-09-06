@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 )
@@ -85,6 +86,10 @@ type GDACSGeometry struct {
 	Lon, Lat  float64
 	EpisodeID int
 	Vertices  int
+	// Transposed records whether GDACS's ring had to be read as the transpose of
+	// EONET's to correspond. False means upstream agreed — which is what a repaired
+	// EONET feed would look like.
+	Transposed bool
 }
 
 // parseGDACSReference pulls the event type and id out of a GDACS report URL.
@@ -170,7 +175,6 @@ func ResolveGDACSPolygon(ctx context.Context, sourceURL string, eonet [][2]float
 		return GDACSGeometry{}, false
 	}
 	wantVertices := len(eonet)
-	eonetBox := positionsBBox(eonet)
 
 	var event gdacsEventData
 	if !gdacsGetJSON(ctx, fmt.Sprintf("%s?eventtype=%s&eventid=%s",
@@ -189,6 +193,12 @@ func ResolveGDACSPolygon(ctx context.Context, sourceURL string, eonet [][2]float
 			return GDACSGeometry{}, false
 		}
 	}
+
+	// ⚠️ Collect ALL candidates rather than returning the first match. If two
+	// episodes both correspond, the geometry is ambiguous and we cannot say which
+	// one EONET published — resolving to either would be a guess, and a guess here
+	// relocates a disaster.
+	var candidates []GDACSGeometry
 
 	for ep := 1; ep <= episodes; ep++ {
 		// Respect cancellation between episodes: this loop is network-bound and
@@ -212,31 +222,29 @@ func ResolveGDACSPolygon(ctx context.Context, sourceURL string, eonet [][2]float
 				continue
 			}
 			positions := collectPositions(coords)
-			if len(positions) != wantVertices {
+			if len(positions) != wantVertices || !positionsWithinWGS84(positions) {
 				continue
 			}
-			if !positionsWithinWGS84(positions) {
+			transposed, corresponds := positionsCorrespond(eonet, positions)
+			if !corresponds {
 				continue
 			}
-			// ⚠️ A matching vertex count is NOT proof that this is the same
-			// footprint — two episodes can coincidentally share one, and
-			// substituting the wrong episode relocates the disaster instead of
-			// correcting it. Require the extents to correspond as well, either
-			// directly or as each other's transpose.
-			if !extentsCorrespond(eonetBox, positionsBBox(positions)) {
-				continue
-			}
-			lon, lat := positionsCentroid(positions)
-			return GDACSGeometry{
-				GeoJSON:   fmt.Sprintf(`{"type":"Polygon","coordinates":%s}`, string(f.Geometry.Coordinates)),
-				Lon:       lon,
-				Lat:       lat,
-				EpisodeID: ep,
-				Vertices:  len(positions),
-			}, true
+			lon, lat := representativePoint(positions)
+			candidates = append(candidates, GDACSGeometry{
+				GeoJSON:    fmt.Sprintf(`{"type":"Polygon","coordinates":%s}`, string(f.Geometry.Coordinates)),
+				Lon:        lon,
+				Lat:        lat,
+				EpisodeID:  ep,
+				Vertices:   len(positions),
+				Transposed: transposed,
+			})
 		}
 	}
-	return GDACSGeometry{}, false
+
+	if len(candidates) != 1 {
+		return GDACSGeometry{}, false
+	}
+	return candidates[0], true
 }
 
 // collectPositions flattens nested GeoJSON coordinate arrays into [lon, lat]
@@ -275,40 +283,101 @@ func positionsWithinWGS84(p [][2]float64) bool {
 	return true
 }
 
-// positionsCentroid returns the mean position. A representative point for the map
-// marker only — the polygon itself remains the geometry used for spatial queries,
-// so this never narrows what ST_DWithin matches.
-func positionsCentroid(p [][2]float64) (lon, lat float64) {
-	for _, c := range p {
-		lon += c[0]
-		lat += c[1]
-	}
-	return lon / float64(len(p)), lat / float64(len(p))
-}
-
-// gdacsExtentToleranceDeg is how far two extents may differ and still be
-// considered the same geometry. GDACS publishes 4 decimal places where EONET
-// publishes 6, so identical polygons differ by up to ~1e-4 degrees (~11m) purely
-// from rounding. Measured deltas on the two production events were ~3e-5.
-const gdacsExtentToleranceDeg = 1e-3
-
-// extentsCorrespond reports whether a GDACS extent is the same geometry as an
-// EONET extent — either directly, or with the axes transposed.
+// gdacsCoordToleranceDeg is how far a single coordinate may differ and still be
+// considered the same vertex.
 //
-// Accepting BOTH is deliberate. Today EONET reverses the pairs, so the transposed
-// case is what matches; the day upstream is repaired the direct case will match
-// instead and this keeps working with no change. That is the property a blanket
-// swap would not have.
-func extentsCorrespond(eonet, gdacs [4]float64) bool {
+// Derived, not guessed: GDACS publishes 4 decimal places, so rounding alone can
+// move a coordinate by up to 5e-5 degrees. This allows 2e-4 — a 4x margin over
+// that bound, about 22m. ⚠️ An earlier revision used 1e-3 (~111m), roughly 20x
+// the rounding it was meant to absorb and wide enough to accept genuinely
+// different vertices. Measured deltas on the two production events were 5.0e-5
+// and 4.75e-5, comfortably inside this.
+const gdacsCoordToleranceDeg = 2e-4
+
+// positionsCorrespond reports whether two coordinate sequences describe the same
+// geometry, and whether GDACS's had to be read as the transpose of EONET's.
+//
+// ⚠️ Every vertex is compared. An earlier revision compared only bounding boxes,
+// which is NOT geometry identity: two different shapes can share a vertex count
+// and an envelope — concave outlines, rings with holes, a square whose box is
+// symmetric under transposition, or the same ring reordered. Accepting an
+// envelope match would let a different episode through, which is precisely the
+// defect this change exists to remove.
+//
+// Both orientations are accepted deliberately. Today EONET reverses the pairs so
+// the transposed comparison matches; the day upstream is repaired the direct one
+// will, and this keeps working unchanged. That is the property a blanket swap
+// would not have.
+func positionsCorrespond(eonet, gdacs [][2]float64) (transposed bool, ok bool) {
+	if len(eonet) == 0 || len(eonet) != len(gdacs) {
+		return false, false
+	}
 	near := func(a, b float64) bool {
 		d := a - b
-		return d < gdacsExtentToleranceDeg && d > -gdacsExtentToleranceDeg
+		return d < gdacsCoordToleranceDeg && d > -gdacsCoordToleranceDeg
 	}
-	direct := near(eonet[0], gdacs[0]) && near(eonet[1], gdacs[1]) &&
-		near(eonet[2], gdacs[2]) && near(eonet[3], gdacs[3])
-	transposed := near(eonet[1], gdacs[0]) && near(eonet[0], gdacs[1]) &&
-		near(eonet[3], gdacs[2]) && near(eonet[2], gdacs[3])
-	return direct || transposed
+
+	direct, swapped := true, true
+	for i := range eonet {
+		if !near(eonet[i][0], gdacs[i][0]) || !near(eonet[i][1], gdacs[i][1]) {
+			direct = false
+		}
+		if !near(eonet[i][1], gdacs[i][0]) || !near(eonet[i][0], gdacs[i][1]) {
+			swapped = false
+		}
+		if !direct && !swapped {
+			return false, false
+		}
+	}
+	return !direct, true
+}
+
+// representativePoint returns a point that is guaranteed to lie INSIDE the
+// polygon, for use as the map marker.
+//
+// ⚠️ It is NOT the arithmetic mean of the boundary vertices. That was the
+// previous implementation and it is wrong twice over: it is weighted by how
+// densely each part of the outline happens to be sampled, and for a concave
+// shape — a flood along a river bend is exactly that — it can land outside the
+// polygon entirely. The marker would then sit somewhere the flood is not.
+//
+// The approach mirrors PostGIS ST_PointOnSurface: take the horizontal line
+// through the vertical middle of the shape, find where it crosses the boundary,
+// and return the midpoint of the widest interior span. That point is inside the
+// polygon by construction.
+//
+// ⚠️ The polygon remains the geometry used for spatial queries. This point is
+// only a label, and callers must not treat it as the event's extent.
+func representativePoint(p [][2]float64) (lon, lat float64) {
+	box := positionsBBox(p)
+	y := (box[1] + box[3]) / 2
+
+	// Collect boundary crossings of the horizontal line at y.
+	var xs []float64
+	for i := 0; i < len(p); i++ {
+		a, b := p[i], p[(i+1)%len(p)]
+		if (a[1] <= y && b[1] > y) || (b[1] <= y && a[1] > y) {
+			t := (y - a[1]) / (b[1] - a[1])
+			xs = append(xs, a[0]+t*(b[0]-a[0]))
+		}
+	}
+	if len(xs) < 2 {
+		// Degenerate (a horizontal sliver, or a ring we could not cross cleanly).
+		// The bbox centre is the best available answer and is still inside the
+		// extent, which is what the marker needs.
+		return (box[0] + box[2]) / 2, y
+	}
+	sort.Float64s(xs)
+
+	// Interior spans of an even-odd crossing sequence are the pairs (0,1), (2,3)…
+	// Take the widest, so the point sits in the largest lobe rather than a sliver.
+	bestLo, bestHi, bestWidth := xs[0], xs[1], xs[1]-xs[0]
+	for i := 0; i+1 < len(xs); i += 2 {
+		if w := xs[i+1] - xs[i]; w > bestWidth {
+			bestLo, bestHi, bestWidth = xs[i], xs[i+1], w
+		}
+	}
+	return (bestLo + bestHi) / 2, y
 }
 
 // positionsBBox returns [minLon, minLat, maxLon, maxLat].
@@ -420,9 +489,15 @@ func polygonPositionsFromGeoJSON(geoJSON string) [][2]float64 {
 	return collectPositions(doc.Coordinates)
 }
 
-// bboxesIntersect reports whether two [minLon, minLat, maxLon, maxLat] boxes
-// overlap. Used for polygon containment: a flood straddling a border belongs to
-// the country it reaches, even when its centroid lies outside the box.
-func bboxesIntersect(a, b [4]float64) bool {
+// envelopesOverlap reports whether two [minLon, minLat, maxLon, maxLat] boxes
+// overlap.
+//
+// ⚠️ This is envelope overlap, NOT polygon intersection, and the difference is
+// real: two polygons can have overlapping bounding boxes while never touching.
+// It is deliberately the permissive direction — a flood straddling a border
+// belongs to the country it reaches, and admitting a near-miss is far cheaper
+// than dropping a real event. The precise test happens later, in PostGIS, where
+// the enrichment trigger uses ST_Intersects against actual boundaries.
+func envelopesOverlap(a, b [4]float64) bool {
 	return a[0] <= b[2] && b[0] <= a[2] && a[1] <= b[3] && b[1] <= a[3]
 }
