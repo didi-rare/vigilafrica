@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.6.0](https://github.com/didi-rare/vigilafrica/compare/v1.5.0...v1.6.0) (2026-09-04)
+
+
+### Features
+
+* **api:** narrow the trusted-proxy CIDRs to the measured gateway ([41921f0](https://github.com/didi-rare/vigilafrica/commit/41921f02f95c8b383966ae188ffb5cb757ad1e7d))
+* **api:** narrow the trusted-proxy CIDRs to the measured gateway ([ff05cbd](https://github.com/didi-rare/vigilafrica/commit/ff05cbdde8ada0a82b9e8acf08b1329177ba5d06))
+* **deploy:** split the deploy account per environment and harden sshd ([48d0b09](https://github.com/didi-rare/vigilafrica/commit/48d0b092d0992310df0fbccc610032abcd1db915))
+* **deploy:** split the deploy account per environment and harden sshd ([7f143be](https://github.com/didi-rare/vigilafrica/commit/7f143bed4a575e74deec00287fed3530fb2b21c9))
+
+
+### Bug Fixes
+
+* **api:** drop lib/pq by moving migrations onto the pgx driver ([1a33296](https://github.com/didi-rare/vigilafrica/commit/1a33296c216a2bba4a53d48e9302a55835941c35))
+* **api:** drop lib/pq by moving migrations onto the pgx driver ([8c9188f](https://github.com/didi-rare/vigilafrica/commit/8c9188f06455990ebed53d6870962cdc59d30980))
+
 ## [1.5.0](https://github.com/didi-rare/vigilafrica/compare/v1.4.0...v1.5.0) (2026-08-16)
 
 
