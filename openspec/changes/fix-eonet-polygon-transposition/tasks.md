@@ -10,7 +10,8 @@ second opinion.
 
 ## 1. Stop the bleeding
 
-- [ ] 1.1 **Reject impossible latitudes at normalization.** Any coordinate pair whose latitude falls
+- [x] 1.1 **Reject impossible latitudes at normalization.** ✅ `validLonLat` +
+      `polygonCoordinatesPlausible` in `normalizer.go`; every vertex walked, nested rings included. Any coordinate pair whose latitude falls
       outside ±90° is not a heuristic failure, it is definitionally invalid. Reject the event and
       count it. ⚠️ Apply to **every** vertex of a polygon, not just the first — the transposition is
       uniform, but a partial corruption would be worse and must not slip through.
@@ -31,7 +32,11 @@ second opinion.
 
 ## 2. Get the real geometry
 
-- [ ] 2.1 **Resolve GDACS-sourced geometry from GDACS.** `source_url` already carries the event id:
+- [x] 2.1 **Resolve GDACS-sourced geometry from GDACS.** ✅ `ingestor/gdacs.go`. Uses the
+      **centroid** endpoint rather than polygon episodes — it needs no episode matching, and it
+      gives these events coordinates for the first time (the map drops null-coordinate events, so
+      every polygon flood was previously invisible). Polygon-episode matching stays unneeded unless
+      we later want the extent. `source_url` already carries the event id:
       `https://www.gdacs.org/report.aspx?eventtype=FL&eventid=<id>`. The geometry endpoint is
       `https://www.gdacs.org/gdacsapi/api/polygons/getgeometry?eventtype=FL&eventid=<id>&episodeid=<n>`
       and returns `Point_Centroid`, `Poly_Affected` and `Poly_Global` features.
@@ -40,11 +45,15 @@ second opinion.
       (lon 6.77–6.86, lat 6.05–6.14). Match on **vertex count** to identify the right episode rather
       than assuming `episodeid=1`.
 
-- [ ] 2.2 **Decide and document the failure policy when GDACS is unreachable.** ⚠️ Do not silently
+- [x] 2.2 **Decide and document the failure policy when GDACS is unreachable.** ✅ Fails closed:
+      no else-branch fallback, the event keeps nil coordinates and is counted unverified. Covered by
+      `TestResolveGDACSCentroid/fails_closed_on_transport_and_shape_problems` (500, non-JSON, missing
+      geometry, wrong type, short coords, empty body). ⚠️ Do not silently
       fall back to the EONET geometry — that reinstates the defect under a network blip. The event
       stays quarantined (1.2) until geometry is resolved.
 
-- [ ] 2.3 **Do NOT blanket-swap polygon coordinates.** Recorded as a rejected option so it is not
+- [x] 2.3 **Do NOT blanket-swap polygon coordinates.** ✅ Not done, and recorded here so it is
+      not re-proposed. Recorded as a rejected option so it is not
       re-proposed: it is correct today and silently corrupts every polygon the moment EONET fixes
       their feed, reintroducing invented locations with no signal.
 
@@ -73,3 +82,13 @@ second opinion.
 - [ ] 4.2 **Verify on staging before production**, then confirm in production that `/v1/events?
       category=floods` no longer returns a Kwara flood and that the remaining floods' coordinates
       agree with GDACS.
+
+## 5. Security note carried by this change
+
+- [x] 5.1 **The GDACS source URL is upstream data and is never fetched.** ⚠️ It arrives inside the
+      EONET payload, so following it directly would let a third-party feed choose which host we call.
+      `parseGDACSReference` validates the host against `gdacs.org`, extracts only `eventtype`
+      (2 letters) and `eventid` (digits), and the request is rebuilt against a constant base URL.
+      An upstream value can influence **which event** is fetched, never **which host**. Pinned by
+      `TestParseGDACSReferenceRejectsForeignHosts`, including the `gdacs.org.evil.example.com`
+      suffix-confusion case, and by a test asserting a foreign URL never reaches the network at all.

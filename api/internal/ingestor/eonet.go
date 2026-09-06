@@ -111,7 +111,12 @@ type IngestResult struct {
 	// is invisible in production (LOG_LEVEL defaults to info) — which would
 	// defeat the point of recording it at all.
 	EventsUnverifiedGeom int
-	Run                  *models.IngestionRun
+
+	// EventsGeomResolved counts events whose unverifiable polygon geometry was
+	// replaced with an authoritative GDACS centroid. A run where this stays 0
+	// while EventsUnverifiedGeom rises means resolution is failing silently.
+	EventsGeomResolved int
+	Run                *models.IngestionRun
 }
 
 // Ingest pulls events from NASA EONET for the given country, upserts them
@@ -168,6 +173,7 @@ func Ingest(ctx context.Context, repo database.Repository, country CountryConfig
 			"events_stored", result.EventsStored,
 			"events_skipped_bbox", result.EventsSkippedBBox,
 			"events_unverified_geom", result.EventsUnverifiedGeom,
+			"events_geom_resolved", result.EventsGeomResolved,
 			"err", ingestErr,
 		)
 		return result, ingestErr
@@ -181,6 +187,7 @@ func Ingest(ctx context.Context, repo database.Repository, country CountryConfig
 		"events_stored", result.EventsStored,
 		"events_skipped_bbox", result.EventsSkippedBBox,
 		"events_unverified_geom", result.EventsUnverifiedGeom,
+		"events_geom_resolved", result.EventsGeomResolved,
 	)
 	return result, nil
 }
@@ -396,6 +403,35 @@ func processEONETBody(
 		if geoJSON == "" {
 			slog.Warn("ingestion: skipping event with no geometry", "country", country.Code, "source_id", event.SourceID)
 			continue
+		}
+
+		// Resolve an authoritative point for polygon geometry before the
+		// containment guard runs, so a polygon stops being unverifiable rather
+		// than being waved through (fix-eonet-polygon-transposition).
+		//
+		// ⚠️ This is a correction, not an enrichment. EONET reverses the axis order
+		// on GDACS polygons, so the geometry we were storing put a Cameroonian
+		// flood inside Kwara. Replacing it with the GDACS centroid also gives these
+		// events coordinates for the first time — the frontend drops null-coordinate
+		// events from the map, so every polygon flood was previously invisible.
+		if event.Longitude == nil && event.Latitude == nil && event.SourceURL != nil {
+			if lon, lat, resolved := resolveGDACSCentroid(ctx, *event.SourceURL); resolved {
+				point := "Point"
+				event.Longitude = &lon
+				event.Latitude = &lat
+				event.GeomType = &point
+				geoJSON = fmt.Sprintf(`{"type":"Point","coordinates":[%f,%f]}`, lon, lat)
+				result.EventsGeomResolved++
+				slog.Info("ingestion: replaced unverifiable polygon with the GDACS centroid",
+					"country", country.Code,
+					"source_id", event.SourceID,
+					"lon", lon,
+					"lat", lat,
+				)
+			}
+			// Deliberately no else-branch fallback: an unresolved event keeps its
+			// nil coordinates and is counted as unverified below. Falling back to
+			// the EONET geometry would reinstate the transposed coordinates.
 		}
 
 		// Containment guard: EONET's server-side bbox filter is a hint, not a

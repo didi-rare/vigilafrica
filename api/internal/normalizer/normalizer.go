@@ -129,21 +129,81 @@ func Normalize(raw RawEONETEvent, rawPayload []byte) (models.Event, string, erro
 		if geom.Type == "Point" && len(geom.Coordinates) == 2 {
 			lon, ok1 := geom.Coordinates[0].(float64)
 			lat, ok2 := geom.Coordinates[1].(float64)
-			if ok1 && ok2 {
+			if ok1 && ok2 && validLonLat(lon, lat) {
 				evt.Longitude = &lon
 				evt.Latitude = &lat
 				// Construct simple GeoJSON
 				geoJSON = fmt.Sprintf(`{"type":"Point","coordinates":[%f,%f]}`, lon, lat)
 			}
 		} else if geom.Type == "Polygon" {
+			// ⚠️ Reject a polygon whose coordinates cannot be [lon, lat] at all.
+			//
+			// EONET republishes GDACS polygons with the pair order reversed, so the
+			// "latitude" is really a longitude. Where that longitude exceeds 90 the
+			// result is not merely wrong, it is impossible — 14 of 40 sampled flood
+			// events declared latitudes such as 136.77 (Japan) or 168.12 (New
+			// Zealand). See openspec/changes/fix-eonet-polygon-transposition.
+			//
+			// This is a definitional constraint, not a heuristic, so it can never
+			// reject valid data. It does NOT catch every transposed polygon —
+			// anything whose true longitude is within +/-90 stays plausible-looking,
+			// which is exactly why the ingestor resolves GDACS geometry from GDACS
+			// rather than relying on this guard alone.
+			if !polygonCoordinatesPlausible(geom.Coordinates) {
+				return evt, "", nil
+			}
 			// Construct GeoJSON from the raw coordinates interface array
 			coordsBytes, _ := json.Marshal(geom.Coordinates)
 			geoJSON = fmt.Sprintf(`{"type":"Polygon","coordinates":%s}`, string(coordsBytes))
-			// Extract centroid? Deferring complex GIS parsing to DB, leaving lon/lat nil for polygons now.
+			// lon/lat stay nil here. The ingestor resolves an authoritative point for
+			// GDACS-sourced polygons; until it does, containment is unverifiable.
 		}
 	}
 
 	return evt, geoJSON, nil
+}
+
+// validLonLat applies the definitional bounds of a WGS-84 coordinate pair.
+// Anything outside them is not a coordinate, whatever the feed claims.
+func validLonLat(lon, lat float64) bool {
+	return lon >= -180 && lon <= 180 && lat >= -90 && lat <= 90
+}
+
+// polygonCoordinatesPlausible walks every vertex of an arbitrarily nested GeoJSON
+// coordinate array and reports whether all of them could be [lon, lat] pairs.
+//
+// Every vertex is checked rather than the first, because a partially corrupted
+// ring would be harder to spot than a uniformly transposed one and must not slip
+// through on the strength of a valid opening vertex.
+func polygonCoordinatesPlausible(coords []interface{}) bool {
+	valid := true
+	var walk func(v interface{})
+	walk = func(v interface{}) {
+		if !valid {
+			return
+		}
+		arr, ok := v.([]interface{})
+		if !ok || len(arr) == 0 {
+			return
+		}
+		// A coordinate pair is a flat array whose first element is a number.
+		if first, isNum := arr[0].(float64); isNum {
+			if len(arr) < 2 {
+				valid = false
+				return
+			}
+			second, isNum2 := arr[1].(float64)
+			if !isNum2 || !validLonLat(first, second) {
+				valid = false
+			}
+			return
+		}
+		for _, item := range arr {
+			walk(item)
+		}
+	}
+	walk(coords)
+	return valid
 }
 
 func validatedSourceURL(rawURL string) (string, bool) {
