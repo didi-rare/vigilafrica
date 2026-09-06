@@ -135,7 +135,11 @@ func Normalize(raw RawEONETEvent, rawPayload []byte) (models.Event, string, erro
 				// Construct simple GeoJSON
 				geoJSON = fmt.Sprintf(`{"type":"Point","coordinates":[%f,%f]}`, lon, lat)
 			}
-		} else if geom.Type == "Polygon" {
+		} else if geom.Type == "Polygon" || geom.Type == "MultiPolygon" {
+			// MultiPolygon is handled explicitly rather than falling through to
+			// "no geometry". EONET has not been observed emitting one, but the
+			// silent-drop behaviour meant we could never have noticed if it did:
+			// the event would simply vanish with a generic warning.
 			// ⚠️ Reject a polygon whose coordinates cannot be [lon, lat] at all.
 			//
 			// EONET republishes GDACS polygons with the pair order reversed, so the
@@ -154,7 +158,7 @@ func Normalize(raw RawEONETEvent, rawPayload []byte) (models.Event, string, erro
 			}
 			// Construct GeoJSON from the raw coordinates interface array
 			coordsBytes, _ := json.Marshal(geom.Coordinates)
-			geoJSON = fmt.Sprintf(`{"type":"Polygon","coordinates":%s}`, string(coordsBytes))
+			geoJSON = fmt.Sprintf(`{"type":%q,"coordinates":%s}`, geom.Type, string(coordsBytes))
 			// lon/lat stay nil here. The ingestor resolves an authoritative point for
 			// GDACS-sourced polygons; until it does, containment is unverifiable.
 		}
@@ -169,41 +173,78 @@ func validLonLat(lon, lat float64) bool {
 	return lon >= -180 && lon <= 180 && lat >= -90 && lat <= 90
 }
 
-// polygonCoordinatesPlausible walks every vertex of an arbitrarily nested GeoJSON
-// coordinate array and reports whether all of them could be [lon, lat] pairs.
+// maxCoordinateNesting bounds recursion depth. GeoJSON needs at most 4 levels
+// (MultiPolygon -> polygon -> ring -> position); anything deeper is malformed and
+// is rejected rather than walked, so an adversarial payload cannot drive
+// unbounded recursion.
+const maxCoordinateNesting = 8
+
+// polygonCoordinatesPlausible reports whether every position in an arbitrarily
+// nested GeoJSON coordinate array could be a [lon, lat] pair.
 //
-// Every vertex is checked rather than the first, because a partially corrupted
-// ring would be harder to spot than a uniformly transposed one and must not slip
+// Every position is checked rather than the first, because a partially corrupted
+// ring is harder to spot than a uniformly transposed one and must not slip
 // through on the strength of a valid opening vertex.
+//
+// ⚠️ It returns false for an empty or structurally malformed tree. An earlier
+// version returned true for those, on the reasoning that "nothing impossible is
+// present" — but that let `{"coordinates":[]}` and a position like ["x", 200]
+// through to PostGIS. RFC 7946 §3.1.1 defines a position as an array of at least
+// two numbers, so anything else is not a position and is not plausible.
 func polygonCoordinatesPlausible(coords []interface{}) bool {
-	valid := true
-	var walk func(v interface{})
-	walk = func(v interface{}) {
-		if !valid {
-			return
-		}
-		arr, ok := v.([]interface{})
-		if !ok || len(arr) == 0 {
-			return
-		}
-		// A coordinate pair is a flat array whose first element is a number.
-		if first, isNum := arr[0].(float64); isNum {
-			if len(arr) < 2 {
-				valid = false
-				return
-			}
-			second, isNum2 := arr[1].(float64)
-			if !isNum2 || !validLonLat(first, second) {
-				valid = false
-			}
-			return
-		}
-		for _, item := range arr {
-			walk(item)
-		}
+	positions, ok := walkCoordinates(coords, 0)
+	return ok && positions > 0
+}
+
+// walkCoordinates returns the number of valid positions found, and whether the
+// whole tree is well formed.
+func walkCoordinates(v interface{}, depth int) (int, bool) {
+	if depth > maxCoordinateNesting {
+		return 0, false
 	}
-	walk(coords)
-	return valid
+	arr, ok := v.([]interface{})
+	if !ok || len(arr) == 0 {
+		return 0, false
+	}
+
+	// A position is a flat array of numbers. Decide which case we are in by the
+	// FIRST element's type, then require every element to agree — a mixed array
+	// such as ["x", 200] is malformed, not a nested structure to recurse into.
+	if _, isNum := arr[0].(float64); isNum {
+		if len(arr) < 2 {
+			return 0, false
+		}
+		lon, ok1 := arr[0].(float64)
+		lat, ok2 := arr[1].(float64)
+		if !ok1 || !ok2 {
+			return 0, false
+		}
+		// A third element (altitude) is permitted by RFC 7946 but must still be
+		// numeric if present.
+		for _, extra := range arr[2:] {
+			if _, isNum := extra.(float64); !isNum {
+				return 0, false
+			}
+		}
+		if !validLonLat(lon, lat) {
+			return 0, false
+		}
+		return 1, true
+	}
+
+	total := 0
+	for _, item := range arr {
+		// Reject a tree that mixes positions and nested arrays at the same level.
+		if _, isNum := item.(float64); isNum {
+			return 0, false
+		}
+		n, ok := walkCoordinates(item, depth+1)
+		if !ok {
+			return 0, false
+		}
+		total += n
+	}
+	return total, true
 }
 
 func validatedSourceURL(rawURL string) (string, bool) {

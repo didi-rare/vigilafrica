@@ -14,42 +14,83 @@ import (
 
 // GDACS geometry resolution (openspec/changes/fix-eonet-polygon-transposition).
 //
-// EONET republishes GDACS polygons with latitude and longitude reversed. Verified
-// against GDACS for both affected production events: the vertex counts match
-// exactly (1311 and 28) and only the axis order differs. GDACS is upstream of
+// EONET republishes GDACS polygons with latitude and longitude reversed, so a
+// Cameroonian flood was stored inside Kwara State, Nigeria. GDACS is upstream of
 // EONET, so it is the origin rather than a second opinion.
 //
-// ⚠️ We resolve rather than reverse. Blanket-swapping every polygon is correct
-// today and silently corrupts everything the moment EONET repairs the feed;
-// asking GDACS keeps working either way.
-
-var gdacsHTTPClient = &http.Client{Timeout: 20 * time.Second}
-
-// gdacsEventDataURL is the GDACS event endpoint. A var, not a const, so tests
-// can point it at an httptest server — the same seam pattern as eonetURL.
+// ⚠️ We resolve rather than reverse. Blanket-swapping is correct today and
+// silently corrupts everything the moment EONET repairs the feed.
 //
-// ⚠️ The host allowlist in parseGDACSReference validates the URL we were GIVEN;
-// this constant is the URL we ACTUALLY call. Keeping them separate is the point:
-// an upstream value can influence which event is fetched, never which host.
-var gdacsEventDataURL = "https://www.gdacs.org/gdacsapi/api/events/geteventdata"
+// ⚠️ The EPISODE is load-bearing, and getting it wrong substitutes a different
+// disaster rather than correcting one. GDACS events move: 1104105 ran 13 Aug to
+// 4 Sep over five episodes in different parts of Nigeria. EONET publishes ONE of
+// them — for that event, episode 2 in the north — while the event-level endpoint
+// returns episode 5, ~700km away in the Niger Delta. Taking the event-level
+// centroid would therefore relocate the flood, not fix it. We match the episode
+// whose vertex count equals EONET's and verify the axes are genuinely reversed
+// before trusting it.
 
-// gdacsEventTypes are the GDACS hazard codes we accept. Restricting the set keeps
-// a hostile upstream value out of the URL we build.
-var gdacsEventTypeRe = regexp.MustCompile(`^[A-Z]{2}$`)
+var gdacsHTTPClient = &http.Client{
+	Timeout: gdacsRequestTimeout,
+	// ⚠️ Pin the origin. Go follows cross-host redirects by default, so without
+	// this the host allowlist below would validate the URL we were GIVEN while the
+	// request ended up somewhere else entirely.
+	CheckRedirect: func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	},
+}
+
+// Base URLs are vars, not consts, so tests can point them at an httptest server —
+// the same seam pattern as eonetURL.
+//
+// ⚠️ The host allowlist validates the URL we were given; these constants are the
+// hosts we actually call. Keeping them separate is the point: an upstream value
+// can influence WHICH EVENT is fetched, never WHICH HOST.
+var (
+	gdacsEventDataURL = "https://www.gdacs.org/gdacsapi/api/events/geteventdata"
+	gdacsGeometryURL  = "https://www.gdacs.org/gdacsapi/api/polygons/getgeometry"
+)
+
+const (
+	maxGDACSResponseBytes = 4 << 20 // 4 MiB — flood polygons run to thousands of vertices
+	// maxGDACSEpisodes bounds episode enumeration. GDACS numbers episodes from 1
+	// and the event payload declares how many exist; this is a backstop against a
+	// malformed count turning one event into unbounded requests.
+	maxGDACSEpisodes = 20
+)
+
+// gdacsEventTypes is a real allowlist of GDACS hazard codes. A bare `[A-Z]{2}`
+// pattern accepts anything two letters, including "ZZ", which made the previous
+// "event types we accept" comment false.
+var gdacsEventTypes = map[string]bool{
+	"FL": true, // flood
+	"EQ": true, // earthquake
+	"TC": true, // tropical cyclone
+	"DR": true, // drought
+	"VO": true, // volcano
+	"WF": true, // wildfire
+	"TS": true, // tsunami
+}
+
 var gdacsEventIDRe = regexp.MustCompile(`^[0-9]{1,12}$`)
 
-// gdacsReference identifies a GDACS event extracted from a source URL.
 type gdacsReference struct {
 	EventType string
 	EventID   string
 }
 
+// GDACSGeometry is an authoritative geometry resolved from GDACS.
+type GDACSGeometry struct {
+	GeoJSON   string // polygon in correct [lon, lat] order
+	Lon, Lat  float64
+	EpisodeID int
+	Vertices  int
+}
+
 // parseGDACSReference pulls the event type and id out of a GDACS report URL.
 //
-// ⚠️ The URL originates in upstream data, so it is never fetched directly. Only
-// the two validated components are used, and the request URL is rebuilt from a
-// constant base — an upstream value can therefore never redirect the request
-// somewhere else.
+// ⚠️ The URL originates in upstream data and is NEVER fetched. Only the two
+// validated components are used, against a constant base URL.
 func parseGDACSReference(sourceURL string) (gdacsReference, bool) {
 	parsed, err := url.Parse(strings.TrimSpace(sourceURL))
 	if err != nil || parsed.Scheme != "https" {
@@ -65,75 +106,323 @@ func parseGDACSReference(sourceURL string) (gdacsReference, bool) {
 		EventType: strings.ToUpper(strings.TrimSpace(q.Get("eventtype"))),
 		EventID:   strings.TrimSpace(q.Get("eventid")),
 	}
-	if !gdacsEventTypeRe.MatchString(ref.EventType) || !gdacsEventIDRe.MatchString(ref.EventID) {
+	if !gdacsEventTypes[ref.EventType] || !gdacsEventIDRe.MatchString(ref.EventID) {
 		return gdacsReference{}, false
 	}
 	return ref, true
 }
 
-// gdacsEventData is the subset of the GDACS event payload we rely on. The
-// geometry is a Point that GDACS labels "Centroid".
-type gdacsEventData struct {
-	Geometry struct {
-		Type        string    `json:"type"`
-		Coordinates []float64 `json:"coordinates"`
-	} `json:"geometry"`
-}
-
-// resolveGDACSCentroid returns the authoritative [lon, lat] centroid GDACS holds
-// for the event named by sourceURL.
-//
-// Returns ok=false whenever the point cannot be established with confidence. The
-// caller must NOT fall back to the EONET geometry in that case — doing so would
-// reinstate the transposed coordinates under a network blip.
-func resolveGDACSCentroid(ctx context.Context, sourceURL string) (lon, lat float64, ok bool) {
-	ref, valid := parseGDACSReference(sourceURL)
-	if !valid {
-		return 0, 0, false
-	}
-
-	reqURL := fmt.Sprintf(
-		"%s?eventtype=%s&eventid=%s",
-		gdacsEventDataURL, url.QueryEscape(ref.EventType), url.QueryEscape(ref.EventID),
-	)
-
+func gdacsGetJSON(ctx context.Context, reqURL string, into interface{}) bool {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
-		return 0, 0, false
+		return false
 	}
-
 	resp, err := gdacsHTTPClient.Do(req)
 	if err != nil {
-		return 0, 0, false
+		return false
 	}
 	defer resp.Body.Close()
+	// ErrUseLastResponse surfaces the redirect itself, which is not a usable body.
 	if resp.StatusCode != http.StatusOK {
-		return 0, 0, false
+		return false
 	}
-
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxGDACSResponseBytes))
 	if err != nil {
-		return 0, 0, false
+		return false
 	}
-
-	var data gdacsEventData
-	if err := json.Unmarshal(body, &data); err != nil {
-		return 0, 0, false
-	}
-	if data.Geometry.Type != "Point" || len(data.Geometry.Coordinates) != 2 {
-		return 0, 0, false
-	}
-
-	lon, lat = data.Geometry.Coordinates[0], data.Geometry.Coordinates[1]
-
-	// GDACS publishes GeoJSON order, verified against its own polygon and country
-	// fields. Validate anyway: the whole reason this code exists is an upstream
-	// that got the order wrong, so trusting a second upstream unconditionally
-	// would repeat the mistake.
-	if lon < -180 || lon > 180 || lat < -90 || lat > 90 {
-		return 0, 0, false
-	}
-	return lon, lat, true
+	return json.Unmarshal(body, into) == nil
 }
 
-const maxGDACSResponseBytes = 2 << 20 // 2 MiB
+type gdacsEventData struct {
+	Properties struct {
+		EpisodeID int `json:"episodeid"`
+		Episodes  []struct {
+			Details string `json:"details"`
+		} `json:"episodes"`
+	} `json:"properties"`
+}
+
+type gdacsFeatureCollection struct {
+	Features []struct {
+		Properties struct {
+			Class     string `json:"Class"`
+			EpisodeID int    `json:"episodeid"`
+		} `json:"properties"`
+		Geometry struct {
+			Type        string          `json:"type"`
+			Coordinates json.RawMessage `json:"coordinates"`
+		} `json:"geometry"`
+	} `json:"features"`
+}
+
+// ResolveGDACSPolygon finds the GDACS episode whose affected-area polygon matches
+// the EONET geometry, and returns it in correct axis order.
+//
+// wantVertices is the vertex count of the EONET polygon. Matching on it pins the
+// episode; without that we would silently swap in a different footprint.
+//
+// Returns ok=false whenever the geometry cannot be established with confidence.
+// ⚠️ The caller MUST NOT fall back to the EONET geometry — that is the transposed
+// data this exists to reject.
+func ResolveGDACSPolygon(ctx context.Context, sourceURL string, eonet [][2]float64) (GDACSGeometry, bool) {
+	ref, valid := parseGDACSReference(sourceURL)
+	if !valid || len(eonet) == 0 {
+		return GDACSGeometry{}, false
+	}
+	wantVertices := len(eonet)
+	eonetBox := positionsBBox(eonet)
+
+	var event gdacsEventData
+	if !gdacsGetJSON(ctx, fmt.Sprintf("%s?eventtype=%s&eventid=%s",
+		gdacsEventDataURL, url.QueryEscape(ref.EventType), url.QueryEscape(ref.EventID)), &event) {
+		return GDACSGeometry{}, false
+	}
+
+	episodes := len(event.Properties.Episodes)
+	if episodes == 0 {
+		episodes = event.Properties.EpisodeID
+	}
+	if episodes <= 0 || episodes > maxGDACSEpisodes {
+		if episodes > maxGDACSEpisodes {
+			episodes = maxGDACSEpisodes
+		} else {
+			return GDACSGeometry{}, false
+		}
+	}
+
+	for ep := 1; ep <= episodes; ep++ {
+		// Respect cancellation between episodes: this loop is network-bound and
+		// sits inside a scheduled run with a bounded lease (§3.6).
+		if ctx.Err() != nil {
+			return GDACSGeometry{}, false
+		}
+
+		var fc gdacsFeatureCollection
+		if !gdacsGetJSON(ctx, fmt.Sprintf("%s?eventtype=%s&eventid=%s&episodeid=%d",
+			gdacsGeometryURL, url.QueryEscape(ref.EventType), url.QueryEscape(ref.EventID), ep), &fc) {
+			continue
+		}
+
+		for _, f := range fc.Features {
+			if f.Properties.Class != "Poly_Affected" || f.Geometry.Type != "Polygon" {
+				continue
+			}
+			var coords []interface{}
+			if json.Unmarshal(f.Geometry.Coordinates, &coords) != nil {
+				continue
+			}
+			positions := collectPositions(coords)
+			if len(positions) != wantVertices {
+				continue
+			}
+			if !positionsWithinWGS84(positions) {
+				continue
+			}
+			// ⚠️ A matching vertex count is NOT proof that this is the same
+			// footprint — two episodes can coincidentally share one, and
+			// substituting the wrong episode relocates the disaster instead of
+			// correcting it. Require the extents to correspond as well, either
+			// directly or as each other's transpose.
+			if !extentsCorrespond(eonetBox, positionsBBox(positions)) {
+				continue
+			}
+			lon, lat := positionsCentroid(positions)
+			return GDACSGeometry{
+				GeoJSON:   fmt.Sprintf(`{"type":"Polygon","coordinates":%s}`, string(f.Geometry.Coordinates)),
+				Lon:       lon,
+				Lat:       lat,
+				EpisodeID: ep,
+				Vertices:  len(positions),
+			}, true
+		}
+	}
+	return GDACSGeometry{}, false
+}
+
+// collectPositions flattens nested GeoJSON coordinate arrays into [lon, lat]
+// pairs, ignoring any third dimension.
+func collectPositions(v interface{}) [][2]float64 {
+	arr, ok := v.([]interface{})
+	if !ok || len(arr) == 0 {
+		return nil
+	}
+	if first, isNum := arr[0].(float64); isNum {
+		if len(arr) < 2 {
+			return nil
+		}
+		second, ok2 := arr[1].(float64)
+		if !ok2 {
+			return nil
+		}
+		return [][2]float64{{first, second}}
+	}
+	var out [][2]float64
+	for _, item := range arr {
+		out = append(out, collectPositions(item)...)
+	}
+	return out
+}
+
+func positionsWithinWGS84(p [][2]float64) bool {
+	if len(p) == 0 {
+		return false
+	}
+	for _, c := range p {
+		if c[0] < -180 || c[0] > 180 || c[1] < -90 || c[1] > 90 {
+			return false
+		}
+	}
+	return true
+}
+
+// positionsCentroid returns the mean position. A representative point for the map
+// marker only — the polygon itself remains the geometry used for spatial queries,
+// so this never narrows what ST_DWithin matches.
+func positionsCentroid(p [][2]float64) (lon, lat float64) {
+	for _, c := range p {
+		lon += c[0]
+		lat += c[1]
+	}
+	return lon / float64(len(p)), lat / float64(len(p))
+}
+
+// gdacsExtentToleranceDeg is how far two extents may differ and still be
+// considered the same geometry. GDACS publishes 4 decimal places where EONET
+// publishes 6, so identical polygons differ by up to ~1e-4 degrees (~11m) purely
+// from rounding. Measured deltas on the two production events were ~3e-5.
+const gdacsExtentToleranceDeg = 1e-3
+
+// extentsCorrespond reports whether a GDACS extent is the same geometry as an
+// EONET extent — either directly, or with the axes transposed.
+//
+// Accepting BOTH is deliberate. Today EONET reverses the pairs, so the transposed
+// case is what matches; the day upstream is repaired the direct case will match
+// instead and this keeps working with no change. That is the property a blanket
+// swap would not have.
+func extentsCorrespond(eonet, gdacs [4]float64) bool {
+	near := func(a, b float64) bool {
+		d := a - b
+		return d < gdacsExtentToleranceDeg && d > -gdacsExtentToleranceDeg
+	}
+	direct := near(eonet[0], gdacs[0]) && near(eonet[1], gdacs[1]) &&
+		near(eonet[2], gdacs[2]) && near(eonet[3], gdacs[3])
+	transposed := near(eonet[1], gdacs[0]) && near(eonet[0], gdacs[1]) &&
+		near(eonet[3], gdacs[2]) && near(eonet[2], gdacs[3])
+	return direct || transposed
+}
+
+// positionsBBox returns [minLon, minLat, maxLon, maxLat].
+func positionsBBox(p [][2]float64) [4]float64 {
+	b := [4]float64{p[0][0], p[0][1], p[0][0], p[0][1]}
+	for _, c := range p {
+		if c[0] < b[0] {
+			b[0] = c[0]
+		}
+		if c[1] < b[1] {
+			b[1] = c[1]
+		}
+		if c[0] > b[2] {
+			b[2] = c[0]
+		}
+		if c[1] > b[3] {
+			b[3] = c[1]
+		}
+	}
+	return b
+}
+
+// ---------------------------------------------------------------------------
+// Per-run resolution budget and cache.
+//
+// ⚠️ Deliberately per-run state, not a package global: a shared cache would leak
+// results between scheduled runs and between countries, and a shared budget
+// would let one run starve the next.
+
+const (
+	// maxGDACSCallsPerRun bounds total GDACS requests for one EONET response.
+	maxGDACSCallsPerRun = 40
+
+	// gdacsRunBudgetDuration is a WALL-CLOCK ceiling on all GDACS work for one
+	// response, and it is the control that actually protects the scheduler lock.
+	//
+	// ⚠️ A call cap alone is not enough. schedulerLockTTL is 5 minutes, sized
+	// against a documented ~3 minute worst-case run, with an explicit SCALE NOTE
+	// to revisit it if a run exceeds ~4 minutes. 40 calls at the client timeout
+	// would be ~13 minutes on its own — the lock would expire mid-run and a
+	// second replica could start ingesting concurrently. This keeps the added
+	// work to a bounded slice of the existing headroom instead (§3.5).
+	gdacsRunBudgetDuration = 90 * time.Second
+
+	// gdacsRequestTimeout is per request. Deliberately shorter than the run
+	// budget so one stalled request cannot consume the whole allowance.
+	gdacsRequestTimeout = 10 * time.Second
+)
+
+type gdacsBudget struct {
+	remaining int
+	deadline  time.Time
+	cache     map[string]gdacsCacheEntry
+}
+
+type gdacsCacheEntry struct {
+	geom GDACSGeometry
+	ok   bool
+}
+
+func newGDACSBudget() gdacsBudget {
+	return gdacsBudget{
+		remaining: maxGDACSCallsPerRun,
+		deadline:  time.Now().Add(gdacsRunBudgetDuration),
+		cache:     map[string]gdacsCacheEntry{},
+	}
+}
+
+// resolve is the budgeted, cached entry point used by the ingest loop.
+//
+// The cache is keyed on source URL AND vertex count, because the vertex count is
+// what selects the episode — two events sharing a GDACS id but different
+// footprints must not share a cached answer.
+func (b *gdacsBudget) resolve(ctx context.Context, sourceURL string, eonet [][2]float64) (GDACSGeometry, bool) {
+	key := fmt.Sprintf("%s#%d", sourceURL, len(eonet))
+	if hit, seen := b.cache[key]; seen {
+		return hit.geom, hit.ok
+	}
+	if b.remaining <= 0 || !time.Now().Before(b.deadline) {
+		// Budget exhausted, by calls or by wall clock. Returning false means the
+		// event is skipped rather than stored unverified — the safe direction.
+		return GDACSGeometry{}, false
+	}
+	b.remaining--
+
+	// Cap this resolution at whatever remains of the run budget, so the total
+	// cannot drift past it however slow upstream is.
+	cctx, cancel := context.WithDeadline(ctx, b.deadline)
+	defer cancel()
+
+	geom, ok := ResolveGDACSPolygon(cctx, sourceURL, eonet)
+	b.cache[key] = gdacsCacheEntry{geom: geom, ok: ok}
+	return geom, ok
+}
+
+// polygonPositionsFromGeoJSON extracts [lon, lat] pairs from a Polygon GeoJSON
+// document. Returns nil for anything that is not a usable polygon.
+func polygonPositionsFromGeoJSON(geoJSON string) [][2]float64 {
+	var doc struct {
+		Type        string      `json:"type"`
+		Coordinates interface{} `json:"coordinates"`
+	}
+	if json.Unmarshal([]byte(geoJSON), &doc) != nil {
+		return nil
+	}
+	if doc.Type != "Polygon" && doc.Type != "MultiPolygon" {
+		return nil
+	}
+	return collectPositions(doc.Coordinates)
+}
+
+// bboxesIntersect reports whether two [minLon, minLat, maxLon, maxLat] boxes
+// overlap. Used for polygon containment: a flood straddling a border belongs to
+// the country it reaches, even when its centroid lies outside the box.
+func bboxesIntersect(a, b [4]float64) bool {
+	return a[0] <= b[2] && b[0] <= a[2] && a[1] <= b[3] && b[1] <= a[3]
+}

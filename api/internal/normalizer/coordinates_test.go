@@ -4,9 +4,9 @@ import "testing"
 
 func TestValidLonLat(t *testing.T) {
 	valid := [][2]float64{
-		{3.3942, 6.4551},   // Lagos — the one flood EONET gets right
-		{9.414, 4.6027},    // the Cameroon flood, correct order
-		{-79.5, 43.8},      // Toronto, negative longitude
+		{3.3942, 6.4551}, // Lagos — the one flood EONET gets right
+		{9.414, 4.6027},  // the Cameroon flood, correct order
+		{-79.5, 43.8},    // Toronto, negative longitude
 		{180, 90}, {-180, -90}, {0, 0},
 	}
 	for _, c := range valid {
@@ -71,8 +71,8 @@ func TestPolygonCoordinatesPlausible(t *testing.T) {
 		// transposed one and must not pass on a valid opening vertex.
 		partial := []interface{}{
 			[]interface{}{
-				[]interface{}{4.377, 9.216}, // fine
-				[]interface{}{4.828, 9.569}, // fine
+				[]interface{}{4.377, 9.216},  // fine
+				[]interface{}{4.828, 9.569},  // fine
 				[]interface{}{4.828, 168.12}, // impossible
 			},
 		}
@@ -96,18 +96,41 @@ func TestPolygonCoordinatesPlausible(t *testing.T) {
 	})
 
 	t.Run("malformed input is rejected rather than panicking", func(t *testing.T) {
-		for _, bad := range [][]interface{}{
-			{[]interface{}{[]interface{}{1.0}}},                    // single element
-			{[]interface{}{[]interface{}{1.0, "x"}}},               // non-numeric
+		for name, bad := range map[string][]interface{}{
+			"single element":     {[]interface{}{[]interface{}{1.0}}},
+			"non-numeric second": {[]interface{}{[]interface{}{1.0, "x"}}},
+			// ⚠️ A position whose FIRST member is non-numeric was previously
+			// traversed as if it were a nested structure, so its scalar leaves were
+			// never range-checked and the whole tree was accepted.
+			"non-numeric first":    {[]interface{}{[]interface{}{"x", 200.0}}},
+			"mixed level":          {[]interface{}{1.0, []interface{}{1.0, 2.0}}},
+			"non-numeric altitude": {[]interface{}{[]interface{}{1.0, 2.0, "z"}}},
+			"empty ring":           {[]interface{}{}},
 		} {
 			if polygonCoordinatesPlausible(bad) {
-				t.Errorf("expected %v to be rejected", bad)
+				t.Errorf("%s: expected rejection", name)
 			}
 		}
-		// Empty input has nothing impossible in it; accepting it is correct, and
-		// the caller already skips events with no geometry.
-		if !polygonCoordinatesPlausible([]interface{}{}) {
-			t.Error("empty coordinates should not be treated as implausible")
+
+		// ⚠️ Empty coordinates are now REJECTED. An earlier version accepted them
+		// on the reasoning that "nothing impossible is present", but that let
+		// {"coordinates":[]} reach PostGIS. RFC 7946 §3.1.1 defines a position as
+		// at least two numbers, so a tree containing none is not plausible — it is
+		// structurally invalid.
+		if polygonCoordinatesPlausible([]interface{}{}) {
+			t.Error("empty coordinates must be rejected, not accepted as vacuously valid")
+		}
+	})
+
+	t.Run("bounds recursion depth on adversarial nesting", func(t *testing.T) {
+		// Build a tree far deeper than any legal GeoJSON. It must be refused
+		// without recursing unboundedly.
+		var deep interface{} = []interface{}{1.0, 2.0}
+		for i := 0; i < 50; i++ {
+			deep = []interface{}{deep}
+		}
+		if polygonCoordinatesPlausible([]interface{}{deep}) {
+			t.Error("excessively nested coordinates must be rejected")
 		}
 	})
 }

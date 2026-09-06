@@ -100,10 +100,15 @@ func (m *mockRepo) Close() {}
 type recordingRepo struct {
 	*mockRepo
 	upserts []models.Event
+	// geoJSONs records the geometry actually written, in upsert order. Without
+	// this a test cannot tell a corrected polygon from the transposed one it
+	// replaced -- which is precisely the defect that reached production.
+	geoJSONs []string
 }
 
 func (r *recordingRepo) UpsertEvent(ctx context.Context, e models.Event, geoJSON string) error {
 	r.upserts = append(r.upserts, e)
+	r.geoJSONs = append(r.geoJSONs, geoJSON)
 	return nil
 }
 
@@ -684,12 +689,21 @@ func TestRunIngest_SkipsEventOutsideCountryBBox(t *testing.T) {
 	}
 }
 
-// TestRunIngest_StoresEventWithUnverifiableGeometry pins the deliberate decision
-// that events whose containment cannot be checked are stored rather than
-// dropped. The normalizer resolves lon/lat only for Point geometry and leaves
-// them nil for Polygon, so a polygon is unverifiable — we do not discard data we
-// cannot verify, even when the ring lies outside the country bbox.
-func TestRunIngest_StoresEventWithUnverifiableGeometry(t *testing.T) {
+// TestRunIngest_SkipsPolygonWhoseGeometryCannotBeVerified pins a DELIBERATE
+// REVERSAL of earlier policy.
+//
+// This test previously asserted the opposite — that an unverifiable polygon is
+// stored rather than dropped, on the principle of not discarding data we cannot
+// check. EONET's axis transposition invalidated that principle: polygon geometry
+// from EONET is not merely unchecked, it is known-suspect, and storing it is how
+// a Cameroonian flood ended up inside Kwara State.
+//
+// ⚠️ The upsert is keyed on source_id, so storing an unresolved event would let a
+// single GDACS outage overwrite an already-corrected row with the transposed
+// polygon again — silently, while the run reported success. Skipping is what
+// makes the failure closed.
+func TestRunIngest_SkipsPolygonWhoseGeometryCannotBeVerified(t *testing.T) {
+	// No sources block, so there is no GDACS URL and resolution cannot succeed.
 	const body = `{
 		"events": [
 			{
@@ -714,17 +728,147 @@ func TestRunIngest_StoresEventWithUnverifiableGeometry(t *testing.T) {
 		t.Fatalf("runIngest returned err: %v", err)
 	}
 
-	if result.EventsStored != 1 {
-		t.Errorf("expected the polygon event to be stored, got %d stored", result.EventsStored)
+	if result.EventsStored != 0 {
+		t.Errorf("an unverifiable polygon must NOT be stored, got %d stored", result.EventsStored)
 	}
-	if result.EventsSkippedBBox != 0 {
-		t.Errorf("polygon must not count as a bbox skip, got %d", result.EventsSkippedBBox)
+	if result.EventsGeomUnresolved != 1 {
+		t.Errorf("expected 1 unresolved-geometry event counted, got %d", result.EventsGeomUnresolved)
 	}
-	if result.EventsUnverifiedGeom != 1 {
-		t.Errorf("expected 1 unverified-geometry event counted, got %d", result.EventsUnverifiedGeom)
+	if got := repo.sourceIDs(); len(got) != 0 {
+		t.Errorf("nothing should have been upserted, got %v", got)
 	}
-	if got := repo.sourceIDs(); len(got) != 1 || got[0] != "EONET_POLY" {
-		t.Errorf("expected EONET_POLY to be upserted, got %v", got)
+}
+
+// TestRunIngest_GDACSFailureNeverOverwritesWithTransposedGeometry is the
+// regression test for the P0 this change exists to fix.
+//
+// The scenario: a row has already been corrected (by migration 000015 or an
+// earlier successful resolution), and a later ingestion run cannot reach GDACS.
+// The transposed EONET polygon must never reach UpsertEvent, because the
+// source_id upsert would overwrite the corrected geometry with it.
+//
+// ⚠️ This test fails if the resolver call is removed from the ingest path — the
+// resolver-only unit tests did not.
+func TestRunIngest_GDACSFailureNeverOverwritesWithTransposedGeometry(t *testing.T) {
+	// The real EONET_22248 shape: a GDACS-sourced polygon whose coordinates are
+	// reversed, which is why it lands inside the Nigeria bbox at all.
+	const body = `{
+		"events": [
+			{
+				"id": "EONET_22248",
+				"title": "Flood in Cameroon 1104078",
+				"categories": [{"id": "floods"}],
+				"sources": [{"id": "GDACS", "url": "https://www.gdacs.org/report.aspx?eventtype=FL&eventid=1104078"}],
+				"geometry": [{"date": "2026-08-03T20:00:00Z", "type": "Polygon", "coordinates": [[[4.377,9.216],[4.828,9.216],[4.828,9.569],[4.377,9.569],[4.377,9.216]]]}]
+			}
+		]
+	}`
+
+	srv := httptest.NewServer(closedQueryStub(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, body)
+	}))
+	defer srv.Close()
+	defer installTestServer(t, srv)()
+
+	// GDACS is unreachable for the whole run.
+	gdacs := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer gdacs.Close()
+	swapGDACSURLs(t, gdacs.URL, gdacs.URL)
+
+	repo := &recordingRepo{mockRepo: &mockRepo{}}
+	result, err := runIngest(context.Background(), repo, testCountry)
+	if err != nil {
+		t.Fatalf("runIngest returned err: %v", err)
+	}
+
+	if len(repo.upserts) != 0 {
+		t.Fatalf("a GDACS failure must write NOTHING, got %d upserts: %v", len(repo.upserts), repo.sourceIDs())
+	}
+	for _, g := range repo.geoJSONs {
+		if strings.Contains(g, "4.377") {
+			t.Errorf("the transposed EONET polygon reached the database: %s", g)
+		}
+	}
+	if result.EventsGeomUnresolved != 1 {
+		t.Errorf("expected the event counted as unresolved, got %d", result.EventsGeomUnresolved)
+	}
+	if result.EventsStored != 0 {
+		t.Errorf("expected nothing stored, got %d", result.EventsStored)
+	}
+}
+
+// TestRunIngest_ResolvedPolygonIsStoredWithCorrectedAxes proves the success path
+// end to end: EONET's transposed polygon is replaced by the GDACS episode whose
+// vertex count matches, the polygon is PRESERVED rather than reduced to a point,
+// and a representative centroid is populated so the map can render it.
+func TestRunIngest_ResolvedPolygonIsStoredWithCorrectedAxes(t *testing.T) {
+	const body = `{
+		"events": [
+			{
+				"id": "EONET_22248",
+				"title": "Flood in Cameroon 1104078",
+				"categories": [{"id": "floods"}],
+				"sources": [{"id": "GDACS", "url": "https://www.gdacs.org/report.aspx?eventtype=FL&eventid=1104078"}],
+				"geometry": [{"date": "2026-08-03T20:00:00Z", "type": "Polygon", "coordinates": [[[4.377,9.216],[4.828,9.216],[4.828,9.569],[4.377,9.569],[4.377,9.216]]]}]
+			}
+		]
+	}`
+
+	srv := httptest.NewServer(closedQueryStub(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, body)
+	}))
+	defer srv.Close()
+	defer installTestServer(t, srv)()
+
+	// Episode 1 carries the same 5-vertex ring in CORRECT [lon, lat] order.
+	eventData := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, `{"properties":{"episodeid":1,"episodes":[{"details":"x"}]}}`)
+	}))
+	defer eventData.Close()
+	geometry := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, `{"features":[{"properties":{"Class":"Poly_Affected","episodeid":1},"geometry":{"type":"Polygon","coordinates":[[[9.216,4.377],[9.216,4.828],[9.569,4.828],[9.569,4.377],[9.216,4.377]]]}}]}`)
+	}))
+	defer geometry.Close()
+	swapGDACSURLs(t, eventData.URL, geometry.URL)
+
+	repo := &recordingRepo{mockRepo: &mockRepo{}}
+	result, err := runIngest(context.Background(), repo, testCountry)
+	if err != nil {
+		t.Fatalf("runIngest returned err: %v", err)
+	}
+
+	if result.EventsGeomResolved != 1 {
+		t.Fatalf("expected 1 resolved geometry, got %d", result.EventsGeomResolved)
+	}
+	if len(repo.geoJSONs) != 1 {
+		t.Fatalf("expected exactly one upsert, got %d", len(repo.geoJSONs))
+	}
+
+	stored := repo.geoJSONs[0]
+	// The polygon must survive as a polygon: GetNearbyEvents runs ST_DWithin
+	// against geom, which for a polygon measures to the nearest edge. Collapsing
+	// it to a point would drop the event for users inside the flood but far from
+	// its centre.
+	if !strings.Contains(stored, `"type":"Polygon"`) {
+		t.Errorf("geometry must remain a Polygon, got %s", stored)
+	}
+	// And it must carry the GDACS orientation, not EONET's.
+	if !strings.Contains(stored, "9.216") || strings.Contains(stored, "[[4.377") {
+		t.Errorf("stored geometry is not the corrected GDACS ring: %s", stored)
+	}
+
+	e := repo.upserts[0]
+	if e.Latitude == nil || e.Longitude == nil {
+		t.Fatal("a representative centroid must be populated so the map can render the event")
+	}
+	// Centroid of the corrected ring: lon ~9.4, lat ~4.6 — in Cameroon, not the
+	// transposition that put it in Kwara.
+	if *e.Longitude < 9.0 || *e.Longitude > 10.0 || *e.Latitude < 4.0 || *e.Latitude > 5.0 {
+		t.Errorf("centroid lon=%v lat=%v is not inside the corrected ring", *e.Longitude, *e.Latitude)
 	}
 }
 
