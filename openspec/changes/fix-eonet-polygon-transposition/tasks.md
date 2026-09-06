@@ -59,7 +59,14 @@ second opinion.
 
 ## 3. Repair what is already stored
 
-- [ ] 3.1 **Backfill the two affected production rows** once 2.1 lands: `EONET_22248` (must become
+- [x] 3.1 **Backfill the two affected production rows** ✅ Migration
+      `000015_correct_transposed_polygon_geometry`. ⚠️ **Corrected outcome:** 1104078 re-enriches to
+      **Cameroon** (ADM0 fallback, state NULL) — its true point still sits inside the Nigeria bbox
+      because that box overhangs the border, so the row legitimately stays, correctly labelled.
+      1104105 resolves to **Delta State**, not the "~Kano" first reported: that earlier figure came
+      from untransposing the polygon EONET happened to pick (GDACS episode 2), whereas GDACS's
+      canonical centroid for the event is in the Niger Delta. Both outcomes are asserted by new cases
+      in `TestEnrichmentTrigger_ADM0Fallback`, run against real PostGIS. Original text: once 2.1 lands: `EONET_22248` (must become
       Cameroon, and therefore leave the Nigeria/Ghana result set entirely) and `EONET_23208` (must
       move from Adamawa to its real northern-Nigeria location).
       ⚠️ Re-running enrichment is **not** sufficient — the trigger was never wrong. The stored

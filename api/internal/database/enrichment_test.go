@@ -35,6 +35,22 @@ func TestEnrichmentTrigger_ADM0Fallback(t *testing.T) {
 		{"lagos event -> state wins via ADM1", "ENR_LAG", 3.3941795, 6.4550575, "Nigeria", "Lagos"},
 		{"borno event near border -> NG state, not mislabelled to a neighbour", "ENR_BORNO", 14.376242, 11.775278, "Nigeria", "Borno"},
 		{"gulf of guinea -> outside all boundaries", "ENR_OCEAN", 0.0, 0.0, "", ""},
+
+		// The exact values migration 000015 writes for the two rows EONET stored
+		// with reversed coordinates. These assert the post-migration labelling
+		// rather than assuming the trigger does the right thing with them.
+		//
+		// ⚠️ 1104078 must come out as Cameroon, NOT Nigeria. Its true point still
+		// falls inside the Nigeria ingestion bbox because that box overhangs the
+		// border, so the row legitimately stays in the dataset — but it is a
+		// Cameroonian flood and must be labelled as one. It was previously served
+		// as "Kwara, Nigeria", which is the defect this whole change exists to fix.
+		{"gdacs 1104078 corrected -> Cameroon, not Kwara", "ENR_TRANS_CM", 9.414, 4.6027, "Cameroon", ""},
+		// 1104105's GDACS centroid resolves to Delta State in the Niger Delta.
+		// Previously served as Adamawa — ~700km north-east — because EONET's
+		// polygon was transposed. Unlike 1104078 this one matches an ADM1 polygon,
+		// so a state is expected rather than the ADM0 fallback.
+		{"gdacs 1104105 corrected -> Delta, not Adamawa", "ENR_TRANS_NG", 6.0998, 5.5897, "Nigeria", "Delta"},
 	}
 
 	for _, tt := range tests {
