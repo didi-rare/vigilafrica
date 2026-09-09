@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useRef } from 'react'
+import { formatLocation } from '../formatLocation'
 import { useParams, Link } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { fetchEventById, eventKeys } from '../api/events'
@@ -120,7 +121,15 @@ export function EventDetail() {
             <section className="info-group">
               <label>Location Context</label>
               <div className="event-location glass-effect">
-                <strong>{event.state_name}</strong>, {event.country_name}
+                {(() => {
+                  const label = formatLocation(
+                    event.state_name, event.country_name, coordinates?.lat, coordinates?.lng)
+                  return (
+                    <>
+                      <strong>{label.primary}</strong>{label.secondary ? `, ${label.secondary}` : ''}
+                    </>
+                  )
+                })()}
                 <small>
                   {coordinates
                     ? `Coordinates: ${coordinates.lat.toFixed(4)}, ${coordinates.lng.toFixed(4)}`
