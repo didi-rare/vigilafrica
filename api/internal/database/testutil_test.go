@@ -19,6 +19,10 @@ import (
 // Initialized once in TestMain; the PostGIS container lives for the duration of the run.
 var testRepo database.Repository
 
+// testDSN is the container DSN, exposed so tests that need raw SQL — replaying a
+// migration, for instance — can open their own connection.
+var testDSN string
+
 func TestMain(m *testing.M) {
 	ctx := context.Background()
 
@@ -54,6 +58,7 @@ func TestMain(m *testing.M) {
 	}
 
 	testRepo = repo
+	testDSN = dsn
 	code := m.Run()
 
 	repo.Close()

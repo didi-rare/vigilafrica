@@ -166,3 +166,7 @@ func TestReadinessHandlerFailsWhenDegraded(t *testing.T) {
 		t.Fatalf("expected /ready status %d, got %d", http.StatusServiceUnavailable, w.Code)
 	}
 }
+
+func (r *healthTestRepo) UpdateEventMetadata(ctx context.Context, e models.Event) (bool, error) {
+	return false, nil
+}

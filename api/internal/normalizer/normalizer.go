@@ -108,9 +108,26 @@ func Normalize(raw RawEONETEvent, rawPayload []byte) (models.Event, string, erro
 
 	// Determine source URL if available. Upstream URLs are treated as untrusted
 	// data; only HTTPS links from known public data providers are retained.
-	if len(raw.Sources) > 0 {
-		if sourceURL, ok := validatedSourceURL(raw.Sources[0].URL); ok {
+	// ⚠️ Prefer a GDACS source wherever it appears, not merely the first entry.
+	// Geometry resolution depends on finding the GDACS reference, and EONET does
+	// not contract that GDACS comes first — the current sample is 40/40
+	// GDACS-first, which is an observation about today's data, not a guarantee.
+	for _, src := range raw.Sources {
+		sourceURL, ok := validatedSourceURL(src.URL)
+		if !ok {
+			continue
+		}
+		if evt.SourceURL == nil {
 			evt.SourceURL = &sourceURL
+		}
+		// ⚠️ Compare the parsed HOSTNAME, never a substring of the whole URL. A
+		// permitted NASA or USGS link carrying "gdacs.org" in its path or query
+		// would otherwise be preferred over a real GDACS source later in the list,
+		// then rejected by the resolver's own host check — turning safe input into
+		// silent geometry loss.
+		if isGDACSHost(sourceURL) {
+			evt.SourceURL = &sourceURL
+			break
 		}
 	}
 
@@ -129,21 +146,137 @@ func Normalize(raw RawEONETEvent, rawPayload []byte) (models.Event, string, erro
 		if geom.Type == "Point" && len(geom.Coordinates) == 2 {
 			lon, ok1 := geom.Coordinates[0].(float64)
 			lat, ok2 := geom.Coordinates[1].(float64)
-			if ok1 && ok2 {
+			if ok1 && ok2 && validLonLat(lon, lat) {
 				evt.Longitude = &lon
 				evt.Latitude = &lat
 				// Construct simple GeoJSON
 				geoJSON = fmt.Sprintf(`{"type":"Point","coordinates":[%f,%f]}`, lon, lat)
 			}
+		} else if geom.Type == "MultiPolygon" {
+			// ⚠️ Explicit refusal, not a silent drop. EONET has never been observed
+			// emitting MultiPolygon, and supporting it properly would mean the
+			// resolver, the geometry_type enum in openapi.yaml, and both web map
+			// consumers. Falling through to the generic "no geometry" path would
+			// make an arrival indistinguishable from a missing-geometry event; this
+			// returns the type so the caller can say what was refused.
+			return evt, "", fmt.Errorf("unsupported geometry type %q: MultiPolygon is not supported end to end", geom.Type)
 		} else if geom.Type == "Polygon" {
+			// ⚠️ Reject a polygon whose coordinates cannot be [lon, lat] at all.
+			//
+			// EONET republishes GDACS polygons with the pair order reversed, so the
+			// "latitude" is really a longitude. Where that longitude exceeds 90 the
+			// result is not merely wrong, it is impossible — 14 of 40 sampled flood
+			// events declared latitudes such as 136.77 (Japan) or 168.12 (New
+			// Zealand). See openspec/changes/fix-eonet-polygon-transposition.
+			//
+			// This is a definitional constraint, not a heuristic, so it can never
+			// reject valid data. It does NOT catch every transposed polygon —
+			// anything whose true longitude is within +/-90 stays plausible-looking,
+			// which is exactly why the ingestor resolves GDACS geometry from GDACS
+			// rather than relying on this guard alone.
+			if !polygonCoordinatesPlausible(geom.Coordinates) {
+				return evt, "", nil
+			}
 			// Construct GeoJSON from the raw coordinates interface array
 			coordsBytes, _ := json.Marshal(geom.Coordinates)
 			geoJSON = fmt.Sprintf(`{"type":"Polygon","coordinates":%s}`, string(coordsBytes))
-			// Extract centroid? Deferring complex GIS parsing to DB, leaving lon/lat nil for polygons now.
+			// lon/lat stay nil here. The ingestor resolves an authoritative point for
+			// GDACS-sourced polygons; until it does, containment is unverifiable.
 		}
 	}
 
 	return evt, geoJSON, nil
+}
+
+// validLonLat applies the definitional bounds of a WGS-84 coordinate pair.
+// Anything outside them is not a coordinate, whatever the feed claims.
+func validLonLat(lon, lat float64) bool {
+	return lon >= -180 && lon <= 180 && lat >= -90 && lat <= 90
+}
+
+// maxCoordinateNesting bounds recursion depth. GeoJSON needs at most 4 levels
+// (MultiPolygon -> polygon -> ring -> position); anything deeper is malformed and
+// is rejected rather than walked, so an adversarial payload cannot drive
+// unbounded recursion.
+const maxCoordinateNesting = 8
+
+// polygonCoordinatesPlausible reports whether every position in an arbitrarily
+// nested GeoJSON coordinate array could be a [lon, lat] pair.
+//
+// Every position is checked rather than the first, because a partially corrupted
+// ring is harder to spot than a uniformly transposed one and must not slip
+// through on the strength of a valid opening vertex.
+//
+// ⚠️ It returns false for an empty or structurally malformed tree. An earlier
+// version returned true for those, on the reasoning that "nothing impossible is
+// present" — but that let `{"coordinates":[]}` and a position like ["x", 200]
+// through to PostGIS. RFC 7946 §3.1.1 defines a position as an array of at least
+// two numbers, so anything else is not a position and is not plausible.
+func polygonCoordinatesPlausible(coords []interface{}) bool {
+	positions, ok := walkCoordinates(coords, 0)
+	return ok && positions > 0
+}
+
+// walkCoordinates returns the number of valid positions found, and whether the
+// whole tree is well formed.
+func walkCoordinates(v interface{}, depth int) (int, bool) {
+	if depth > maxCoordinateNesting {
+		return 0, false
+	}
+	arr, ok := v.([]interface{})
+	if !ok || len(arr) == 0 {
+		return 0, false
+	}
+
+	// A position is a flat array of numbers. Decide which case we are in by the
+	// FIRST element's type, then require every element to agree — a mixed array
+	// such as ["x", 200] is malformed, not a nested structure to recurse into.
+	if _, isNum := arr[0].(float64); isNum {
+		if len(arr) < 2 {
+			return 0, false
+		}
+		lon, ok1 := arr[0].(float64)
+		lat, ok2 := arr[1].(float64)
+		if !ok1 || !ok2 {
+			return 0, false
+		}
+		// A third element (altitude) is permitted by RFC 7946 but must still be
+		// numeric if present.
+		for _, extra := range arr[2:] {
+			if _, isNum := extra.(float64); !isNum {
+				return 0, false
+			}
+		}
+		if !validLonLat(lon, lat) {
+			return 0, false
+		}
+		return 1, true
+	}
+
+	total := 0
+	for _, item := range arr {
+		// Reject a tree that mixes positions and nested arrays at the same level.
+		if _, isNum := item.(float64); isNum {
+			return 0, false
+		}
+		n, ok := walkCoordinates(item, depth+1)
+		if !ok {
+			return 0, false
+		}
+		total += n
+	}
+	return total, true
+}
+
+// isGDACSHost reports whether a URL's host is gdacs.org, using the same
+// predicate as the resolver so the two cannot disagree.
+func isGDACSHost(rawURL string) bool {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return false
+	}
+	host := strings.ToLower(parsed.Hostname())
+	return host == "gdacs.org" || strings.HasSuffix(host, ".gdacs.org")
 }
 
 func validatedSourceURL(rawURL string) (string, bool) {

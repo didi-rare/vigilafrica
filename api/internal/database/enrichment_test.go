@@ -35,6 +35,7 @@ func TestEnrichmentTrigger_ADM0Fallback(t *testing.T) {
 		{"lagos event -> state wins via ADM1", "ENR_LAG", 3.3941795, 6.4550575, "Nigeria", "Lagos"},
 		{"borno event near border -> NG state, not mislabelled to a neighbour", "ENR_BORNO", 14.376242, 11.775278, "Nigeria", "Borno"},
 		{"gulf of guinea -> outside all boundaries", "ENR_OCEAN", 0.0, 0.0, "", ""},
+
 	}
 
 	for _, tt := range tests {
