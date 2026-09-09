@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { formatLocation } from '../formatLocation'
 import { Link, useSearchParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { fetchEvents, fetchContext, fetchHealth, fetchStates, getApiBaseUrl, eventKeys, stateKeys, healthKeys, contextKeys, EVENTS_PAGE_SIZE } from '../api/events'
@@ -580,15 +581,15 @@ export function EventsDashboard() {
 
                         <div className="event-location glass-effect">
                           <span className="location-pin" aria-hidden="true"><MapPin size={13} /></span>
-                          {event.state_name ? (
-                            <span className="location-text">
-                              <strong>{event.state_name}</strong>, {event.country_name}
-                            </span>
-                          ) : (
-                            <span className="location-text coords">
-                              {event.latitude?.toFixed(4)}, {event.longitude?.toFixed(4)}
-                            </span>
-                          )}
+                          {(() => {
+                            const label = formatLocation(
+                              event.state_name, event.country_name, event.latitude, event.longitude)
+                            return (
+                              <span className={label.isCoordinatesOnly ? 'location-text coords' : 'location-text'}>
+                                <strong>{label.primary}</strong>{label.secondary ? `, ${label.secondary}` : ''}
+                              </span>
+                            )
+                          })()}
                         </div>
 
                         <div className="event-meta">
