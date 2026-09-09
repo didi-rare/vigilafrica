@@ -120,7 +120,12 @@ func Normalize(raw RawEONETEvent, rawPayload []byte) (models.Event, string, erro
 		if evt.SourceURL == nil {
 			evt.SourceURL = &sourceURL
 		}
-		if strings.Contains(strings.ToLower(sourceURL), "gdacs.org") {
+		// ⚠️ Compare the parsed HOSTNAME, never a substring of the whole URL. A
+		// permitted NASA or USGS link carrying "gdacs.org" in its path or query
+		// would otherwise be preferred over a real GDACS source later in the list,
+		// then rejected by the resolver's own host check — turning safe input into
+		// silent geometry loss.
+		if isGDACSHost(sourceURL) {
 			evt.SourceURL = &sourceURL
 			break
 		}
@@ -147,6 +152,14 @@ func Normalize(raw RawEONETEvent, rawPayload []byte) (models.Event, string, erro
 				// Construct simple GeoJSON
 				geoJSON = fmt.Sprintf(`{"type":"Point","coordinates":[%f,%f]}`, lon, lat)
 			}
+		} else if geom.Type == "MultiPolygon" {
+			// ⚠️ Explicit refusal, not a silent drop. EONET has never been observed
+			// emitting MultiPolygon, and supporting it properly would mean the
+			// resolver, the geometry_type enum in openapi.yaml, and both web map
+			// consumers. Falling through to the generic "no geometry" path would
+			// make an arrival indistinguishable from a missing-geometry event; this
+			// returns the type so the caller can say what was refused.
+			return evt, "", fmt.Errorf("unsupported geometry type %q: MultiPolygon is not supported end to end", geom.Type)
 		} else if geom.Type == "Polygon" {
 			// ⚠️ Reject a polygon whose coordinates cannot be [lon, lat] at all.
 			//
@@ -253,6 +266,17 @@ func walkCoordinates(v interface{}, depth int) (int, bool) {
 		total += n
 	}
 	return total, true
+}
+
+// isGDACSHost reports whether a URL's host is gdacs.org, using the same
+// predicate as the resolver so the two cannot disagree.
+func isGDACSHost(rawURL string) bool {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return false
+	}
+	host := strings.ToLower(parsed.Hostname())
+	return host == "gdacs.org" || strings.HasSuffix(host, ".gdacs.org")
 }
 
 func validatedSourceURL(rawURL string) (string, bool) {

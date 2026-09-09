@@ -117,7 +117,13 @@ func parseGDACSReference(sourceURL string) (gdacsReference, bool) {
 	return ref, true
 }
 
-func gdacsGetJSON(ctx context.Context, reqURL string, into interface{}) bool {
+func gdacsGetJSON(ctx context.Context, budget *RunBudget, reqURL string, into interface{}) bool {
+	// Spend here, not per resolution: one resolution can issue up to
+	// 1 + maxGDACSEpisodes requests, so counting resolutions understated the real
+	// outbound volume by more than an order of magnitude.
+	if !budget.spend() {
+		return false
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
 		return false
@@ -170,6 +176,12 @@ type gdacsFeatureCollection struct {
 // ⚠️ The caller MUST NOT fall back to the EONET geometry — that is the transposed
 // data this exists to reject.
 func ResolveGDACSPolygon(ctx context.Context, sourceURL string, eonet [][2]float64) (GDACSGeometry, bool) {
+	return resolveGDACSPolygon(ctx, nil, sourceURL, eonet)
+}
+
+// resolveGDACSPolygon is the budgeted implementation. A nil budget means
+// unbounded, which is only used by tests that exercise resolution directly.
+func resolveGDACSPolygon(ctx context.Context, budget *RunBudget, sourceURL string, eonet [][2]float64) (GDACSGeometry, bool) {
 	ref, valid := parseGDACSReference(sourceURL)
 	if !valid || len(eonet) == 0 {
 		return GDACSGeometry{}, false
@@ -177,7 +189,7 @@ func ResolveGDACSPolygon(ctx context.Context, sourceURL string, eonet [][2]float
 	wantVertices := len(eonet)
 
 	var event gdacsEventData
-	if !gdacsGetJSON(ctx, fmt.Sprintf("%s?eventtype=%s&eventid=%s",
+	if !gdacsGetJSON(ctx, budget, fmt.Sprintf("%s?eventtype=%s&eventid=%s",
 		gdacsEventDataURL, url.QueryEscape(ref.EventType), url.QueryEscape(ref.EventID)), &event) {
 		return GDACSGeometry{}, false
 	}
@@ -208,7 +220,7 @@ func ResolveGDACSPolygon(ctx context.Context, sourceURL string, eonet [][2]float
 		}
 
 		var fc gdacsFeatureCollection
-		if !gdacsGetJSON(ctx, fmt.Sprintf("%s?eventtype=%s&eventid=%s&episodeid=%d",
+		if !gdacsGetJSON(ctx, budget, fmt.Sprintf("%s?eventtype=%s&eventid=%s&episodeid=%d",
 			gdacsGeometryURL, url.QueryEscape(ref.EventType), url.QueryEscape(ref.EventID), ep), &fc) {
 			continue
 		}
@@ -241,10 +253,30 @@ func ResolveGDACSPolygon(ctx context.Context, sourceURL string, eonet [][2]float
 		}
 	}
 
-	if len(candidates) != 1 {
+	// ⚠️ Count DISTINCT GEOMETRIES, not matching feature records. GDACS can serve
+	// the same ring under more than one episode, and a feature collection can
+	// repeat a feature; counting records would then report ambiguity where there
+	// is none and refuse to resolve an event whose geometry is perfectly clear.
+	// Genuine ambiguity — two DIFFERENT rings that both correspond — is still
+	// refused, because resolving it would be a guess.
+	distinct := map[string]GDACSGeometry{}
+	for _, c := range candidates {
+		if _, seen := distinct[c.GeoJSON]; !seen {
+			distinct[c.GeoJSON] = c
+		}
+	}
+	if len(distinct) != 1 {
 		return GDACSGeometry{}, false
 	}
-	return candidates[0], true
+	// Prefer the lowest episode id among identical geometries, so the result is
+	// deterministic rather than dependent on map iteration order.
+	best := candidates[0]
+	for _, c := range candidates {
+		if c.EpisodeID < best.EpisodeID {
+			best = c
+		}
+	}
+	return best, true
 }
 
 // collectPositions flattens nested GeoJSON coordinate arrays into [lon, lat]
@@ -408,18 +440,26 @@ func positionsBBox(p [][2]float64) [4]float64 {
 // would let one run starve the next.
 
 const (
-	// maxGDACSCallsPerRun bounds total GDACS requests for one EONET response.
-	maxGDACSCallsPerRun = 40
+	// maxGDACSRequestsPerRun bounds ACTUAL OUTBOUND HTTP REQUESTS for one whole
+	// scheduler run.
+	//
+	// ⚠️ It previously counted *resolutions*, which was misleading by more than an
+	// order of magnitude: one resolution issues one event request plus up to
+	// maxGDACSEpisodes geometry requests, so a nominal cap of 40 permitted ~840
+	// requests. The limit now decrements where the request is actually made.
+	maxGDACSRequestsPerRun = 60
 
 	// gdacsRunBudgetDuration is a WALL-CLOCK ceiling on all GDACS work for one
-	// response, and it is the control that actually protects the scheduler lock.
+	// whole scheduler run, and it is the control that actually protects the lock.
 	//
-	// ⚠️ A call cap alone is not enough. schedulerLockTTL is 5 minutes, sized
-	// against a documented ~3 minute worst-case run, with an explicit SCALE NOTE
-	// to revisit it if a run exceeds ~4 minutes. 40 calls at the client timeout
-	// would be ~13 minutes on its own — the lock would expire mid-run and a
-	// second replica could start ingesting concurrently. This keeps the added
-	// work to a bounded slice of the existing headroom instead (§3.5).
+	// ⚠️ SCOPE HAS BEEN WRONG TWICE. It began per EONET *response*, and runIngest
+	// issues two (open and closed) — so the real ceiling was double the intended
+	// value. Correcting that to per-Ingest still left it per *country*, and
+	// runAllCountries loops over DefaultCountries, doubling it again for NG+GH.
+	// It is now created once per RUN and threaded through every country.
+	//
+	// 90s against schedulerLockTTL of 5 minutes, which is sized for a documented
+	// ~3 minute worst case, leaves the lease intact with margin (§3.5).
 	gdacsRunBudgetDuration = 90 * time.Second
 
 	// gdacsRequestTimeout is per request. Deliberately shorter than the run
@@ -427,10 +467,15 @@ const (
 	gdacsRequestTimeout = 10 * time.Second
 )
 
-type gdacsBudget struct {
-	remaining int
-	deadline  time.Time
-	cache     map[string]gdacsCacheEntry
+// RunBudget bounds GDACS work for ONE scheduler run, across every country.
+//
+// ⚠️ Exported only so the run loops (scheduler.runAllCountries and cmd/ingest)
+// can create exactly one and pass it down. It is not safe for concurrent use;
+// ingestion is sequential by design.
+type RunBudget struct {
+	requestsLeft int
+	deadline     time.Time
+	cache        map[string]gdacsCacheEntry
 }
 
 type gdacsCacheEntry struct {
@@ -438,12 +483,27 @@ type gdacsCacheEntry struct {
 	ok   bool
 }
 
-func newGDACSBudget() gdacsBudget {
-	return gdacsBudget{
-		remaining: maxGDACSCallsPerRun,
-		deadline:  time.Now().Add(gdacsRunBudgetDuration),
-		cache:     map[string]gdacsCacheEntry{},
+// NewRunBudget creates the single budget for one ingestion run.
+func NewRunBudget() *RunBudget {
+	return &RunBudget{
+		requestsLeft: maxGDACSRequestsPerRun,
+		deadline:     time.Now().Add(gdacsRunBudgetDuration),
+		cache:        map[string]gdacsCacheEntry{},
 	}
+}
+
+// spend reserves one outbound HTTP request, reporting whether it is allowed.
+// Called at the point the request is actually issued, so the cap means what its
+// name says.
+func (b *RunBudget) spend() bool {
+	if b == nil {
+		return true
+	}
+	if b.requestsLeft <= 0 || !time.Now().Before(b.deadline) {
+		return false
+	}
+	b.requestsLeft--
+	return true
 }
 
 // resolve is the budgeted, cached entry point used by the ingest loop.
@@ -451,24 +511,23 @@ func newGDACSBudget() gdacsBudget {
 // The cache is keyed on source URL AND vertex count, because the vertex count is
 // what selects the episode — two events sharing a GDACS id but different
 // footprints must not share a cached answer.
-func (b *gdacsBudget) resolve(ctx context.Context, sourceURL string, eonet [][2]float64) (GDACSGeometry, bool) {
+func (b *RunBudget) resolve(ctx context.Context, sourceURL string, eonet [][2]float64) (GDACSGeometry, bool) {
 	key := fmt.Sprintf("%s#%d", sourceURL, len(eonet))
 	if hit, seen := b.cache[key]; seen {
 		return hit.geom, hit.ok
 	}
-	if b.remaining <= 0 || !time.Now().Before(b.deadline) {
+	if b.requestsLeft <= 0 || !time.Now().Before(b.deadline) {
 		// Budget exhausted, by calls or by wall clock. Returning false means the
 		// event is skipped rather than stored unverified — the safe direction.
 		return GDACSGeometry{}, false
 	}
-	b.remaining--
-
 	// Cap this resolution at whatever remains of the run budget, so the total
-	// cannot drift past it however slow upstream is.
+	// cannot drift past it however slow upstream is. The REQUEST COUNT is spent
+	// inside gdacsGetJSON, where the requests are actually made.
 	cctx, cancel := context.WithDeadline(ctx, b.deadline)
 	defer cancel()
 
-	geom, ok := ResolveGDACSPolygon(cctx, sourceURL, eonet)
+	geom, ok := resolveGDACSPolygon(cctx, b, sourceURL, eonet)
 	b.cache[key] = gdacsCacheEntry{geom: geom, ok: ok}
 	return geom, ok
 }

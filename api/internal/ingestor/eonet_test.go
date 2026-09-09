@@ -229,7 +229,7 @@ func TestRunIngest_429_ThenSuccess(t *testing.T) {
 	defer srv.Close()
 	defer installTestServer(t, srv)()
 
-	result, err := runIngest(context.Background(), &mockRepo{}, testCountry)
+	result, err := runIngest(context.Background(), &mockRepo{}, testCountry, NewRunBudget())
 	if err != nil {
 		t.Fatalf("expected success after retry, got err: %v", err)
 	}
@@ -259,7 +259,7 @@ func TestRunIngest_503_ThenSuccess(t *testing.T) {
 	defer srv.Close()
 	defer installTestServer(t, srv)()
 
-	result, err := runIngest(context.Background(), &mockRepo{}, testCountry)
+	result, err := runIngest(context.Background(), &mockRepo{}, testCountry, NewRunBudget())
 	if err != nil {
 		t.Fatalf("expected success after 503 retry, got err: %v", err)
 	}
@@ -282,7 +282,7 @@ func TestRunIngest_ExhaustRetries(t *testing.T) {
 	defer srv.Close()
 	defer installTestServer(t, srv)()
 
-	_, err := runIngest(context.Background(), &mockRepo{}, testCountry)
+	_, err := runIngest(context.Background(), &mockRepo{}, testCountry, NewRunBudget())
 	if err == nil {
 		t.Fatal("expected error after exhausting retries, got nil")
 	}
@@ -317,7 +317,7 @@ func TestRunIngest_MissingRetryAfter_ExponentialFallback(t *testing.T) {
 	defer srv.Close()
 	defer installTestServer(t, srv)()
 
-	_, err := runIngest(context.Background(), &mockRepo{}, testCountry)
+	_, err := runIngest(context.Background(), &mockRepo{}, testCountry, NewRunBudget())
 	if err != nil {
 		t.Fatalf("expected success after exponential retries, got err: %v", err)
 	}
@@ -359,7 +359,7 @@ func TestRunIngest_ContextCancelledDuringSleep(t *testing.T) {
 	defer srv.Close()
 	defer installTestServer(t, srv)()
 
-	_, err := runIngest(ctx, &mockRepo{}, testCountry)
+	_, err := runIngest(ctx, &mockRepo{}, testCountry, NewRunBudget())
 	if err == nil {
 		t.Fatal("expected an error due to context cancellation, got nil")
 	}
@@ -379,7 +379,7 @@ func TestRunIngest_RejectsExcessiveRetryAfter(t *testing.T) {
 	defer srv.Close()
 	defer installTestServer(t, srv)()
 
-	_, err := runIngest(context.Background(), &mockRepo{}, testCountry)
+	_, err := runIngest(context.Background(), &mockRepo{}, testCountry, NewRunBudget())
 	if err == nil {
 		t.Fatal("expected excessive retry_after to fail")
 	}
@@ -396,7 +396,7 @@ func TestRunIngest_RejectsOversizedEONETResponse(t *testing.T) {
 	defer srv.Close()
 	defer installTestServer(t, srv)()
 
-	_, err := runIngest(context.Background(), &mockRepo{}, testCountry)
+	_, err := runIngest(context.Background(), &mockRepo{}, testCountry, NewRunBudget())
 	if err == nil {
 		t.Fatal("expected oversized response to fail")
 	}
@@ -425,7 +425,7 @@ func TestRunIngest_RejectsOversizedRawEventPayload(t *testing.T) {
 	defer srv.Close()
 	defer installTestServer(t, srv)()
 
-	_, err := runIngest(context.Background(), &mockRepo{}, testCountry)
+	_, err := runIngest(context.Background(), &mockRepo{}, testCountry, NewRunBudget())
 	if err == nil {
 		t.Fatal("expected oversized raw event payload to fail")
 	}
@@ -464,7 +464,7 @@ func TestRunIngest_NonRetryable4xx(t *testing.T) {
 			eonetURL = srv.URL
 			defer func() { eonetURL = origURL }()
 
-			_, err := runIngest(context.Background(), &mockRepo{}, testCountry)
+			_, err := runIngest(context.Background(), &mockRepo{}, testCountry, NewRunBudget())
 			if err == nil {
 				t.Errorf("status %d: expected error, got nil", tt.status)
 			}
@@ -494,7 +494,7 @@ func TestRunIngest_5xx_ThenSuccess(t *testing.T) {
 	defer srv.Close()
 	defer installTestServer(t, srv)()
 
-	result, err := runIngest(context.Background(), &mockRepo{}, testCountry)
+	result, err := runIngest(context.Background(), &mockRepo{}, testCountry, NewRunBudget())
 	if err != nil {
 		t.Fatalf("expected success after 5xx retry, got err: %v", err)
 	}
@@ -520,7 +520,7 @@ func TestRunIngest_5xx_ExhaustsTransientRetries(t *testing.T) {
 	defer srv.Close()
 	defer installTestServer(t, srv)()
 
-	_, err := runIngest(context.Background(), &mockRepo{}, testCountry)
+	_, err := runIngest(context.Background(), &mockRepo{}, testCountry, NewRunBudget())
 	if err == nil {
 		t.Fatal("expected error after exhausting transient retries, got nil")
 	}
@@ -557,7 +557,7 @@ func TestRunIngest_NetworkError_ThenSuccess(t *testing.T) {
 	}
 	defer installHTTPClient(t, &http.Client{Timeout: 30 * time.Second, Transport: rt})()
 
-	result, err := runIngest(context.Background(), &mockRepo{}, testCountry)
+	result, err := runIngest(context.Background(), &mockRepo{}, testCountry, NewRunBudget())
 	if err != nil {
 		t.Fatalf("expected success after network-error retry, got err: %v", err)
 	}
@@ -598,7 +598,7 @@ func TestRunIngest_RateLimit_RealSleep(t *testing.T) {
 	defer installTestServer(t, srv)()
 
 	start := time.Now()
-	result, err := runIngest(context.Background(), &mockRepo{}, testCountry)
+	result, err := runIngest(context.Background(), &mockRepo{}, testCountry, NewRunBudget())
 	elapsed := time.Since(start)
 
 	if err != nil {
@@ -686,7 +686,7 @@ func TestRunIngest_SkipsEventOutsideCountryBBox(t *testing.T) {
 	defer installTestServer(t, srv)()
 
 	repo := &recordingRepo{mockRepo: &mockRepo{}}
-	result, err := runIngest(context.Background(), repo, testCountry)
+	result, err := runIngest(context.Background(), repo, testCountry, NewRunBudget())
 	if err != nil {
 		t.Fatalf("runIngest returned err: %v", err)
 	}
@@ -739,7 +739,7 @@ func TestRunIngest_SkipsPolygonWhoseGeometryCannotBeVerified(t *testing.T) {
 	defer installTestServer(t, srv)()
 
 	repo := &recordingRepo{mockRepo: &mockRepo{}}
-	result, err := runIngest(context.Background(), repo, testCountry)
+	result, err := runIngest(context.Background(), repo, testCountry, NewRunBudget())
 	if err != nil {
 		t.Fatalf("runIngest returned err: %v", err)
 	}
@@ -795,7 +795,7 @@ func TestRunIngest_GDACSFailureNeverOverwritesWithTransposedGeometry(t *testing.
 	swapGDACSURLs(t, gdacs.URL, gdacs.URL)
 
 	repo := &recordingRepo{mockRepo: &mockRepo{}}
-	result, err := runIngest(context.Background(), repo, testCountry)
+	result, err := runIngest(context.Background(), repo, testCountry, NewRunBudget())
 	if err != nil {
 		t.Fatalf("runIngest returned err: %v", err)
 	}
@@ -852,7 +852,7 @@ func TestRunIngest_ResolvedPolygonIsStoredWithCorrectedAxes(t *testing.T) {
 	swapGDACSURLs(t, eventData.URL, geometry.URL)
 
 	repo := &recordingRepo{mockRepo: &mockRepo{}}
-	result, err := runIngest(context.Background(), repo, testCountry)
+	result, err := runIngest(context.Background(), repo, testCountry, NewRunBudget())
 	if err != nil {
 		t.Fatalf("runIngest returned err: %v", err)
 	}
@@ -932,7 +932,7 @@ func TestRunIngest_QueriesOpenAndClosed(t *testing.T) {
 	defer srv.Close()
 	defer installTestServer(t, srv)()
 
-	if _, err := runIngest(context.Background(), &mockRepo{}, testCountry); err != nil {
+	if _, err := runIngest(context.Background(), &mockRepo{}, testCountry, NewRunBudget()); err != nil {
 		t.Fatalf("runIngest failed: %v", err)
 	}
 
@@ -1001,7 +1001,7 @@ func TestRunIngest_IngestsClosedFloodEvent(t *testing.T) {
 	defer installTestServer(t, srv)()
 
 	repo := &recordingRepo{mockRepo: &mockRepo{}}
-	result, err := runIngest(context.Background(), repo, testCountry)
+	result, err := runIngest(context.Background(), repo, testCountry, NewRunBudget())
 	if err != nil {
 		t.Fatalf("runIngest failed: %v", err)
 	}
@@ -1069,7 +1069,7 @@ func TestRunIngest_UnresolvedGeometryStillRefreshesMetadata(t *testing.T) {
 
 	t.Run("an EXISTING row has its metadata refreshed, geometry untouched", func(t *testing.T) {
 		repo := &recordingRepo{mockRepo: &mockRepo{metadataRowExists: true}}
-		result, err := runIngest(context.Background(), repo, testCountry)
+		result, err := runIngest(context.Background(), repo, testCountry, NewRunBudget())
 		if err != nil {
 			t.Fatalf("runIngest returned err: %v", err)
 		}
@@ -1091,7 +1091,7 @@ func TestRunIngest_UnresolvedGeometryStillRefreshesMetadata(t *testing.T) {
 
 	t.Run("a NEW row is not invented with unverified geometry", func(t *testing.T) {
 		repo := &recordingRepo{mockRepo: &mockRepo{metadataRowExists: false}}
-		result, err := runIngest(context.Background(), repo, testCountry)
+		result, err := runIngest(context.Background(), repo, testCountry, NewRunBudget())
 		if err != nil {
 			t.Fatalf("runIngest returned err: %v", err)
 		}
@@ -1142,7 +1142,7 @@ func TestRunIngest_GDACSBudgetIsSharedAcrossBothResponses(t *testing.T) {
 	swapGDACSURLs(t, gdacs.URL, gdacs.URL)
 
 	repo := &recordingRepo{mockRepo: &mockRepo{}}
-	if _, err := runIngest(context.Background(), repo, testCountry); err != nil {
+	if _, err := runIngest(context.Background(), repo, testCountry, NewRunBudget()); err != nil {
 		t.Fatalf("runIngest returned err: %v", err)
 	}
 

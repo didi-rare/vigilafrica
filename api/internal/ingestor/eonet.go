@@ -131,6 +131,16 @@ type IngestResult struct {
 // Ingest pulls events from NASA EONET for the given country, upserts them
 // (F-013 deduplication), and records the run in ingestion_runs (ADR-011).
 func Ingest(ctx context.Context, repo database.Repository, country CountryConfig) (*IngestResult, error) {
+	return IngestWithBudget(ctx, repo, country, NewRunBudget())
+}
+
+// IngestWithBudget is Ingest with an explicit run budget.
+//
+// ⚠️ The run loops MUST create ONE budget and pass it to every country. Calling
+// Ingest per country creates a fresh budget each time, which is how the ceiling
+// silently doubled for NG+GH — the scope of this budget has been wrong twice
+// already (per response, then per country).
+func IngestWithBudget(ctx context.Context, repo database.Repository, country CountryConfig, budget *RunBudget) (*IngestResult, error) {
 	startedAt := time.Now()
 
 	runID, err := repo.CreateIngestionRun(ctx, startedAt, country.Code)
@@ -145,7 +155,7 @@ func Ingest(ctx context.Context, repo database.Repository, country CountryConfig
 		"started_at", startedAt.Format(time.RFC3339),
 	)
 
-	result, ingestErr := runIngest(ctx, repo, country)
+	result, ingestErr := runIngest(ctx, repo, country, budget)
 
 	completedAt := time.Now()
 	duration := completedAt.Sub(startedAt)
@@ -222,7 +232,7 @@ func Ingest(ctx context.Context, repo database.Repository, country CountryConfig
 //
 // Overlap between the two responses is harmless: UpsertEvent is idempotent on
 // source_id (F-013).
-func runIngest(ctx context.Context, repo database.Repository, country CountryConfig) (*IngestResult, error) {
+func runIngest(ctx context.Context, repo database.Repository, country CountryConfig, budget *RunBudget) (*IngestResult, error) {
 	result := &IngestResult{}
 
 	bbox := fmt.Sprintf("%.4f,%.4f,%.4f,%.4f",
@@ -230,13 +240,9 @@ func runIngest(ctx context.Context, repo database.Repository, country CountryCon
 		country.BBox[2], country.BBox[3],
 	)
 
-	// ⚠️ ONE budget for the whole Ingest call, not one per response. runIngest
-	// issues TWO requests (open and closed), so a per-response budget silently
-	// doubles the ceiling — 180s per country, 360s for NG+GH, which overruns both
-	// the 5-minute schedulerLockTTL and the standalone ingestor's 2-minute
-	// deadline. An earlier revision made exactly that mistake while fixing an
-	// unbounded-work defect: the fix moved the problem instead of removing it.
-	budget := newGDACSBudget()
+	if budget == nil {
+		budget = NewRunBudget()
+	}
 
 	// No days window on the open query — long-burning wildfires must not be dropped.
 	openURL := fmt.Sprintf("%s?bbox=%s&category=floods,wildfires&status=open", eonetURL, bbox)
@@ -253,7 +259,7 @@ func runIngest(ctx context.Context, repo database.Repository, country CountryCon
 		if err != nil {
 			return result, err
 		}
-		if err := processEONETBody(ctx, repo, country, body, result, &budget); err != nil {
+		if err := processEONETBody(ctx, repo, country, body, result, budget); err != nil {
 			return result, err
 		}
 	}
@@ -397,7 +403,7 @@ func processEONETBody(
 	country CountryConfig,
 	body []byte,
 	result *IngestResult,
-	gdacsBudget *gdacsBudget,
+	gdacsBudget *RunBudget,
 ) error {
 	var root struct {
 		Events []normalizer.RawEONETEvent `json:"events"`

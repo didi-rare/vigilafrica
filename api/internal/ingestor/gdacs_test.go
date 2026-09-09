@@ -256,7 +256,7 @@ func TestGDACSBudgetCachesAndBounds(t *testing.T) {
 		cleanup, calls := episodeServers(t, 1, map[int]string{1: ring})
 		defer cleanup()
 
-		b := newGDACSBudget()
+		b := NewRunBudget()
 		url := "https://www.gdacs.org/report.aspx?eventtype=FL&eventid=1"
 		if _, ok := b.resolve(context.Background(), url, ring4); !ok {
 			t.Fatal("first resolve should succeed")
@@ -277,19 +277,19 @@ func TestGDACSBudgetCachesAndBounds(t *testing.T) {
 		defer srv.Close()
 		swapGDACSURLs(t, srv.URL, srv.URL)
 
-		b := newGDACSBudget()
+		b := NewRunBudget()
 		url := "https://www.gdacs.org/report.aspx?eventtype=FL&eventid=1"
 		b.resolve(context.Background(), url, ring4)
-		spent := maxGDACSCallsPerRun - b.remaining
+		spent := maxGDACSRequestsPerRun - b.requestsLeft
 		b.resolve(context.Background(), url, ring4)
-		if got := maxGDACSCallsPerRun - b.remaining; got != spent {
+		if got := maxGDACSRequestsPerRun - b.requestsLeft; got != spent {
 			t.Errorf("a cached failure still spent budget: %d -> %d", spent, got)
 		}
 	})
 
 	t.Run("an exhausted budget fails closed", func(t *testing.T) {
-		b := newGDACSBudget()
-		b.remaining = 0
+		b := NewRunBudget()
+		b.requestsLeft = 0
 		if _, ok := b.resolve(context.Background(),
 			"https://www.gdacs.org/report.aspx?eventtype=FL&eventid=999", ring4); ok {
 			t.Error("an exhausted budget must not resolve")
@@ -455,7 +455,7 @@ func TestGDACSBudgetRespectsWallClockDeadline(t *testing.T) {
 	})
 	defer cleanup()
 
-	b := newGDACSBudget()
+	b := NewRunBudget()
 	b.deadline = time.Now().Add(-time.Second) // already expired
 	before := *calls
 
@@ -466,8 +466,8 @@ func TestGDACSBudgetRespectsWallClockDeadline(t *testing.T) {
 	if *calls != before {
 		t.Errorf("an expired budget still made %d network calls", *calls-before)
 	}
-	if b.remaining != maxGDACSCallsPerRun {
-		t.Errorf("an expired budget consumed call allowance: remaining=%d", b.remaining)
+	if b.requestsLeft != maxGDACSRequestsPerRun {
+		t.Errorf("an expired budget consumed request allowance: remaining=%d", b.requestsLeft)
 	}
 }
 
@@ -483,4 +483,93 @@ func pointInPolygon(x, y float64, poly [][2]float64) bool {
 		}
 	}
 	return inside
+}
+
+// TestRepresentativePointWithFlattenedHoles records a claim that was CHECKED and
+// did not hold.
+//
+// Round-3 review asserted that flattening an exterior ring together with a hole
+// creates an artificial connector edge whose crossings make the widest interval
+// the hole itself, returning a marker off the surface. Run against the real
+// function, five hole configurations — including the exact one cited — all return
+// on-surface points, because the connector edges add crossings in pairs and the
+// even-odd parity survives.
+//
+// ⚠️ This does NOT prove the function is correct for every possible ring; it
+// records that the specific counterexample is wrong. Both real GDACS
+// Poly_Affected polygons are single-ring (1311 and 28 vertices), so holes do not
+// arise in the data we actually ingest.
+func TestRepresentativePointWithFlattenedHoles(t *testing.T) {
+	outer := [][2]float64{{-10, -10}, {10, -10}, {10, 10}, {-10, 10}, {-10, -10}}
+	cases := map[string][][2]float64{
+		"hole starting (-9,1)":  {{-9, 1}, {-9, -9}, {9, -9}, {9, 9}, {-9, 9}, {-9, 1}},
+		"hole starting (-9,-9)": {{-9, -9}, {9, -9}, {9, 9}, {-9, 9}, {-9, -9}},
+		"hole starting (9,9)":   {{9, 9}, {-9, 9}, {-9, -9}, {9, -9}, {9, 9}},
+		"hole starting (9,-9)":  {{9, -9}, {9, 9}, {-9, 9}, {-9, -9}, {9, -9}},
+	}
+	for name, hole := range cases {
+		t.Run(name, func(t *testing.T) {
+			flat := append(append([][2]float64{}, outer...), hole...)
+			lon, lat := representativePoint(flat)
+			if lon > -9 && lon < 9 && lat > -9 && lat < 9 {
+				t.Errorf("marker (%.3f, %.3f) landed in the hole", lon, lat)
+			}
+		})
+	}
+}
+
+// TestResolveGDACSPolygonDeduplicatesIdenticalEpisodes covers a round-3 finding:
+// "exactly one" counted matching FEATURE RECORDS, so GDACS serving the same ring
+// under two episodes reported ambiguity where there was none, and refused to
+// resolve an event whose geometry was perfectly clear.
+func TestResolveGDACSPolygonDeduplicatesIdenticalEpisodes(t *testing.T) {
+	const sameRing = `[[[9.216,4.377],[9.216,4.828],[9.569,4.828],[9.569,4.377],[9.216,4.377]]]`
+
+	t.Run("the same ring under two episodes resolves, not ambiguous", func(t *testing.T) {
+		cleanup, _ := episodeServers(t, 2, map[int]string{1: sameRing, 2: sameRing})
+		defer cleanup()
+
+		got, ok := ResolveGDACSPolygon(context.Background(),
+			"https://www.gdacs.org/report.aspx?eventtype=FL&eventid=1", ring5)
+		if !ok {
+			t.Fatal("identical geometry under two episodes is not ambiguous and must resolve")
+		}
+		// Deterministic: lowest episode id wins, not map iteration order.
+		if got.EpisodeID != 1 {
+			t.Errorf("episode = %d, want the lowest (1)", got.EpisodeID)
+		}
+	})
+
+	t.Run("two DIFFERENT corresponding rings are still refused", func(t *testing.T) {
+		// Genuine ambiguity: both correspond to the EONET ring within tolerance but
+		// are not the same geometry. Picking either would be a guess.
+		const shifted = `[[[9.2161,4.3771],[9.2161,4.8281],[9.5691,4.8281],[9.5691,4.3771],[9.2161,4.3771]]]`
+		cleanup, _ := episodeServers(t, 2, map[int]string{1: sameRing, 2: shifted})
+		defer cleanup()
+
+		if _, ok := ResolveGDACSPolygon(context.Background(),
+			"https://www.gdacs.org/report.aspx?eventtype=FL&eventid=1", ring5); ok {
+			t.Error("two distinct corresponding geometries must be refused, not guessed between")
+		}
+	})
+}
+
+// TestRunBudgetCountsHTTPRequestsNotResolutions covers a round-3 finding: the cap
+// counted resolutions, but one resolution issues one event request plus up to
+// maxGDACSEpisodes geometry requests — so a nominal 40 permitted ~840.
+func TestRunBudgetCountsHTTPRequestsNotResolutions(t *testing.T) {
+	cleanup, calls := episodeServers(t, 5, map[int]string{})
+	defer cleanup()
+
+	b := NewRunBudget()
+	b.requestsLeft = 3 // event request + 2 episode requests, then exhausted
+
+	b.resolve(context.Background(), "https://www.gdacs.org/report.aspx?eventtype=FL&eventid=1", ring5)
+
+	if *calls != 3 {
+		t.Errorf("made %d HTTP requests, want exactly the 3 the budget allowed", *calls)
+	}
+	if b.requestsLeft != 0 {
+		t.Errorf("requestsLeft = %d, want 0", b.requestsLeft)
+	}
 }

@@ -1,6 +1,6 @@
 # Tasks: Stop Ingesting Transposed EONET Polygon Geometry
 
-⚠️ **TWO independent adversarial reviews (`gpt-5.6-sol`) both returned BLOCK.**
+⚠️ **THREE independent adversarial reviews (`gpt-5.6-sol`), all BLOCK.**
 Round 1 found three P0s. Round 2, run against the rewrite, found three more —
 including an **over-correction of a round-1 fix** and a defect the round-1 fix had
 **moved rather than removed**. That is the whole argument for reviewing a fix as
@@ -260,3 +260,64 @@ oversight.
       `openapi.yaml`, and both web consumers, for a geometry EONET has never sent.
       The normalizer now refuses it explicitly instead of silently dropping it, so
       if one ever arrives it will be visible rather than invisible.
+
+
+## 9. Round 3 — and the first review finding that was itself wrong
+
+Round 3 returned BLOCK with stopping signal "false". Six findings were real and
+are fixed below. ⚠️ **One was not, and is recorded because a review is evidence,
+not authority.**
+
+- [x] 9.1 **`event_date` and `raw_payload` ARE derived from the geometry.** The
+      round-2 metadata path refreshed them, justified in §7.1 by the claim that
+      "dates do not depend on coordinates". **That claim was false**: `event_date`
+      is parsed from the selected geometry snapshot's own `date` field
+      (`normalizer.go`), and `raw_payload` contains that geometry verbatim.
+      Writing either beside the OLD geometry asserts that an old polygon belongs
+      to a new observation — and the digest selects by `event_date`, so a stale
+      extent could surface as a current flood. Both are now excluded. Proven
+      against real PostGIS by `TestUpdateEventMetadataPreservesGeometryAndDate`,
+      which checks `ST_Equals` on the geometry and that the ORIGINAL date survives.
+
+- [x] 9.2 **"Exactly one" counted feature records, not distinct geometries.**
+      GDACS can serve the same ring under two episodes, which reported ambiguity
+      where there was none and refused an event whose geometry was perfectly
+      clear. Candidates are now deduplicated by geometry; genuine ambiguity — two
+      DIFFERENT corresponding rings — is still refused, and the lowest episode id
+      wins so the result does not depend on map iteration order.
+
+- [x] 9.3 **The budget was per COUNTRY, not per run.** Scope has now been wrong
+      three times: per response, then per `Ingest`, then per country —
+      `runAllCountries` loops over `DefaultCountries`, doubling it again for
+      NG+GH. One `RunBudget` is created in each run loop and threaded through
+      every country.
+
+- [x] 9.4 **The cap counted resolutions, not HTTP requests.** One resolution
+      issues one event request plus up to `maxGDACSEpisodes` geometry requests, so
+      a nominal 40 permitted ~840. The budget is now spent inside `gdacsGetJSON`,
+      where requests are actually made, and renamed `maxGDACSRequestsPerRun`.
+
+- [x] 9.5 **GDACS preference used `strings.Contains` on the whole URL.**
+      Introduced in round 2. A permitted NASA/USGS link carrying `gdacs.org` in
+      its path or query outranked a real GDACS source later in the list, and the
+      resolver then rejected it on hostname — turning safe input into silent
+      geometry loss. Now compares the parsed hostname with the same predicate as
+      the resolver.
+
+- [x] 9.6 **"MultiPolygon is explicitly rejected" was false.** Removing the branch
+      left it falling through to the generic no-geometry path, making an arrival
+      indistinguishable from an event that simply had none — the silent drop §7.5
+      claimed to have fixed. It now returns an error naming the type.
+
+- [x] 9.7 ❌ **REVIEW FINDING DISPROVEN — do not "fix" this.** Round 3 claimed
+      `representativePoint` returns a marker inside a hole when rings are
+      flattened, with a specific counterexample (outer `[-10,10]²`, hole
+      `[-9,9]²` starting at `(-9,1)`). **Run against the real function it returns
+      (9.5, 0.0) — in the annulus, on the surface.** Four further hole
+      configurations also pass, because the connector edges add crossings in pairs
+      and even-odd parity survives. Both real GDACS `Poly_Affected` polygons are
+      single-ring (1311 and 28 vertices), so holes do not arise in ingested data
+      either. Recorded by `TestRepresentativePointWithFlattenedHoles`.
+      ⚠️ This does not prove the function correct for every ring — it proves the
+      counterexample wrong. **A reviewer with a strong track record still produces
+      findings that must be checked before they are acted on.**

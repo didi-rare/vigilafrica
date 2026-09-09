@@ -1,6 +1,9 @@
 package normalizer
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestValidLonLat(t *testing.T) {
 	valid := [][2]float64{
@@ -133,4 +136,65 @@ func TestPolygonCoordinatesPlausible(t *testing.T) {
 			t.Error("excessively nested coordinates must be rejected")
 		}
 	})
+}
+
+// TestGDACSSourceSelectedByHostname covers a round-3 finding. Preferring the
+// GDACS source by substring-matching the whole URL meant a permitted NASA or
+// USGS link carrying "gdacs.org" in its path or query outranked a real GDACS
+// source later in the list — and the resolver would then reject it on hostname,
+// turning safe input into silent geometry loss.
+func TestGDACSSourceSelectedByHostname(t *testing.T) {
+	raw := RawEONETEvent{
+		ID:    "EONET_X",
+		Title: "decoy first",
+		Sources: []struct {
+			ID  string `json:"id"`
+			URL string `json:"url"`
+		}{
+			{ID: "NASA", URL: "https://eonet.gsfc.nasa.gov/api/v3/events?ref=gdacs.org"},
+			{ID: "GDACS", URL: "https://www.gdacs.org/report.aspx?eventtype=FL&eventid=1104078"},
+		},
+	}
+
+	evt, _, err := Normalize(raw, []byte("{}"))
+	if err != nil {
+		t.Fatalf("normalize: %v", err)
+	}
+	if evt.SourceURL == nil {
+		t.Fatal("expected a source URL")
+	}
+	if !isGDACSHost(*evt.SourceURL) {
+		t.Errorf("selected %q — the decoy NASA URL outranked the real GDACS source", *evt.SourceURL)
+	}
+}
+
+// TestMultiPolygonIsRefusedExplicitly covers a round-3 finding: the task list
+// claimed MultiPolygon was "explicitly rejected", but it fell through to the
+// generic no-geometry path, making an arrival indistinguishable from an event
+// that simply had no geometry — the silent drop the claim said was fixed.
+func TestMultiPolygonIsRefusedExplicitly(t *testing.T) {
+	raw := RawEONETEvent{
+		ID: "EONET_MP",
+		Geometries: []RawGeometry{{
+			Date: "2026-08-03T20:00:00Z",
+			Type: "MultiPolygon",
+			Coordinates: []interface{}{
+				[]interface{}{[]interface{}{
+					[]interface{}{1.0, 2.0}, []interface{}{1.1, 2.0},
+					[]interface{}{1.1, 2.1}, []interface{}{1.0, 2.0},
+				}},
+			},
+		}},
+	}
+
+	_, geoJSON, err := Normalize(raw, []byte("{}"))
+	if err == nil {
+		t.Fatal("MultiPolygon must be refused with an error naming the type, not dropped silently")
+	}
+	if geoJSON != "" {
+		t.Errorf("no geometry should be emitted, got %q", geoJSON)
+	}
+	if !strings.Contains(err.Error(), "MultiPolygon") {
+		t.Errorf("the error must name the refused type, got %v", err)
+	}
 }

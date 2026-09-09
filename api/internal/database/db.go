@@ -173,9 +173,10 @@ func (r *pgRepo) UpsertEvent(ctx context.Context, e models.Event, geoJSON string
 	return nil
 }
 
-// UpdateEventMetadata updates the non-geometry columns of an existing event and
-// reports whether a row matched. It NEVER inserts, and it never touches geom,
-// geom_type, latitude or longitude.
+// UpdateEventMetadata refreshes the fields of an existing event that are
+// independent of its geometry, and reports whether a row matched. It NEVER
+// inserts, and never touches geom, geom_type, latitude, longitude, event_date or
+// raw_payload.
 //
 // ⚠️ This exists because "skip the event entirely when its geometry cannot be
 // verified" throws away changes that have nothing to do with geometry. Status is
@@ -188,21 +189,29 @@ func (r *pgRepo) UpsertEvent(ctx context.Context, e models.Event, geoJSON string
 // reaches this path precisely when the incoming geometry is known-suspect, and
 // the stored geometry may already have been corrected by migration 000015.
 func (r *pgRepo) UpdateEventMetadata(ctx context.Context, e models.Event) (bool, error) {
+	// ⚠️ event_date and raw_payload are DELIBERATELY EXCLUDED.
+	//
+	// Both are derived from the geometry snapshot we just refused. event_date is
+	// parsed from the selected geometry's own `date` field (normalizer.go), and
+	// raw_payload contains that geometry verbatim. Writing either alongside the
+	// OLD geometry would produce a row asserting that an old polygon belongs to a
+	// new observation — and the digest selects by event_date, so a stale extent
+	// could be surfaced as a current flood.
+	//
+	// An earlier revision updated both, justified by the claim that "dates do not
+	// depend on coordinates". That claim was false.
 	query := `
 		UPDATE events SET
 			source      = $2,
 			title       = $3,
 			category    = $4,
 			status      = $5,
-			event_date  = $6,
-			source_url  = $7,
-			raw_payload = $8,
+			source_url  = $6,
 			ingested_at = NOW()
 		WHERE source_id = $1;`
 
 	tag, err := r.pool.Exec(ctx, query,
-		e.SourceID, e.Source, e.Title, e.Category, e.Status,
-		e.EventDate, e.SourceURL, e.RawPayload,
+		e.SourceID, e.Source, e.Title, e.Category, e.Status, e.SourceURL,
 	)
 	if err != nil {
 		return false, fmt.Errorf("failed to update metadata for event %s: %w", e.SourceID, err)
