@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Artifact from scripts/csp-map-check.py — headless render, not evidence worth keeping
+csp-map-check.png
