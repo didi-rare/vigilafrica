@@ -118,19 +118,22 @@ func schedulerLockHolder() string {
 // runAllCountries iterates over DefaultCountries and ingests each in sequence.
 // A failure for one country is logged and alerted but does not abort the others.
 func runAllCountries(ctx context.Context, repo database.Repository, alertClient *alert.Client) {
+	// ONE GDACS budget for the whole run, shared across every country (§3.5).
+	budget := NewRunBudget()
+
 	for _, country := range DefaultCountries {
 		if err := ctx.Err(); err != nil {
 			slog.Info("scheduler: context cancelled before country ingestion", "country", country.Code, "err", err)
 			return
 		}
-		runScheduledIngest(ctx, repo, alertClient, country)
+		runScheduledIngest(ctx, repo, alertClient, country, budget)
 	}
 }
 
 // runScheduledIngest executes a single ingestion cycle for one country and fires
 // a Resend failure alert if the run fails.
-func runScheduledIngest(ctx context.Context, repo database.Repository, alertClient *alert.Client, country CountryConfig) {
-	result, err := Ingest(ctx, repo, country)
+func runScheduledIngest(ctx context.Context, repo database.Repository, alertClient *alert.Client, country CountryConfig, budget *RunBudget) {
+	result, err := IngestWithBudget(ctx, repo, country, budget)
 	if err == nil {
 		return
 	}

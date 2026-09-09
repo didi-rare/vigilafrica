@@ -1,12 +1,41 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import maplibregl from 'maplibre-gl/dist/maplibre-gl-csp'
-import { setWorkerUrl } from 'maplibre-gl/dist/maplibre-gl-csp'
-import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-csp-worker.js?url'
+// ⚠️ Imported explicitly rather than relying on the ambient `GeoJSON` namespace.
+// maplibre-gl 5 pulled in @types/geojson transitively and made the global
+// resolvable; v6 does not, and tsconfig.app.json restricts `types` to
+// ["vite/client"], so `export as namespace GeoJSON` never applies here. An
+// explicit import does not depend on either.
+import type { FeatureCollection, Point } from 'geojson'
+// ⚠️ maplibre-gl v6 NO LONGER SHIPS THE CSP BUILD. v5 provided
+// dist/maplibre-gl-csp.js plus a separate csp-worker, which this file imported
+// and wired up with setWorkerUrl. Neither file exists in v6 — the package is now
+// ESM-only and bundles its worker, which Vite resolves.
+//
+// That is safe under our Content-Security-Policy because vercel.json already
+// grants `worker-src 'self' blob:` and `child-src 'self' blob:`, which is what
+// the standard build needs to start its worker. The CSP build was belt and
+// braces, not a requirement of the policy we actually serve.
+//
+// ⚠️ v6 also has NO DEFAULT EXPORT — everything is named — so this is a namespace
+// import. `import maplibregl from 'maplibre-gl'` silently yields `any` and every
+// callback below loses its types.
+import * as maplibregl from 'maplibre-gl'
+// ⚠️ The worker URL MUST still be set explicitly, and dropping this silently
+// breaks the map. v6 derives its worker path at RUNTIME from the main bundle's
+// own URL — `new URL('./maplibre-gl-worker.mjs', <chunk url>)` — which the
+// bundler cannot see, so Vite never emits the file and the request 404s. The
+// map container and canvas still appear, so the failure is invisible to
+// type-check, lint, unit tests and `npm run build`; only a browser shows it.
+// ⚠️ `?worker&url`, NOT plain `?url`. v6 builds main and worker in one context
+// and extracts a shared chunk, so the worker is not self-contained — it imports
+// ./maplibre-gl-shared.mjs relatively. Plain `?url` copies the single file and
+// that import 404s. `?worker&url` makes Vite BUNDLE the worker with its
+// dependencies and return the URL of the result.
+import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { track } from '../analytics'
 import './Map.css'
 
-setWorkerUrl(maplibreWorkerUrl)
+maplibregl.setWorkerUrl(maplibreWorkerUrl)
 
 const SOURCE_ID = 'events-map-source'
 const CLUSTERS_LAYER_ID = 'events-map-clusters'
@@ -27,7 +56,7 @@ interface MapProps {
   zoom?: number
 }
 
-type EventsGeoJSON = GeoJSON.FeatureCollection<GeoJSON.Point, { id: string; title: string; category: string }>
+type EventsGeoJSON = FeatureCollection<Point, { id: string; title: string; category: string }>
 type MarkerRecord = {
   marker: maplibregl.Marker
   event: EventMarker
