@@ -58,7 +58,13 @@
   --bg-card-hover: rgba(30, 41, 59, 0.6);
   --bg-elevated: var(--navy-800);
   --bg-elevated-hover: var(--navy-750);
-  --bg-nav: rgba(7, 9, 26, 0.85);
+  /* Alpha is load-bearing, not decorative: the nav is sticky, so page content
+     scrolls underneath it permanently. At 0.85 a bold heading behind the bar
+     composites to 1.46:1 against the bar itself — dim, but legible enough to
+     read words across the wordmark. 0.97 drops that to 1.05:1 while keeping
+     enough translucency for `backdrop-filter` to read as depth.
+     Guarded by web/scripts/nav-bleed-contrast.py. */
+  --bg-nav: rgba(7, 9, 26, 0.97);
   --bg-hud-overlay: rgba(10, 11, 14, 0.8);
   --bg-popup: rgba(10, 11, 14, 0.95);
 
