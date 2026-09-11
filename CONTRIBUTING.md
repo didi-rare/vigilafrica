@@ -253,7 +253,17 @@ See [docs/deployment/release-process.md](docs/deployment/release-process.md) for
 
 ### Sentinel CI Gate
 
-Any change to `api/internal/*` or `api/cmd/*` **must** be accompanied by a file in `openspec/changes/` or the commit message must include `[trivial]`. The CI will reject PRs without this.
+Any change to `api/internal/*`, `api/cmd/*`, or `web/src/*` **must** be accompanied by a file under
+`openspec/proposals/` or `openspec/changes/`, or opt out with the `[trivial]` bypass. The CI will
+reject PRs without one of these.
+
+The bypass has an exact contract, not "include the word somewhere": **`[trivial]` must be the
+entire content of a line, starting at column zero, in the current (HEAD) commit's message.**
+Mentioning the token in a sentence, or indenting it as a quoted example, does not count — only a
+bare, unindented `[trivial]` on its own line does. It must be on the commit currently under review;
+an earlier commit's opt-out does not carry forward to later commits on the same branch, and on a
+multi-commit PR the bypass still excuses the whole diff, so the tool names the commit count when
+there's more than one, as a signal to double-check the rest by hand.
 
 Create a change record by copying the template:
 ```bash
