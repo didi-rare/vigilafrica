@@ -40,8 +40,11 @@ func main() {
 	defer repo.Close()
 
 	var totalFetched, totalStored int
+	// ONE GDACS budget for the whole run, shared across every country.
+	budget := ingestor.NewRunBudget()
+
 	for _, country := range ingestor.DefaultCountries {
-		result, err := ingestor.Ingest(ctx, repo, country)
+		result, err := ingestor.IngestWithBudget(ctx, repo, country, budget)
 		if err != nil {
 			log.Printf("Ingestion failed for %s: %v", country.Name, err)
 			continue

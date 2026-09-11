@@ -298,8 +298,13 @@ Implement an automated governance gate ("The Sentinel") that prevents code chang
 
 1. **Critical Packages**: Any change to `api/internal/*`, `api/cmd/*`, or `web/src/*` triggers an audit.
 2. **Governance Link**: The audit passes IF at least one file is added or modified in an active OpenSpec record location — `openspec/proposals/` (the flat proposal layout) **or** `openspec/changes/` (the per-change layout). Archived records (any path under `/archive/`) do not count.
-3. **Exemptions**: 
-   - **Trivial Fixes**: Commits containing `[trivial]` in the message skip the audit (for typos, linting, etc.).
+3. **Exemptions**:
+   - **Trivial Fixes**: the HEAD commit under review may opt out with `[trivial]` — but only when
+     that exact token is the **entire content of one of its lines, unindented**. A mention inside a
+     sentence, or an indented/quoted example, does not qualify — see
+     `openspec/proposals/fix-sentinel-trivial-bypass-overmatch.md` for why that distinction exists.
+     The opt-out is not inherited from an earlier commit on the branch, and it still excuses the
+     whole PR diff, not just the commit that carries it — see that proposal's "Known limitation."
    - **Maintenance**: Changes to `api/db/migrations/`, `docs/`, or root configuration files are exempt.
 
 ### Consequences
