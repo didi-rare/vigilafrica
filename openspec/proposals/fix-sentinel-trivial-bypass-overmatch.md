@@ -1,7 +1,7 @@
 ---
 id: fix-sentinel-trivial-bypass-overmatch
-status: proposed
-branch: tbd
+status: in-progress
+branch: fix/sentinel-trivial-bypass-overmatch
 ---
 
 # Proposal: The Sentinel's Bypass Token Matches Anywhere, So Discussing It Disables the Gate (fix-sentinel-trivial-bypass-overmatch)
@@ -87,26 +87,107 @@ not yet demonstrated.
 Whichever is chosen, the bypass should be **reported loudly**: printing the commit that carried it
 turns an invisible skip into a reviewable fact.
 
+### Resolution: option 1 + the HEAD-only half of option 3, not option 2/3's subject-line restriction
+
+Implemented as: the token must be the **entire content of some line** in **HEAD's own commit
+message** (`^\s*\[trivial\]\s*$`, case-insensitive, multiline) — not merely present anywhere in the
+`baseBranch..HEAD` range, and not inherited from an earlier commit further back on the branch.
+
+This takes option 3's real security property (a deliberate, *current* act, closing the
+branch-inheritance hole) without its subject-line restriction. Checked against actual repository
+history before choosing: every real `[trivial]` commit found (`e61b202`, `119d047`) carries it as
+the **last line of the body**, not the subject — `reference_trivial_tag_placement` documents "commit
+message," never "subject line" specifically. Restricting to the subject would have broken the
+established, working convention for no additional security benefit; restricting to *a line, in
+HEAD's message* gets the same guarantee option 3 wanted while staying compatible with it.
+
+The previously-unverified branch-inheritance hole is now **confirmed real** (not just plausible):
+demonstrated below by re-breaking the fix with a constructed 3-commit branch.
+
+### ⚠️ Round 2 — independent review (`gpt-5.6-sol`) found three more real defects
+
+Self-review of round 1 called the fix complete. It was not. An adversarial pass — same standard as
+[[project_codex_review_calibration]] — read the actual live CI run for this PR's own commit and
+found the round-1 fix would not have worked in real CI at all:
+
+1. **P0 — HEAD is not what round 1 assumed.** On a `pull_request` trigger, `actions/checkout`'s
+   default (no `ref:` override, and none was added) checks out GitHub's *synthetic merge commit* —
+   `refs/pull/<n>/merge` — as HEAD. That commit's message is auto-generated
+   (`"Merge <sha> into <sha>"`), never the real message a contributor wrote. Round 1's `git log -1
+   HEAD` would have read that generated message on every real PR, making a real, deliberately-placed
+   token **invisible in every real run** — confirmed on this PR's own live CI: checkout resolved
+   `refs/remotes/pull/273/merge`, subject literally `"Merge 6e5e0de… into 7018b11…"`. This would not
+   have been a residual attack surface; it would have broken the escape hatch entirely, for everyone,
+   silently, the first time anyone actually relied on it. **Fixed:** `resolveAuditCommit` detects the
+   two-parent, auto-generated-subject shape and reads the second parent (the real PR tip) instead.
+2. **P0 — indentation reopened the same class of hole.** Round 1's regex allowed `^\s*` before the
+   token, so an indented documentation example — `"Example of what NOT to do:\n\n    [trivial]\n\n
+   Don't paste that literally."` — matched, for the identical reason a prose mention matched the
+   *original* bug: the line's content looked like an opt-out even though its context didn't mean one.
+   **Fixed:** the token must start at column zero (`^\[trivial\]\s*$`) — still exactly how the real
+   commits (`e61b202`, `119d047`) use it.
+3. **P1 — reported to stdout only.** A passed check shows a green tick without opening the log,
+   which is how the *original* bug stayed invisible for as long as it did. **Fixed:**
+   `reportBypassLoudly` now also emits a `::warning::` GitHub annotation (visible on the PR without
+   opening the run) and a job-summary line; both are no-ops outside Actions.
+
+Two more findings were investigated and are recorded, not fixed:
+
+- Go's `\s` is ASCII-only (rejects a pasted NBSP) — **not fixed**: this fails CLOSED (audit still
+  runs), the safe direction, so it is a minor false-negative-on-the-opt-out annoyance, not a hole.
+- **Known limitation, deliberately not fixed here:** the bypass is scoped to the reviewed commit's
+  *message*, but the diff it excuses is the *whole PR*. On a multi-commit branch, an earlier commit
+  can add an ungoverned critical file while a later, unrelated commit happens to carry `[trivial]` —
+  confirmed real with a constructed 2-commit branch, and this repo's own history contains real
+  non-squash merges of 3, 4, and 7 commits, so this is a reachable shape, not a hypothetical one.
+  Properly closing it means auditing each commit's own diff against its own message — a materially
+  bigger change than "match the token more precisely," and out of scope for this proposal by its own
+  original framing. **Mitigated, not closed:** the bypass message now names the commit count when
+  there's more than one, turning a silent gap into a visible prompt to check the rest by hand. A
+  follow-up proposal is the right vehicle for the full fix, if it's judged worth the redesign.
+
+Every fix was proved by re-running the real binary, not just re-reading the diff — see the updated
+scenario table below.
+
 ## Verification
 
-- [ ] Unit tests in `api/cmd/sentinel/main_test.go` (which already covers `isGovernanceRecord`,
-      `isCritical`, `isAllowed`, `migrationIsExempt`) extended with the discussion case: a commit
-      whose body contains the token in prose must **NOT** bypass.
-- [ ] ⚠️ **Prove the gate by re-breaking what it guards.** Construct a branch with a critical file
-      change and no record, confirm it FAILS; add a prose mention of the token, confirm it **still
-      fails**; add the token as an intentional opt-out, confirm it passes. A test that only asserts
-      the happy path would not have caught this defect.
-- [ ] Run the real binary, not just the unit tests. The container invocation used to find this:
+- [x] Unit tests in `api/cmd/sentinel/main_test.go`: `TestTrivialLineRe` (10 cases — the 8 from round
+      1 plus the indentation regression), `TestParseAuditCommitRef` (6 cases, including the exact
+      synthetic-merge shape observed live on PR #273), `TestEscapeWorkflowCommandValue`. All existing
+      tests (`isGovernanceRecord`, `isCritical`, `isAllowed`, `migrationIsExempt`) still pass
+      unmodified.
+- [x] ⚠️ **Proved the gate by re-breaking what it guards**, using the real binary (not just unit
+      tests) against a standalone clone with `origin/development` pointed at a base carrying the
+      final fix. Seven constructed scenarios, each diffing a real `web/src/` change against that
+      base — E and G are the round-2 regression proofs, built to model what round 1's testing missed:
+
+      | scenario | shape | sentinel result |
+      | --- | --- | --- |
+      | A — no record, no token | plain commit | ❌ FAIL — correct |
+      | B — no record, token named in prose | "Not using the `[trivial]` bypass here…" | ❌ FAIL — confirmed separately that the *original* bare-substring check returns `true` (wrongly bypasses) on this exact range |
+      | C — no record, token as its own line, plain commit | real opt-out, no merge involved | ✅ PASS, reported |
+      | D (sanity) — real governance record, no token | — | ✅ PASS via the normal path, unaffected |
+      | **E — token as its own line, but checked out as GitHub's synthetic PR-merge HEAD** | models the real CI topology round 1 missed | ✅ PASS — resolves through the merge commit to the real PR tip and reports its actual SHA/subject, not the merge commit's |
+      | **F — token indented as a quoted doc example** | the round-2 indentation hole | ❌ FAIL — correct |
+      | **G — 2-commit branch: commit 1 adds an ungoverned critical file, commit 2 (unrelated) carries the token** | the known, unfixed limitation | ✅ PASS, but now says *"This PR carries 2 commits — the bypass covers the WHOLE diff, not just this commit; verify the others too."* |
+
+      Container invocation used (`MSYS_NO_PATHCONV=1`, standalone clone since a linked worktree's
+      `.git` is a pointer file, `core.longpaths=true` needed for this repo's deep archived paths on
+      Windows):
 
       docker run --rm -v <repo>:/repo -w /repo/api golang:1.26-alpine \
         sh -c "apk add --no-cache git; git config --global --add safe.directory /repo; go run ./cmd/sentinel"
 
-      ⚠️ On Windows this needs `MSYS_NO_PATHCONV=1`, and a linked git worktree cannot be mounted
-      directly — its `.git` is a pointer file, so clone to a standalone repo first.
+- [x] Ran the real binary against this PR's own actual commit (not a constructed scenario): reported
+      `2 critical code changes, 1 governance records`, passed via the normal governance path — the
+      updated `openspec/proposals/` record in this same diff, not the bypass.
 
 ## Impact
 
-- **Affected:** `api/cmd/sentinel/main.go`, `api/cmd/sentinel/main_test.go`.
+- **Affected:** `api/cmd/sentinel/main.go`, `api/cmd/sentinel/main_test.go`, plus `CONTRIBUTING.md`
+  and `openspec/specs/vigilafrica/decisions.md` — both described the bypass's contract loosely
+  ("commits containing `[trivial]` in the message"), which is exactly the ambiguity that caused the
+  bug; updated to state the precise placement, HEAD-only, and multi-commit semantics.
 - **Blast radius:** the gate itself. A mistake here either blocks every PR or silently permits
   ungoverned changes, so the re-breaking step above is not optional.
 - **Not urgent, but not cosmetic.** Nothing is currently ungoverned as a result — #266 was corrected

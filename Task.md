@@ -1,43 +1,69 @@
-# chore-css-tokens
+# fix-sentinel-trivial-bypass-overmatch
 
-**Branch:** `chore/css-tokens`
-**Spec:** [openspec/archive/spec-chore-css-tokens.md](openspec/archive/spec-chore-css-tokens.md) (archived 2026-05-14)
-**Proposal:** [openspec/archive/proposal-chore-css-tokens.md](openspec/archive/proposal-chore-css-tokens.md) (archived 2026-05-14)
-**Origin:** finding F1 from `/openspec-review` of fix-public-trust-quick-wins
+**Branch:** `fix/sentinel-trivial-bypass-overmatch` (PR #273)
+**Proposal:** [openspec/proposals/fix-sentinel-trivial-bypass-overmatch.md](openspec/proposals/fix-sentinel-trivial-bypass-overmatch.md)
+**Origin:** merged PR #267 (docs-only); this PR implements it
 
-## Phase 1 — Token Layer + Audit
+## Round 1 — the proposal's own bug
 
-- [x] Create [web/src/styles/tokens.css](web/src/styles/tokens.css) with two-layer model: primitive palette + semantic tokens
-- [x] Import tokens.css from [web/src/main.tsx](web/src/main.tsx) before any component CSS
-- [x] Define legacy aliases (`--color-text-dim`, `--color-primary`, `--color-border`) so orphan references in Map.css and EventDetail.css resolve correctly
-- [x] Replace every colour literal in [web/src/index.css](web/src/index.css) → tokens
-- [x] Replace every colour literal in [web/src/App.css](web/src/App.css) → tokens (removed embedded colour `:root` block; kept non-colour tokens for typography/spacing/z-index)
-- [x] Replace every colour literal in [web/src/components/EventsDashboard.css](web/src/components/EventsDashboard.css) → tokens
-- [x] Replace every colour literal in [web/src/components/Map.css](web/src/components/Map.css) → tokens
-- [x] Replace every colour literal in [web/src/pages/EventDetail.css](web/src/pages/EventDetail.css) → tokens
+- [x] `checkTrivial` examines only the commit under review, not the whole
+      `baseBranch..HEAD` range
+- [x] Token must be the entire content of a line (not a substring anywhere
+      in a sentence)
+- [x] Bypass reported with the commit's SHA and subject, not an anonymous line
+- [x] Unit tests (`TestTrivialLineRe`) including the actual defect
+      (reconstructed from the real pre-rewording draft of `ae4b3ea`)
+- [x] Re-broke what the gate guards with the real binary against a
+      standalone clone (4 scenarios)
 
-## Phase 2 — Lint Enforcement
+## Round 2 — independent review (`gpt-5.6-sol`) found round 1 incomplete
 
-- [x] Add `stylelint@17.11.0`, `stylelint-config-standard@40.0.0`, `stylelint-declaration-strict-value@1.11.1` to [web/package.json](web/package.json) devDependencies (pinned exact)
-- [x] Add [web/.stylelintrc.json](web/.stylelintrc.json) with `scale-unlimited/declaration-strict-value` enforcing token references on every colour-bearing property
-- [x] Add `lint:styles` npm script to [web/package.json](web/package.json)
-- [x] Add `Run Frontend Style Lint` step to [.github/workflows/ci-cd.yml](.github/workflows/ci-cd.yml)
-- [x] Sanity-tested: deliberately-added `color: #abc` flagged by stylelint with `scale-unlimited/declaration-strict-value` ✓
-- [x] tokens.css exempted from the strict-value rule via `overrides`
+Self-review called round 1 done. It was not — an adversarial pass reading
+this PR's own live CI run found round 1 would not have worked in real CI.
 
-## Phase 3 — Verification
+- [x] **P0 fixed:** `actions/checkout`'s default behaviour on `pull_request`
+      checks out GitHub's synthetic merge commit as HEAD, whose message is
+      auto-generated ("Merge \<sha\> into \<sha\>") — confirmed live on this
+      PR's own run. Round 1's bypass would have been invisible in every real
+      PR. `resolveAuditCommit` now detects that shape and reads the real PR
+      tip (the second parent) instead.
+- [x] **P0 fixed:** round 1's regex allowed leading whitespace, so an
+      indented documentation example matched — the same class of hole as
+      the original bug, via indentation instead of prose. Token must now
+      start at column zero.
+- [x] **P1 fixed:** the bypass is now reported via a GitHub `::warning::`
+      annotation and job summary line, not stdout only.
+- [x] **Investigated, not fixed:** ASCII-only `\s` rejects NBSP — fails
+      closed (safe direction), left as is.
+- [x] **Known limitation, recorded not closed:** the bypass is scoped to one
+      commit's message but excuses the whole PR diff — confirmed real
+      (not hypothetical) with a constructed 2-commit branch, and this
+      repo's own history has real 3/4/7-commit merges. A full fix needs
+      per-commit-diff auditing, a bigger redesign, out of this proposal's
+      scope. Mitigated: the bypass message now names the commit count when
+      >1, so it's a visible prompt to check by hand instead of a silent gap.
+- [x] Unit tests: `TestTrivialLineRe` extended (indentation case),
+      `TestParseAuditCommitRef` (6 cases incl. the exact PR #273 shape),
+      `TestEscapeWorkflowCommandValue`
+- [x] Re-broke what the gate guards again, now covering what round 1
+      missed: E (synthetic-merge HEAD → still resolves correctly), F
+      (indentation → now fails), G (multi-commit gap → now visible)
+- [x] Ran the real binary against this PR's own actual commit: 2 critical
+      changes, 1 governance record, passes via the normal path
 
-- [x] `npm run lint` clean
-- [x] `npm run lint:styles` clean
-- [x] `npm run test` — 31/31 passing (no test changes expected; visual-only refactor)
-- [x] `npm run build` succeeds
-- [x] Visual diff captured via Playwright at 375 / 768 / 1280 px on 2026-05-14; B1 exception documented in spec (three orphan CSS vars now bound; section labels render in muted grey + amber accent on `/events/:id`)
+## Documentation
 
-## Follow-up specs (NOT in this PR)
+- [x] `CONTRIBUTING.md` and `openspec/specs/vigilafrica/decisions.md` both
+      described the bypass loosely ("commits containing `[trivial]` in the
+      message") — exactly the ambiguity that caused the bug. Updated to
+      state the precise contract.
+- [x] `openspec/proposals/fix-sentinel-trivial-bypass-overmatch.md`:
+      status → `in-progress`, Resolution + round-2 sections recording what
+      was chosen, why, and the full verification table
 
-These were named in the spec's "Out of Scope" and are explicitly deferred:
+## Not done / deliberately out of scope
 
-- `chore-spacing-tokens` — extract spacing literals
-- `chore-type-tokens` — extract typography literals
-- `chore-z-index-tokens` — extract z-index literals
-- `feat-dark-mode-toggle` — uses the new colour tokens once they're in place
+- Per-commit-diff auditing (the multi-commit limitation above) — recorded
+  as a follow-up candidate, not attempted here
+- Whether the bypass mechanism should exist at all — unchanged
+- Whether `web/src/` is the right critical-path set — unchanged
