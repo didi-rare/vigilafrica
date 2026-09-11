@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { act, render, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { FeatureCollection, Point } from 'geojson'
 
 import { Map } from './Map'
 import { track } from '../analytics'
@@ -21,12 +22,12 @@ type SourceConfig = {
   cluster?: boolean
   clusterMaxZoom?: number
   clusterRadius?: number
-  data: GeoJSON.FeatureCollection
+  data: FeatureCollection
 }
 
 type SourceFeature = {
   properties: Record<string, unknown>
-  geometry: GeoJSON.Point
+  geometry: Point
 }
 
 type Handler = (...args: unknown[]) => void
@@ -195,20 +196,24 @@ const maplibreMock = vi.hoisted(() => {
   }
 })
 
-vi.mock('maplibre-gl/dist/maplibre-gl-csp', () => ({
-  default: {
-    Map: maplibreMock.Map,
-    Marker: maplibreMock.Marker,
-    Popup: maplibreMock.Popup,
-  },
+// ⚠️ Mocks the PACKAGE ENTRY, not the old CSP sub-path. maplibre-gl v6 dropped
+// the CSP build, so a mock of 'maplibre-gl/dist/maplibre-gl-csp' silently stops
+// applying — the real library then loads and every test in this file fails with
+// "GPUInitializationError: WebGL2 is required", because v6 requires WebGL2 and
+// jsdom has no GPU. A stale mock path fails loudly here, but the same mistake in
+// a mock of something optional would fail silently.
+//
+// No `default` key: v6 has no default export, and Map.tsx uses a namespace
+// import. Providing one would mask a regression back to `import maplibregl from`.
+vi.mock('maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url', () => ({
+  default: 'mock-maplibre-worker.js',
+}))
+
+vi.mock('maplibre-gl', () => ({
   Map: maplibreMock.Map,
   Marker: maplibreMock.Marker,
   Popup: maplibreMock.Popup,
   setWorkerUrl: maplibreMock.setWorkerUrl,
-}))
-
-vi.mock('maplibre-gl/dist/maplibre-gl-csp-worker.js?url', () => ({
-  default: 'mock-maplibre-worker.js',
 }))
 
 const SOURCE_ID = 'events-map-source'
@@ -250,6 +255,11 @@ describe('Map', () => {
   it('initializes MapLibre with a clustered GeoJSON source and cluster layers', async () => {
     render(<Map events={events} center={[3.3792, 6.5244]} zoom={6} />)
 
+    // ⚠️ setWorkerUrl is STILL REQUIRED on v6, and this assertion is what stops it
+    // being dropped again. v6 derives the worker path at runtime from its own
+    // bundle URL, which the bundler cannot see, so without an explicit URL the
+    // worker 404s — while the container and canvas still render, so every other
+    // gate passes. Verified in a browser by web/scripts/csp-map-check.py.
     expect(maplibreMock.setWorkerUrl).toHaveBeenCalledWith('mock-maplibre-worker.js')
     expect(maplibreMock.Map).toHaveBeenCalledTimes(1)
 

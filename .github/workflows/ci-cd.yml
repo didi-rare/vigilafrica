@@ -127,6 +127,12 @@ jobs:
           cd web
           npm run lint:styles
 
+      - name: Verify Nav Bleed-Through Guard
+        # Pure stdlib, no web/ deps needed. Catches a reverted --bg-nav alpha
+        # (the staging defect fixed alongside this check) before it ships --
+        # see web/scripts/nav-bleed-contrast.py for what it computes and why.
+        run: python3 web/scripts/nav-bleed-contrast.py
+
       - name: Run Frontend Tests
         run: |
           cd web
