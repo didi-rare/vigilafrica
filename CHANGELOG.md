@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.6.1](https://github.com/didi-rare/vigilafrica/compare/v1.6.0...v1.6.1) (2026-09-11)
+
+
+### Bug Fixes
+
+* **api:** address round-2 review — metadata preservation, true episode identity ([9818941](https://github.com/didi-rare/vigilafrica/commit/981894143f2eb04b8c569ea74c10cf93fdf0138e))
+* **api:** address round-3 review — six real findings, one disproven ([3578ed8](https://github.com/didi-rare/vigilafrica/commit/3578ed8787cdd9214d51926e90989ad854dedc5f))
+* **api:** require the sentinel's [trivial] bypass on its own line in HEAD ([#273](https://github.com/didi-rare/vigilafrica/issues/273)) ([6b851c9](https://github.com/didi-rare/vigilafrica/commit/6b851c9b43ac26f9942d7ded7f25d7f427e6710c))
+* **api:** resolve GDACS geometry from GDACS, not from EONET's transposed copy ([5766fa1](https://github.com/didi-rare/vigilafrica/commit/5766fa1c48392fe1fd366283b52f48cef39498f2))
+* **api:** resolve GDACS geometry from GDACS, not from EONET's transposed copy ([c8b2a1d](https://github.com/didi-rare/vigilafrica/commit/c8b2a1d00c6b4ce3b16e88dafabe06521f0d57ac))
+* **api:** resolve the matching GDACS episode and keep the polygon ([e5da7d5](https://github.com/didi-rare/vigilafrica/commit/e5da7d5699fce1ca4db7fe35b67e8712d0b901ca))
+* **ci:** stop the web dependency audit from failing open ([e504e4e](https://github.com/didi-rare/vigilafrica/commit/e504e4efc323d63d484319c718d5614bedc8cd04))
+* **ci:** stop the web dependency audit from failing open ([a02dcf5](https://github.com/didi-rare/vigilafrica/commit/a02dcf525ca1488c60dbc3c3e2799b6f4f5cca15))
+* **db:** correct the two stored events with transposed geometry ([bc87208](https://github.com/didi-rare/vigilafrica/commit/bc87208daa37612b1c438b1e2fcb9a6f62a2ea34))
+* **web:** migrate to maplibre-gl 6 to clear a CVSS 10.0 XSS ([f3a30b8](https://github.com/didi-rare/vigilafrica/commit/f3a30b8b070f495ad2b7b5e05cf41aaa5529ef27))
+* **web:** migrate to maplibre-gl 6 to clear a CVSS 10.0 XSS ([6564e81](https://github.com/didi-rare/vigilafrica/commit/6564e816586bc9f3daf830ad26e4bfb5e5e3d842))
+* **web:** show the country when there is no state, not raw coordinates ([44a1914](https://github.com/didi-rare/vigilafrica/commit/44a1914548cbd610946abb5094f36e49d7a9b007))
+* **web:** show the country when there is no state, not raw coordinates ([91d0851](https://github.com/didi-rare/vigilafrica/commit/91d085194d1b0cd98b4e3e207b77c35c3a5dc06d))
+* **web:** stop page content showing through the sticky nav ([#271](https://github.com/didi-rare/vigilafrica/issues/271)) ([cba8ab4](https://github.com/didi-rare/vigilafrica/commit/cba8ab4241d653b9b0ffdbeed3904dbb5349e32a))
+
 ## [1.6.0](https://github.com/didi-rare/vigilafrica/compare/v1.5.0...v1.6.0) (2026-09-04)
 
 
