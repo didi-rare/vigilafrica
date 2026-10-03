@@ -104,6 +104,26 @@ func TestResolveFailureClassification(t *testing.T) {
 			testSourceURL, resolveOK,
 		},
 
+		// Round 2: the inner fields must be present too.
+		{"properties with neither episode field is an outage", body(`{"properties":{}}`), status(http.StatusOK), testSourceURL, resolveUpstream},
+		{"properties with null episodes and no episodeid is an outage", body(`{"properties":{"episodes":null}}`), status(http.StatusOK), testSourceURL, resolveUpstream},
+		{
+			// Round 2: GDACS flood 1104053 declared 34 episodes on 2026-10-03. A
+			// real long event must be scanned in full, not truncated into a
+			// permanent false outage.
+			"a real 34-episode event matching at episode 30 resolves",
+			manyEpisodes(34),
+			func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Query().Get("episodeid") == "30" {
+					_, _ = w.Write([]byte(`{"features":[{"properties":{"Class":"Poly_Affected","episodeid":30},"geometry":{"type":"Polygon","coordinates":` + fourVertexRing + `}}]}`))
+					return
+				}
+				_, _ = w.Write([]byte(`{"features":[]}`))
+			},
+			testSourceURL, resolveOK,
+		},
+		{"a real 34-episode event with no match is a refusal, not an outage", manyEpisodes(34), body(`{"features":[]}`), testSourceURL, resolveUnverifiable},
+
 		// ── unverifiable: GDACS answered, geometry cannot be established ───────
 		{"event endpoint 404 means GDACS does not know the event", status(http.StatusNotFound), status(http.StatusOK), testSourceURL, resolveUnverifiable},
 		{"complete scan, no matching ring, is a refusal", twoEpisodes, body(`{"features":[]}`), testSourceURL, resolveUnverifiable},

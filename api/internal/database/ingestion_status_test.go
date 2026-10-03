@@ -170,3 +170,30 @@ func TestPreviousCompletedRunSkipsRunningAndOtherCountries(t *testing.T) {
 		t.Errorf("unknown country: got %+v, %v — want nil, nil", none, err)
 	}
 }
+
+// TestMigration000016IsReplayable: developers-go.md §11.4. Re-running the up
+// migration on an already-migrated schema must not wedge (independent review,
+// PR #280, round 2). Inside a rolled-back transaction.
+func TestMigration000016IsReplayable(t *testing.T) {
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, testDSN)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer conn.Close(ctx)
+	up, err := os.ReadFile(migration000016Up)
+	if err != nil {
+		t.Fatalf("read up migration: %v", err)
+	}
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, string(up)); err != nil {
+		t.Fatalf("replaying 000016 on an already-migrated schema failed: %v", err)
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO ingestion_runs (started_at, status, country_code) VALUES (now(), 'degraded', 'NG')`); err != nil {
+		t.Errorf("after replay, 'degraded' must still be accepted: %v", err)
+	}
+}

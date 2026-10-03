@@ -7,11 +7,15 @@
 -- stayed green while floods silently dropped off the map.
 --
 -- The original CHECK was declared inline in 000004, so Postgres named it
--- ingestion_runs_status_check. DROP CONSTRAINT without IF EXISTS on purpose:
--- if that assumption is ever wrong this migration must fail loudly, not leave
--- the old constraint in place and then reject every degraded write at runtime.
+-- ingestion_runs_status_check.
+--
+-- Replayable per developers-go.md §11.4 (independent review, PR #280, round 2):
+-- IF EXISTS / IF NOT EXISTS throughout, so re-running after a dirty-version
+-- recovery does not wedge. The cost is that a wrong constraint name would no
+-- longer fail here; it is caught instead by the integration test that writes a
+-- 'degraded' run, which fails if the old constraint survived.
 
-ALTER TABLE ingestion_runs DROP CONSTRAINT ingestion_runs_status_check;
+ALTER TABLE ingestion_runs DROP CONSTRAINT IF EXISTS ingestion_runs_status_check;
 
 ALTER TABLE ingestion_runs
     ADD CONSTRAINT ingestion_runs_status_check
@@ -21,4 +25,4 @@ ALTER TABLE ingestion_runs
 -- Deduplication keys on DELIVERY, not on status: an earlier design compared only
 -- the previous run's status, so a failed send left the streak marked degraded
 -- and every later run suppressed the alert forever (independent review, PR #280).
-ALTER TABLE ingestion_runs ADD COLUMN alert_sent_at TIMESTAMPTZ;
+ALTER TABLE ingestion_runs ADD COLUMN IF NOT EXISTS alert_sent_at TIMESTAMPTZ;

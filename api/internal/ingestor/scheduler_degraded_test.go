@@ -2,6 +2,7 @@ package ingestor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -186,5 +187,83 @@ func TestScheduledIngestRetriesDegradedAlertAfterFailedSend(t *testing.T) {
 	runScheduledIngest(ctx, ledger, client, testCountry, NewRunBudget())
 	if resend.count() != 2 {
 		t.Errorf("run 3: %d attempt(s) total, want 2 — delivered streak was re-alerted", resend.count())
+	}
+}
+
+// failingMarkLedger fails MarkIngestionRunAlerted, simulating a crash or DB
+// error in the window between a successful send and recording it.
+type failingMarkLedger struct{ *runLedger }
+
+func (failingMarkLedger) MarkIngestionRunAlerted(context.Context, int64) error {
+	return errors.New("db unavailable")
+}
+
+func TestScheduledIngestDisabledAlertingDoesNotSilenceTheStreak(t *testing.T) {
+	enabled, resend := degradedWorld(t)
+	disabled := alert.NewClient(alert.Config{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	ledger := &runLedger{mockRepo: &mockRepo{}}
+	ctx := context.Background()
+
+	// Alerting unconfigured: the degraded run must NOT be recorded as alerted.
+	runScheduledIngest(ctx, ledger, disabled, testCountry, NewRunBudget())
+	if ledger.runs[0].AlertSentAt != nil {
+		t.Fatal("a disabled alert client was recorded as having delivered the alert")
+	}
+
+	// Configured mid-outage: the first real email must go out.
+	runScheduledIngest(ctx, ledger, enabled, testCountry, NewRunBudget())
+	if resend.count() != 1 {
+		t.Errorf("after enabling alerting mid-streak: %d alert(s), want 1 — the streak was silenced", resend.count())
+	}
+}
+
+func TestScheduledIngestAlertIsAtLeastOnceWhenRecordingFails(t *testing.T) {
+	// Documents the chosen trade: if recording fails after a successful send,
+	// the next degraded run sends again (a duplicate), rather than risking
+	// silence. Exactly-once is NOT claimed.
+	client, resend := degradedWorld(t)
+	ledger := failingMarkLedger{&runLedger{mockRepo: &mockRepo{}}}
+	ctx := context.Background()
+
+	runScheduledIngest(ctx, ledger, client, testCountry, NewRunBudget())
+	runScheduledIngest(ctx, ledger, client, testCountry, NewRunBudget())
+	if resend.count() != 2 {
+		t.Errorf("unrecorded send: %d alert(s), want 2 (at-least-once)", resend.count())
+	}
+}
+
+func TestScheduledIngestRealertsAfterRecovery(t *testing.T) {
+	client, resend := degradedWorld(t)
+	ledger := &runLedger{mockRepo: &mockRepo{}}
+	ctx := context.Background()
+
+	runScheduledIngest(ctx, ledger, client, testCountry, NewRunBudget()) // degraded: alert 1
+
+	// GDACS answers 404: a refusal, not an outage, so the run is a success and
+	// the streak ends.
+	gdacsStub(t, status(http.StatusNotFound), status(http.StatusNotFound))
+	runScheduledIngest(ctx, ledger, client, testCountry, NewRunBudget())
+	if got := ledger.status(2); got != models.RunStatusSuccess {
+		t.Fatalf("run 2 status = %q, want success (a 404 is a refusal, not an outage)", got)
+	}
+
+	gdacsStub(t, status(http.StatusInternalServerError), status(http.StatusInternalServerError))
+	runScheduledIngest(ctx, ledger, client, testCountry, NewRunBudget()) // new streak: alert 2
+	if resend.count() != 2 {
+		t.Errorf("degraded -> success -> degraded: %d alert(s), want 2", resend.count())
+	}
+}
+
+func TestScheduledIngestStreaksAreIsolatedPerCountry(t *testing.T) {
+	client, resend := degradedWorld(t)
+	ledger := &runLedger{mockRepo: &mockRepo{}}
+	ctx := context.Background()
+	other := testCountry
+	other.Code = "GH"
+
+	runScheduledIngest(ctx, ledger, client, testCountry, NewRunBudget())
+	runScheduledIngest(ctx, ledger, client, other, NewRunBudget())
+	if resend.count() != 2 {
+		t.Errorf("degraded in two countries: %d alert(s), want 2 — one country's streak suppressed the other's", resend.count())
 	}
 }

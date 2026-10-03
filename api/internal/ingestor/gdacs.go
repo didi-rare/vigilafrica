@@ -56,8 +56,16 @@ const (
 	maxGDACSResponseBytes = 4 << 20 // 4 MiB — flood polygons run to thousands of vertices
 	// maxGDACSEpisodes bounds episode enumeration. GDACS numbers episodes from 1
 	// and the event payload declares how many exist; this is a backstop against a
-	// malformed count turning one event into unbounded requests.
-	maxGDACSEpisodes = 20
+	// malformed count turning one event into unbounded requests. The per-run
+	// request and wall-clock budgets are what actually bound outbound work.
+	//
+	// ⚠️ It was 20, and real events exceed that: GDACS flood 1104053 (Italy)
+	// declared 34 episodes on 2026-10-03. With fix-gdacs-degraded-run-status a
+	// truncated scan counts as incomplete, so a cap below real episode counts
+	// would mark such an event degraded on every run for its whole lifetime
+	// (independent review, PR #280, round 2). A declared count above 100 is
+	// treated as malformed: the scan stops there and is reported incomplete.
+	maxGDACSEpisodes = 100
 )
 
 // gdacsEventTypes is a real allowlist of GDACS hazard codes. A bare `[A-Z]{2}`
@@ -167,7 +175,9 @@ type gdacsEventData struct {
 	// maintenance envelope) is NOT an answer that the event has no episodes. It
 	// must classify as upstream, not as a refusal (independent review, PR #280).
 	Properties *struct {
-		EpisodeID int `json:"episodeid"`
+		// Pointer, and Episodes left nil when absent: `{"properties":{}}` must not
+		// read as an explicit "zero episodes" answer (independent review, round 2).
+		EpisodeID *int `json:"episodeid"`
 		Episodes  []struct {
 			Details string `json:"details"`
 		} `json:"episodes"`
@@ -256,7 +266,10 @@ func resolveGDACSPolygon(ctx context.Context, budget *RunBudget, sourceURL strin
 		gdacsEventDataURL, url.QueryEscape(ref.EventType), url.QueryEscape(ref.EventID)), &event); o != fetchOK {
 		return GDACSGeometry{}, failureFor(o)
 	}
-	if event.Properties == nil {
+	if event.Properties == nil || (event.Properties.Episodes == nil && event.Properties.EpisodeID == nil) {
+		// No properties, or properties carrying neither episode field: not an
+		// answer. Only an explicit episodes:[] or episodeid:0 is GDACS saying
+		// "nothing here".
 		return GDACSGeometry{}, resolveUpstream
 	}
 
@@ -267,8 +280,8 @@ func resolveGDACSPolygon(ctx context.Context, budget *RunBudget, sourceURL strin
 	incomplete := false
 
 	episodes := len(event.Properties.Episodes)
-	if episodes == 0 {
-		episodes = event.Properties.EpisodeID
+	if episodes == 0 && event.Properties.EpisodeID != nil {
+		episodes = *event.Properties.EpisodeID
 	}
 	if episodes <= 0 {
 		return GDACSGeometry{}, resolveUnverifiable

@@ -182,7 +182,20 @@ func degradedAlertAction(result *IngestResult, prev *models.IngestionRun, lookup
 }
 
 // notifyIfDegraded applies degradedAlertAction for a completed run.
+//
+// ⚠️ Delivery is AT-LEAST-ONCE per streak, not exactly-once. A crash, or a failed
+// MarkIngestionRunAlerted, between a successful send and recording it causes the
+// next degraded run to send again. That is the deliberate trade: the opposite
+// failure — recording before sending — can silence a real outage, and a
+// duplicate email is the recoverable one (independent review, PR #280, round 2).
 func notifyIfDegraded(ctx context.Context, repo database.Repository, alertClient *alert.Client, result *IngestResult, country CountryConfig) {
+	// Disabled alerting must be checked BEFORE dedupe: SendIngestFailure returns
+	// nil without sending when unconfigured, and recording that as delivered
+	// would silence the streak once alerting is configured mid-outage.
+	if !alertClient.Enabled() {
+		return
+	}
+
 	var runID int64
 	if result != nil && result.Run != nil {
 		runID = result.Run.ID

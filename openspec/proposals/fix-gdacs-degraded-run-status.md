@@ -66,7 +66,7 @@ trains everyone to ignore it. Treat outages as refusals and nothing changes from
    completed run. ⚠️ Without this, a GDACS outage would ALSO fire a *false* "ingestion has stopped"
    staleness alert after its threshold — a wrong diagnosis on top of the right one.
 4. **`/health`** reports `degraded` when any country's last run is `degraded` (as it already does for
-   `failure`). **`/ready` still returns 503 only for `failure`**: an upstream data provider being
+   `failure`). **`/ready` returns 503 for `failure` or an unreadable database, never for `degraded`**: an upstream data provider being
    down does not make this API unable to serve, and readiness must not conflate the two.
 5. **One alert per degraded streak, keyed on delivery**: `ingestion_runs.alert_sent_at` records when
    a degraded alert was actually delivered. After each degraded run the scheduler compares against
@@ -108,6 +108,32 @@ Reviewer could not run the integration or web suites in its sandbox; both were r
 **Recorded, not changed:** the scheduler's five-minute lease is not renewed, so in principle an
 EONET backoff longer than the lease could let two runs overlap. Pre-existing and independent of this
 change; with `alert_sent_at` the worst case is one duplicate email.
+
+## Round 3 — second independent review returned BLOCK; it caught an over-correction of mine
+
+Round-1 verdicts: 3 FIXED, 3 NOT FIXED, 1 **OVER-CORRECTED**. Verified before acting:
+
+- **P1, over-correction — the episode cap.** Round 1 marked a scan truncated at
+  `maxGDACSEpisodes = 20` as incomplete, i.e. an outage. Verified live: GDACS flood 1104053 (Italy)
+  declared **34 episodes** on 2026-10-03. Any such event would have been degraded on every run for
+  its whole lifetime, keeping the public banner up while GDACS answered normally. **Fix:** the cap is
+  a malformed-count backstop, not a scan limit — raised to 100; the per-run request and time
+  budgets bound the real work. A count above 100 is still treated as malformed → incomplete.
+- **P1 — schema-less 200s, inner level.** `{"properties":{}}` and `{"properties":{"episodes":null}}`
+  still read as "zero episodes". Now `upstream` unless `episodes` or `episodeid` is actually present.
+- **P1 — disabled alerting recorded as delivered.** `SendIngestFailure` returns nil when
+  unconfigured, so the streak was marked alerted and configuring alerting mid-outage sent nothing.
+  Now checked before any dedupe.
+- **P2 — "once per streak" was really at-least-once.** A failed record-after-send (or a crash in
+  that window) re-sends. **Not engineered away; stated honestly** in code and tested: the opposite
+  ordering (record, then send) could silence a real outage, and a duplicate is the recoverable error.
+- **P2 — migration not replayable** (developers-go.md §11.4). Now `IF EXISTS` / `IF NOT EXISTS`; a
+  wrong constraint name is instead caught by the integration test that writes a `degraded` run.
+- **P2 — `/ready` absent from OpenAPI; public/email copy said "until it recovers"**, which is wrong
+  when the cause is our own request budget. Both corrected.
+
+Tests added for every item, and each new guard re-broken and confirmed to fail: cap back to 20,
+inner-schema check removed, disabled-alerting check removed, migration made non-replayable.
 
 ## Out of Scope
 
