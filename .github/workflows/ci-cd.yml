@@ -80,7 +80,13 @@ jobs:
         # the first attempt, and if the endpoint is unreachable on every attempt the
         # step FAILS — a gate that could not run must never report as a gate that
         # passed.
-        run: ./scripts/npm-audit-retry.sh moderate
+        #
+        # Runs the SAME gate as the web audit below, pointed at the repo root, so
+        # both trees share one implementation and one allowlist. Until 2026-10-03
+        # the root ran a bare `npm audit` with no allowlist, so an advisory that is
+        # unreachable AND unpatchable (ADR-008's exception case) blocked every PR
+        # with no way to record the exception — GHSA-vfj7-8cjw-p6xm did exactly that.
+        run: node web/scripts/audit-ci.mjs --dir .
 
       - name: Run Web Dependency Audit
         # Wrapper over `npm audit --audit-level=moderate` that carries a narrow,
