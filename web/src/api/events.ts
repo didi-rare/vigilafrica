@@ -110,8 +110,8 @@ export async function fetchContext(): Promise<ContextResponse> {
 // ── Health / ingestion freshness (v0.5 — ADR-011) ────────────────────────────
 
 export interface LastIngestion {
-  // 'degraded': the run completed, but GDACS could not be reached for some flood
-  // polygons, so those areas are missing (fix-gdacs-degraded-run-status).
+  // 'degraded': the run completed, but GDACS returned no usable answer for some flood
+  // polygons; new ones are missing, existing ones may be out of date (fix-gdacs-degraded-run-status).
   status: 'success' | 'failure' | 'running' | 'degraded' | null
   started_at: string | null
   completed_at: string | null

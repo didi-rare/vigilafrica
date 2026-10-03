@@ -41,6 +41,14 @@ type Repository interface {
 	GetLastSuccessfulIngestionRun(ctx context.Context) (*models.IngestionRun, error)
 	GetFirstIngestionRun(ctx context.Context) (*models.IngestionRun, error)
 	GetLastIngestionRunAllCountries(ctx context.Context) (map[string]*models.IngestionRun, error)
+	// GetPreviousCompletedIngestionRun returns the latest NON-running run for a
+	// country with id < beforeID, or nil. Used to deduplicate degraded alerts;
+	// skipping 'running' rows matters because an orphaned one would otherwise
+	// mask the streak and re-send the alert.
+	GetPreviousCompletedIngestionRun(ctx context.Context, countryCode string, beforeID int64) (*models.IngestionRun, error)
+	// MarkIngestionRunAlerted records that a degraded alert covering this run was
+	// delivered (or carried forward from an already-alerted streak).
+	MarkIngestionRunAlerted(ctx context.Context, id int64) error
 
 	// Enrichment + filter helpers (v0.7)
 	GetEnrichmentStats(ctx context.Context) ([]EnrichmentStat, error)

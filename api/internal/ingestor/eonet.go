@@ -149,8 +149,9 @@ func runOutcome(result *IngestResult, ingestErr error) (models.IngestionRunStatu
 		return models.RunStatusFailure, &msg
 	}
 	if result != nil && result.EventsGeomUpstreamFailed > 0 {
-		msg := fmt.Sprintf("degraded: GDACS could not be reached for %d polygon event(s); "+
-			"they were not stored or re-verified this run, so those flood areas may be missing",
+		msg := fmt.Sprintf("degraded: GDACS returned no usable answer for %d polygon event(s) "+
+			"(unreachable, erroring, rate-limited, or run budget exhausted); new ones were not stored "+
+			"and existing ones kept their last verified geometry",
 			result.EventsGeomUpstreamFailed)
 		return models.RunStatusDegraded, &msg
 	}

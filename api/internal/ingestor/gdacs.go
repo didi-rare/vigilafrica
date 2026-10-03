@@ -163,7 +163,10 @@ func gdacsGetJSON(ctx context.Context, budget *RunBudget, reqURL string, into in
 }
 
 type gdacsEventData struct {
-	Properties struct {
+	// Pointer on purpose: a 200 whose body lacks "properties" (`{}`, null, a
+	// maintenance envelope) is NOT an answer that the event has no episodes. It
+	// must classify as upstream, not as a refusal (independent review, PR #280).
+	Properties *struct {
 		EpisodeID int `json:"episodeid"`
 		Episodes  []struct {
 			Details string `json:"details"`
@@ -172,6 +175,8 @@ type gdacsEventData struct {
 }
 
 type gdacsFeatureCollection struct {
+	// nil when "features" is absent or null; an explicit [] decodes to an empty
+	// non-nil slice. Only the latter is GDACS saying "no geometry here".
 	Features []struct {
 		Properties struct {
 			Class     string `json:"Class"`
@@ -251,23 +256,29 @@ func resolveGDACSPolygon(ctx context.Context, budget *RunBudget, sourceURL strin
 		gdacsEventDataURL, url.QueryEscape(ref.EventType), url.QueryEscape(ref.EventID)), &event); o != fetchOK {
 		return GDACSGeometry{}, failureFor(o)
 	}
+	if event.Properties == nil {
+		return GDACSGeometry{}, resolveUpstream
+	}
+
+	// incomplete records whether the scan saw fewer than all episodes. "No
+	// episode matched" is only a refusal if we actually saw every episode; from a
+	// partial view it is an outage, because the matching ring may be the one we
+	// missed.
+	incomplete := false
 
 	episodes := len(event.Properties.Episodes)
 	if episodes == 0 {
 		episodes = event.Properties.EpisodeID
 	}
-	if episodes <= 0 || episodes > maxGDACSEpisodes {
-		if episodes > maxGDACSEpisodes {
-			episodes = maxGDACSEpisodes
-		} else {
-			return GDACSGeometry{}, resolveUnverifiable
-		}
+	if episodes <= 0 {
+		return GDACSGeometry{}, resolveUnverifiable
 	}
-
-	// incomplete records whether any episode could not be fetched. "No episode
-	// matched" is only a refusal if we actually saw every episode; from a partial
-	// view it is an outage, because the matching ring may be the one we missed.
-	incomplete := false
+	if episodes > maxGDACSEpisodes {
+		// Scanning stops at the cap, so episodes beyond it are never seen. That is
+		// a partial view by construction (independent review, PR #280).
+		episodes = maxGDACSEpisodes
+		incomplete = true
+	}
 
 	// ⚠️ Collect ALL candidates rather than returning the first match. If two
 	// episodes both correspond, the geometry is ambiguous and we cannot say which
@@ -287,6 +298,11 @@ func resolveGDACSPolygon(ctx context.Context, budget *RunBudget, sourceURL strin
 		switch gdacsGetJSON(ctx, budget, fmt.Sprintf("%s?eventtype=%s&eventid=%s&episodeid=%d",
 			gdacsGeometryURL, url.QueryEscape(ref.EventType), url.QueryEscape(ref.EventID), ep), &fc) {
 		case fetchOK:
+			if fc.Features == nil {
+				// A 200 with no "features" key is not an answer for this episode.
+				incomplete = true
+				continue
+			}
 		case fetchNotFound:
 			continue // GDACS answered: this episode has no geometry
 		default:

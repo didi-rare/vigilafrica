@@ -16,3 +16,9 @@ ALTER TABLE ingestion_runs DROP CONSTRAINT ingestion_runs_status_check;
 ALTER TABLE ingestion_runs
     ADD CONSTRAINT ingestion_runs_status_check
     CHECK (status IN ('running', 'success', 'failure', 'degraded'));
+
+-- When the degraded alert for this run's streak was actually delivered.
+-- Deduplication keys on DELIVERY, not on status: an earlier design compared only
+-- the previous run's status, so a failed send left the streak marked degraded
+-- and every later run suppressed the alert forever (independent review, PR #280).
+ALTER TABLE ingestion_runs ADD COLUMN alert_sent_at TIMESTAMPTZ;

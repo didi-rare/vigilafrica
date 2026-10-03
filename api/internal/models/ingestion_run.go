@@ -10,8 +10,9 @@ const (
 	RunStatusSuccess IngestionRunStatus = "success"
 	RunStatusFailure IngestionRunStatus = "failure"
 	// RunStatusDegraded: the run completed and stored what it could, but GDACS
-	// could not be reached for at least one polygon event, so those events are
-	// missing from this run (fix-gdacs-degraded-run-status). Distinct from
+	// returned no usable answer for at least one polygon event — new ones were
+	// not stored, existing ones kept their last verified geometry
+	// (fix-gdacs-degraded-run-status). Distinct from
 	// failure: data did arrive, and staleness logic treats it as a completed run.
 	RunStatusDegraded IngestionRunStatus = "degraded"
 )
@@ -29,4 +30,7 @@ type IngestionRun struct {
 	EventsStored  int                `json:"events_stored"`
 	Error         *string            `json:"error"`
 	CreatedAt     time.Time          `json:"created_at"`
+	// AlertSentAt is when a degraded alert covering this run was delivered (or
+	// carried forward from the run before it). Internal: never serialised.
+	AlertSentAt *time.Time `json:"-"`
 }

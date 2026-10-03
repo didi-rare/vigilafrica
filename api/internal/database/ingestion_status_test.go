@@ -120,3 +120,53 @@ func TestMigration000016RoundTrip(t *testing.T) {
 		t.Errorf("after up migration 'degraded' must be accepted: %v", err)
 	}
 }
+
+// TestPreviousCompletedRunSkipsRunningAndOtherCountries proves the SQL behind
+// degraded-alert dedupe (independent review, PR #280): an orphaned 'running'
+// row must not mask the streak, and another country's run must not count.
+func TestPreviousCompletedRunSkipsRunningAndOtherCountries(t *testing.T) {
+	ctx := context.Background()
+	const cc = "ZZ" // a country code no other test uses
+
+	degraded, err := testRepo.CreateIngestionRun(ctx, time.Now(), cc)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	msg := "degraded"
+	if err := testRepo.CompleteIngestionRun(ctx, degraded, models.RunStatusDegraded, 1, 0, &msg); err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+	if err := testRepo.MarkIngestionRunAlerted(ctx, degraded); err != nil {
+		t.Fatalf("mark alerted: %v", err)
+	}
+	if _, err := testRepo.CreateIngestionRun(ctx, time.Now(), cc); err != nil { // orphan: never completed
+		t.Fatalf("create orphan: %v", err)
+	}
+	other, err := testRepo.CreateIngestionRun(ctx, time.Now(), "YY")
+	if err != nil {
+		t.Fatalf("create other country: %v", err)
+	}
+	if err := testRepo.CompleteIngestionRun(ctx, other, models.RunStatusSuccess, 1, 1, nil); err != nil {
+		t.Fatalf("complete other: %v", err)
+	}
+	current, err := testRepo.CreateIngestionRun(ctx, time.Now(), cc)
+	if err != nil {
+		t.Fatalf("create current: %v", err)
+	}
+
+	prev, err := testRepo.GetPreviousCompletedIngestionRun(ctx, cc, current)
+	if err != nil {
+		t.Fatalf("previous: %v", err)
+	}
+	if prev == nil || prev.ID != degraded {
+		t.Fatalf("previous completed run = %+v, want id %d (skipping the orphan and country YY)", prev, degraded)
+	}
+	if prev.Status != models.RunStatusDegraded || prev.AlertSentAt == nil {
+		t.Errorf("previous run status=%q alerted=%v, want degraded and alerted", prev.Status, prev.AlertSentAt)
+	}
+
+	none, err := testRepo.GetPreviousCompletedIngestionRun(ctx, "XX", current)
+	if err != nil || none != nil {
+		t.Errorf("unknown country: got %+v, %v — want nil, nil", none, err)
+	}
+}

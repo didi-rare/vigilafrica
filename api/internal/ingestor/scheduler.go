@@ -1,6 +1,7 @@
 package ingestor
 
 import (
+	"errors"
 	"context"
 	"fmt"
 	"log/slog"
@@ -133,16 +134,10 @@ func runAllCountries(ctx context.Context, repo database.Repository, alertClient 
 // runScheduledIngest executes a single ingestion cycle for one country and fires
 // a Resend failure alert if the run fails.
 func runScheduledIngest(ctx context.Context, repo database.Repository, alertClient *alert.Client, country CountryConfig, budget *RunBudget) {
-	// Snapshot this country's previous run status BEFORE ingesting: IngestWithBudget
-	// inserts a 'running' row first, which would otherwise mask the previous one.
-	prev := previousRunStatus(ctx, repo, country.Code)
-
 	result, err := IngestWithBudget(ctx, repo, country, budget)
 	if err == nil {
-		if alertClient != nil && shouldAlertDegraded(prev, result) {
-			if aerr := alertClient.SendIngestFailure(ctx, degradedAlertRun(result, country)); aerr != nil {
-				slog.Error("scheduler: failed to send degraded alert", "country", country.Code, "err", aerr)
-			}
+		if alertClient != nil {
+			notifyIfDegraded(ctx, repo, alertClient, result, country)
 		}
 		return
 	}
@@ -156,32 +151,80 @@ func runScheduledIngest(ctx context.Context, repo database.Repository, alertClie
 	}
 }
 
-// previousRunStatus returns the status of this country's most recent run, or ""
-// when it cannot be determined. Unknown is treated as "not degraded" by
-// shouldAlertDegraded, so a lookup failure errs towards alerting, never towards
-// silence.
-func previousRunStatus(ctx context.Context, repo database.Repository, countryCode string) models.IngestionRunStatus {
-	byCountry, err := repo.GetLastIngestionRunAllCountries(ctx)
-	if err != nil {
-		slog.Warn("scheduler: could not read previous run status; degraded alert will not be deduplicated",
-			"country", countryCode, "err", err)
-		return ""
+// degradedAction is what to do about a completed run's degraded status.
+type degradedAction int
+
+const (
+	degradedNoAlert degradedAction = iota // run is not degraded
+	degradedSend                          // first degraded run of a streak, or the last send failed
+	degradedCarry                         // streak already alerted: record that, do not re-send
+)
+
+// degradedAlertAction decides whether a completed run warrants a degraded alert.
+//
+// It alerts once per degraded STREAK, keyed on DELIVERY rather than on status
+// (independent review, PR #280):
+//   - prev is the previous COMPLETED run for the country (never a 'running'
+//     row: an orphaned one would otherwise mask the streak and re-send).
+//   - The alert is suppressed only if prev was degraded AND its alert was
+//     actually delivered. If the last send failed, AlertSentAt is unset and this
+//     run retries, instead of the streak being silenced forever.
+//   - A lookup error errs towards sending: a duplicate email is recoverable, a
+//     silent outage is the failure this change exists to remove.
+func degradedAlertAction(result *IngestResult, prev *models.IngestionRun, lookupErr error) degradedAction {
+	if status, _ := runOutcome(result, nil); status != models.RunStatusDegraded {
+		return degradedNoAlert
 	}
-	if run := byCountry[countryCode]; run != nil {
-		return run.Status
+	if lookupErr == nil && prev != nil && prev.Status == models.RunStatusDegraded && prev.AlertSentAt != nil {
+		return degradedCarry
 	}
-	return ""
+	return degradedSend
 }
 
-// shouldAlertDegraded decides whether a completed run warrants a degraded alert.
-//
-// It fires on the TRANSITION into degraded only. A GDACS outage typically spans
-// many scheduler cycles; alerting every cycle would train the on-call to ignore
-// the mail, which defeats the point of making the outage visible. Recovery is
-// visible on /health; this alert exists to say "it started".
-func shouldAlertDegraded(prev models.IngestionRunStatus, result *IngestResult) bool {
-	status, _ := runOutcome(result, nil)
-	return status == models.RunStatusDegraded && prev != models.RunStatusDegraded
+// notifyIfDegraded applies degradedAlertAction for a completed run.
+func notifyIfDegraded(ctx context.Context, repo database.Repository, alertClient *alert.Client, result *IngestResult, country CountryConfig) {
+	var runID int64
+	if result != nil && result.Run != nil {
+		runID = result.Run.ID
+	}
+
+	var prev *models.IngestionRun
+	var lookupErr error
+	if runID > 0 {
+		prev, lookupErr = repo.GetPreviousCompletedIngestionRun(ctx, country.Code, runID)
+		if lookupErr != nil {
+			slog.Warn("scheduler: could not read previous run; degraded alert will not be deduplicated",
+				"country", country.Code, "err", lookupErr)
+		}
+	} else {
+		// No run row was written, so there is nothing to dedupe against or mark.
+		lookupErr = errors.New("no persisted run record")
+	}
+
+	switch degradedAlertAction(result, prev, lookupErr) {
+	case degradedNoAlert:
+		return
+	case degradedCarry:
+		if runID > 0 {
+			if err := repo.MarkIngestionRunAlerted(ctx, runID); err != nil {
+				slog.Warn("scheduler: could not carry alerted flag; next degraded run may re-alert",
+					"country", country.Code, "run_id", runID, "err", err)
+			}
+		}
+	case degradedSend:
+		if err := alertClient.SendIngestFailure(ctx, degradedAlertRun(result, country)); err != nil {
+			// Deliberately NOT marked: the next degraded run will retry.
+			slog.Error("scheduler: failed to send degraded alert; will retry on the next degraded run",
+				"country", country.Code, "err", err)
+			return
+		}
+		if runID > 0 {
+			if err := repo.MarkIngestionRunAlerted(ctx, runID); err != nil {
+				slog.Warn("scheduler: degraded alert sent but not recorded; next degraded run may re-alert",
+					"country", country.Code, "run_id", runID, "err", err)
+			}
+		}
+	}
 }
 
 // degradedAlertRun is the run record sent with a degraded alert. It prefers the

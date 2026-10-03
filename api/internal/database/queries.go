@@ -380,6 +380,45 @@ func (r *pgRepo) GetFirstIngestionRun(ctx context.Context) (*models.IngestionRun
 	return &run, nil
 }
 
+// GetPreviousCompletedIngestionRun — see the Repository interface.
+func (r *pgRepo) GetPreviousCompletedIngestionRun(ctx context.Context, countryCode string, beforeID int64) (*models.IngestionRun, error) {
+	query := `
+		SELECT id, country_code, started_at, completed_at, status, events_fetched, events_stored, error, created_at, alert_sent_at
+		FROM ingestion_runs
+		WHERE country_code = $1 AND id < $2 AND status <> 'running'
+		ORDER BY id DESC
+		LIMIT 1
+	`
+	var run models.IngestionRun
+	err := r.pool.QueryRow(ctx, query, countryCode, beforeID).Scan(
+		&run.ID,
+		&run.CountryCode,
+		&run.StartedAt,
+		&run.CompletedAt,
+		&run.Status,
+		&run.EventsFetched,
+		&run.EventsStored,
+		&run.Error,
+		&run.CreatedAt,
+		&run.AlertSentAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to query previous completed run for %s: %w", countryCode, err)
+	}
+	return &run, nil
+}
+
+// MarkIngestionRunAlerted — see the Repository interface.
+func (r *pgRepo) MarkIngestionRunAlerted(ctx context.Context, id int64) error {
+	if _, err := r.pool.Exec(ctx, `UPDATE ingestion_runs SET alert_sent_at = NOW() WHERE id = $1`, id); err != nil {
+		return fmt.Errorf("failed to mark ingestion run %d alerted: %w", id, err)
+	}
+	return nil
+}
+
 // GetLastIngestionRunAllCountries returns the most recent run per country.
 // Used by: /health last_ingestion_by_country map.
 func (r *pgRepo) GetLastIngestionRunAllCountries(ctx context.Context) (map[string]*models.IngestionRun, error) {

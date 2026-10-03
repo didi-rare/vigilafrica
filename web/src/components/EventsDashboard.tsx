@@ -63,7 +63,7 @@ function selectFreshness(health: HealthResponse): FreshnessSnapshot {
       return {
         kind: 'error',
         message:
-          'Some flood areas could not be verified with the GDACS flood-mapping service and may be missing from the map until it recovers. Other events are up to date.',
+          'Some flood areas could not be verified with the GDACS flood-mapping service, so they may be missing or out of date on the map until it recovers. Other events are unaffected.',
       }
     }
     const message = health.last_ingestion?.status === 'failure'

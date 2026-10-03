@@ -102,7 +102,7 @@ func (c *Client) SendIngestFailure(ctx context.Context, run *models.IngestionRun
 	headline := "An ingestion run failed."
 	verb := "failed"
 	if run.Status == models.RunStatusDegraded {
-		headline = "An ingestion run completed DEGRADED: GDACS could not be reached for some flood polygons, so those areas are missing from the map until it recovers. Other data is unaffected."
+		headline = "An ingestion run completed DEGRADED: GDACS did not return a usable answer for some flood polygons (unreachable, erroring, rate-limited, or the per-run request budget ran out). New flood areas among them are missing from the map; existing ones keep their last verified outline and may be out of date. Everything else ingested normally."
 		verb = "degraded"
 	}
 

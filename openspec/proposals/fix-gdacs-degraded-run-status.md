@@ -47,6 +47,8 @@ conflated:
 | **upstream** | transport error, timeout, 5xx/429, unparseable body | GDACS could not answer | **yes** |
 | **upstream** | per-run request/time budget exhausted | we stopped asking before getting answers | **yes** |
 | **upstream** | some episode fetches failed AND no candidate matched | "no match" cannot be claimed from a partial view | **yes** |
+| **upstream** | episode count exceeds the scan cap AND no candidate matched | episodes past the cap were never seen — a partial view by construction | **yes** |
+| **upstream** | a `200` that lacks the fields an answer must carry (`{}`, null `properties`, missing `features`) | a maintenance page or error envelope, not GDACS saying "no episodes" | **yes** |
 
 ⚠️ Getting this wrong in either direction is a real failure. Treat refusals as outages and a single
 genuinely unmatchable flood keeps the system `degraded` — and the public banner up — forever, which
@@ -66,12 +68,46 @@ trains everyone to ignore it. Treat outages as refusals and nothing changes from
 4. **`/health`** reports `degraded` when any country's last run is `degraded` (as it already does for
    `failure`). **`/ready` still returns 503 only for `failure`**: an upstream data provider being
    down does not make this API unable to serve, and readiness must not conflate the two.
-5. **Alerting on transition only**: the scheduler emails when a country's run becomes `degraded`
-   and the previous completed run for that country was not. A GDACS outage spanning hours sends one
-   email, not one per scheduler cycle. (Failures keep their existing per-run behaviour — unchanged.)
+5. **One alert per degraded streak, keyed on delivery**: `ingestion_runs.alert_sent_at` records when
+   a degraded alert was actually delivered. After each degraded run the scheduler compares against
+   the previous **completed** run for that country (never a `running` row). It suppresses the email
+   only if that run was degraded **and its alert was delivered**, and then carries the flag forward.
+   A failed send leaves the flag unset, so the next degraded run retries. A GDACS outage spanning
+   hours sends one email, not one per cycle. (Failures keep their existing per-run behaviour.)
 6. **Public dashboard**: `degraded` caused by GDACS shows an accurate message ("some flood areas
    could not be verified … may be missing") rather than the generic "ingestion did not complete",
    and the OpenAPI `status` enum and the web type gain `degraded`.
+
+## Round 2 — independent review (`gpt-5.6-sol`) returned BLOCK; all findings verified, all fixed
+
+Each finding was checked against the code before acting; none were taken on trust.
+
+- **P0 — schema-less `200`s classified as refusals.** Confirmed with a probe before fixing: `{}`,
+  `{"properties":null}`, a maintenance envelope, and `{}` from every geometry episode all came back
+  `unverifiable`, which would have re-hidden an outage. Now `upstream`.
+- **P0 — the episode cap was a partial scan classified as complete.** My own rule ("no match is only
+  a refusal from a complete scan"), not applied to the cap. Now `upstream`.
+- **P1 — a failed send silenced the whole streak.** The first design deduplicated on the previous
+  run's *status*, so a failed Resend call left the streak looking alerted forever. Now keyed on
+  delivery (`alert_sent_at`) and retried.
+- **P1 — an orphaned `running` row masked the streak**, re-sending the alert. The lookup now reads
+  the latest *completed* run, by id, after the run finishes.
+- **P1 — `/ready` returned 200 when the database could not be queried.** Pre-existing (errors were
+  only logged), fixed because it is the same function: `/ready` now 503s; `/health` stays 200.
+- **P2 — wording overstated the cause and effect.** `upstream` also covers 429/5xx, malformed bodies
+  and budget exhaustion, and existing events keep their last verified outline (stale, not missing).
+  Corrected in the email, run message, OpenAPI, UI, and here.
+- **P2 — `api-contract.md` still described the v0.1 `/health`** ("always ok"). Stale since v0.5;
+  updated because this change alters that behaviour.
+- **P2 — tests proved the pieces but not the wiring.** Added an end-to-end test driving the real
+  `runScheduledIngest` through fake EONET, GDACS and Resend across consecutive runs, plus an
+  integration test of the dedupe SQL.
+
+Reviewer could not run the integration or web suites in its sandbox; both were run here and pass.
+
+**Recorded, not changed:** the scheduler's five-minute lease is not renewed, so in principle an
+EONET backoff longer than the lease could let two runs overlap. Pre-existing and independent of this
+change; with `alert_sent_at` the worst case is one duplicate email.
 
 ## Out of Scope
 

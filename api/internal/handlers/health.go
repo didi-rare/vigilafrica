@@ -85,6 +85,12 @@ func (h *HealthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Version: h.Version,
 	}
 	anyFailure := false
+	// queryFailed: the ingestion-run lookups themselves errored, i.e. the database
+	// is unreachable. /health stays 200 (it is the liveness probe the container
+	// healthcheck uses, and must not restart the API over a DB blip), but /ready
+	// must not claim readiness it cannot verify (independent review, PR #280;
+	// pre-existing — errors here were only ever logged).
+	queryFailed := false
 	note := func(s models.IngestionRunStatus) {
 		switch s {
 		case models.RunStatusFailure:
@@ -99,6 +105,7 @@ func (h *HealthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// Global last run (backward compat)
 		run, err := h.repo.GetLastIngestionRun(r.Context())
 		if err != nil {
+			queryFailed = true
 			slog.Error("health: failed to query last ingestion run", "err", err)
 		} else if run != nil {
 			resp.LastIngestion = runToResponse(run, h.includeErrors)
@@ -108,6 +115,7 @@ func (h *HealthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// Per-country map
 		byCountry, err := h.repo.GetLastIngestionRunAllCountries(r.Context())
 		if err != nil {
+			queryFailed = true
 			slog.Error("health: failed to query per-country runs", "err", err)
 		} else if len(byCountry) > 0 {
 			resp.LastIngestionByCountry = make(map[string]*lastIngestionResponse, len(byCountry))
@@ -119,7 +127,7 @@ func (h *HealthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	statusCode := http.StatusOK
-	if h.readiness && anyFailure {
+	if h.readiness && (anyFailure || queryFailed) {
 		statusCode = http.StatusServiceUnavailable
 	}
 	w.WriteHeader(statusCode)

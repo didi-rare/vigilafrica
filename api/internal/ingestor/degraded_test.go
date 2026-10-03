@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"vigilafrica/api/internal/models"
 )
@@ -40,6 +41,12 @@ func body(s string) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(s)) }
 }
 
+// manyEpisodes: event data declaring n episodes.
+func manyEpisodes(n int) http.HandlerFunc {
+	list := strings.TrimSuffix(strings.Repeat(`{"details":"x"},`, n), ",")
+	return body(`{"properties":{"episodeid":` + itoa(n) + `,"episodes":[` + list + `]}}`)
+}
+
 // twoEpisodes: event data declaring two episodes.
 var twoEpisodes = body(`{"properties":{"episodeid":2,"episodes":[{"details":"x"},{"details":"x"}]}}`)
 
@@ -68,6 +75,33 @@ func TestResolveFailureClassification(t *testing.T) {
 				_, _ = w.Write([]byte(`{"features":[]}`))
 			},
 			testSourceURL, resolveUpstream,
+		},
+
+		// ── schema-less 200s are NOT answers (independent review, PR #280) ─────
+		// A 200 that parses as JSON but lacks the fields an answer must carry is a
+		// maintenance page, an error envelope, or a broken proxy — not GDACS saying
+		// "no episodes". Classifying these as refusals re-hides the outage.
+		{"event body {} is an outage", body(`{}`), status(http.StatusOK), testSourceURL, resolveUpstream},
+		{"event body with null properties is an outage", body(`{"properties":null}`), status(http.StatusOK), testSourceURL, resolveUpstream},
+		{"event body as a maintenance envelope is an outage", body(`{"status":"maintenance"}`), status(http.StatusOK), testSourceURL, resolveUpstream},
+		{"geometry body {} for every episode is an outage", twoEpisodes, body(`{}`), testSourceURL, resolveUpstream},
+		{"geometry with null features is an outage", twoEpisodes, body(`{"features":null}`), testSourceURL, resolveUpstream},
+		{
+			// Scanning stops at maxGDACSEpisodes; the matching ring may lie beyond it.
+			"no match within the episode cap is a partial scan, not a refusal",
+			manyEpisodes(maxGDACSEpisodes + 5), body(`{"features":[]}`), testSourceURL, resolveUpstream,
+		},
+		{
+			"a match within the episode cap still resolves",
+			manyEpisodes(maxGDACSEpisodes + 5),
+			func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Query().Get("episodeid") == "3" {
+					_, _ = w.Write([]byte(`{"features":[{"properties":{"Class":"Poly_Affected","episodeid":3},"geometry":{"type":"Polygon","coordinates":` + fourVertexRing + `}}]}`))
+					return
+				}
+				_, _ = w.Write([]byte(`{"features":[]}`))
+			},
+			testSourceURL, resolveOK,
 		},
 
 		// ── unverifiable: GDACS answered, geometry cannot be established ───────
@@ -177,28 +211,42 @@ func TestRunOutcome(t *testing.T) {
 	}
 }
 
-func TestShouldAlertDegraded(t *testing.T) {
+func TestDegradedAlertAction(t *testing.T) {
 	degraded := &IngestResult{EventsGeomUpstreamFailed: 1}
 	healthy := &IngestResult{}
+	sent := time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)
+	run := func(s models.IngestionRunStatus, alerted bool) *models.IngestionRun {
+		r := &models.IngestionRun{Status: s}
+		if alerted {
+			r.AlertSentAt = &sent
+		}
+		return r
+	}
 	cases := []struct {
 		name   string
-		prev   models.IngestionRunStatus
 		result *IngestResult
-		want   bool
+		prev   *models.IngestionRun
+		err    error
+		want   degradedAction
 	}{
-		{"success -> degraded alerts", models.RunStatusSuccess, degraded, true},
-		{"degraded -> degraded does NOT alert again", models.RunStatusDegraded, degraded, false},
-		{"failure -> degraded alerts", models.RunStatusFailure, degraded, true},
-		{"unknown previous status errs towards alerting", "", degraded, true},
-		{"degraded -> success does not alert", models.RunStatusDegraded, healthy, false},
-		{"success -> success does not alert", models.RunStatusSuccess, healthy, false},
+		{"not degraded: nothing to do", healthy, run(models.RunStatusDegraded, true), nil, degradedNoAlert},
+		{"first degraded run after success sends", degraded, run(models.RunStatusSuccess, false), nil, degradedSend},
+		{"first degraded run ever sends", degraded, nil, nil, degradedSend},
+		{"failure then degraded sends", degraded, run(models.RunStatusFailure, false), nil, degradedSend},
+		{"streak already alerted is carried, not re-sent", degraded, run(models.RunStatusDegraded, true), nil, degradedCarry},
+		{
+			// ⚠️ The independent-review case: the previous send FAILED, so the
+			// streak was never actually alerted. It must retry, not stay silent.
+			"previous degraded run whose alert failed retries",
+			degraded, run(models.RunStatusDegraded, false), nil, degradedSend,
+		},
+		{"lookup error errs towards sending", degraded, run(models.RunStatusDegraded, true), errors.New("db down"), degradedSend},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := shouldAlertDegraded(c.prev, c.result); got != c.want {
-				t.Errorf("shouldAlertDegraded(%q) = %v, want %v", c.prev, got, c.want)
+			if got := degradedAlertAction(c.result, c.prev, c.err); got != c.want {
+				t.Errorf("degradedAlertAction = %d, want %d", got, c.want)
 			}
 		})
 	}
 }
-

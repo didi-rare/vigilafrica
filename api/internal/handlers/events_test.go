@@ -73,6 +73,10 @@ func (r *listEventsTestRepo) GetFirstIngestionRun(context.Context) (*models.Inge
 func (r *listEventsTestRepo) GetLastIngestionRunAllCountries(context.Context) (map[string]*models.IngestionRun, error) {
 	return nil, nil
 }
+func (r *listEventsTestRepo) GetPreviousCompletedIngestionRun(context.Context, string, int64) (*models.IngestionRun, error) {
+	return nil, nil
+}
+func (r *listEventsTestRepo) MarkIngestionRunAlerted(context.Context, int64) error { return nil }
 
 func (r *listEventsTestRepo) GetEnrichmentStats(context.Context) ([]database.EnrichmentStat, error) {
 	return nil, nil

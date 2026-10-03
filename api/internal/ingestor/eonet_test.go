@@ -100,6 +100,10 @@ func (m *mockRepo) GetFirstIngestionRun(ctx context.Context) (*models.IngestionR
 func (m *mockRepo) GetLastIngestionRunAllCountries(ctx context.Context) (map[string]*models.IngestionRun, error) {
 	return nil, nil
 }
+func (m *mockRepo) GetPreviousCompletedIngestionRun(context.Context, string, int64) (*models.IngestionRun, error) {
+	return nil, nil
+}
+func (m *mockRepo) MarkIngestionRunAlerted(context.Context, int64) error { return nil }
 func (m *mockRepo) GetEnrichmentStats(ctx context.Context) ([]database.EnrichmentStat, error) {
 	return nil, nil
 }

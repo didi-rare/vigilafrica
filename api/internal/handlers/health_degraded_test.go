@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -74,5 +76,26 @@ func TestHealthOkWhenAllSucceed(t *testing.T) {
 	}
 	if code, status := healthStatus(t, NewHealthHandler("test", repo), "/health"); code != http.StatusOK || status != "ok" {
 		t.Errorf("/health = %d %q, want 200 \"ok\"", code, status)
+	}
+}
+
+// erroringHealthRepo simulates an unreachable database.
+type erroringHealthRepo struct{ healthTestRepo }
+
+func (erroringHealthRepo) GetLastIngestionRun(context.Context) (*models.IngestionRun, error) {
+	return nil, errors.New("connection refused")
+}
+func (erroringHealthRepo) GetLastIngestionRunAllCountries(context.Context) (map[string]*models.IngestionRun, error) {
+	return nil, errors.New("connection refused")
+}
+
+func TestReadinessFailsWhenDatabaseUnreachable(t *testing.T) {
+	repo := &erroringHealthRepo{}
+	if code, _ := healthStatus(t, NewReadinessHandler("test", repo), "/ready"); code != http.StatusServiceUnavailable {
+		t.Errorf("/ready = %d with the database unreachable, want 503", code)
+	}
+	// Liveness must NOT fail: the container healthcheck would restart the API.
+	if code, _ := healthStatus(t, NewHealthHandler("test", repo), "/health"); code != http.StatusOK {
+		t.Errorf("/health = %d with the database unreachable, want 200 (liveness)", code)
 	}
 }
