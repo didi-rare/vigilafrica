@@ -246,7 +246,11 @@ oversight.
 
 ## 8. Deliberately NOT done, and why
 
-- [ ] 8.1 **Persisted degraded run status and alerting.** ⚠️ Real gap, honestly
+- [x] 8.1 **Persisted degraded run status and alerting.** ✅ **Done 2026-10-03 in
+      `fix-gdacs-degraded-run-status`.** ⚠️ The deferral below overstated the cost:
+      persisted run status and alert routing already existed (`ingestion_runs`,
+      `SendIngestFailure`); only the typed failure reason was new. Original note,
+      kept for the record: ⚠️ Real gap, honestly
       stated: when geometry resolution fails systematically the run still records
       `success`, `/health` still reports `ok`, and nothing pages. The counters and
       warnings exist only in logs, and this change has already demonstrated that

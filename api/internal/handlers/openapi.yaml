@@ -274,7 +274,11 @@ components:
         status:
           type: string
           nullable: true
-          enum: [success, failure, running]
+          description: |
+            `degraded` means the run completed and stored what it could, but GDACS could not be
+            reached for at least one flood polygon, so those areas are missing from that run.
+            It counts as a completed run for staleness purposes; `failure` does not.
+          enum: [success, failure, running, degraded]
         started_at:
           type: string
           format: date-time
@@ -295,7 +299,7 @@ components:
 
     HealthResponse:
       type: object
-      description: Service health status including version and ingestion telemetry. `status` is `degraded` when the last ingestion run failed.
+      description: Service health status including version and ingestion telemetry. `status` is `degraded` when any country's last ingestion run failed or was degraded (GDACS unreachable for some flood polygons). `/ready` returns 503 only for a failed run.
       properties:
         status:
           type: string

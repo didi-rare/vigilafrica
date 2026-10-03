@@ -9,6 +9,11 @@ const (
 	RunStatusRunning IngestionRunStatus = "running"
 	RunStatusSuccess IngestionRunStatus = "success"
 	RunStatusFailure IngestionRunStatus = "failure"
+	// RunStatusDegraded: the run completed and stored what it could, but GDACS
+	// could not be reached for at least one polygon event, so those events are
+	// missing from this run (fix-gdacs-degraded-run-status). Distinct from
+	// failure: data did arrive, and staleness logic treats it as a completed run.
+	RunStatusDegraded IngestionRunStatus = "degraded"
 )
 
 // IngestionRun records a single EONET ingestion cycle.

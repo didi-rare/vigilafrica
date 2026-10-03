@@ -125,7 +125,36 @@ type IngestResult struct {
 	// which already existed, so their non-geometry fields were refreshed while the
 	// stored geometry was left untouched.
 	EventsMetadataOnly int
-	Run                *models.IngestionRun
+
+	// EventsGeomUpstreamFailed is the subset of EventsGeomUnresolved that failed
+	// because GDACS could not ANSWER (transport, 5xx, budget, partial episode
+	// scan) — as opposed to answering with no matching polygon. Any non-zero
+	// value makes the run degraded (fix-gdacs-degraded-run-status).
+	EventsGeomUpstreamFailed int
+
+	Run *models.IngestionRun
+}
+
+// runOutcome decides the recorded status of a finished run.
+//
+// ⚠️ Before fix-gdacs-degraded-run-status this was "failure if ingestErr, else
+// success", so a GDACS outage that silently dropped every flood polygon still
+// recorded success and kept /health green. A completed run with any upstream
+// GDACS failure is now degraded. Refusals (GDACS answered, nothing matched) do
+// NOT degrade a run: that is the fail-closed check working, and counting it
+// would leave the system degraded forever over one unmatchable flood.
+func runOutcome(result *IngestResult, ingestErr error) (models.IngestionRunStatus, *string) {
+	if ingestErr != nil {
+		msg := ingestErr.Error()
+		return models.RunStatusFailure, &msg
+	}
+	if result != nil && result.EventsGeomUpstreamFailed > 0 {
+		msg := fmt.Sprintf("degraded: GDACS could not be reached for %d polygon event(s); "+
+			"they were not stored or re-verified this run, so those flood areas may be missing",
+			result.EventsGeomUpstreamFailed)
+		return models.RunStatusDegraded, &msg
+	}
+	return models.RunStatusSuccess, nil
 }
 
 // Ingest pulls events from NASA EONET for the given country, upserts them
@@ -161,13 +190,7 @@ func IngestWithBudget(ctx context.Context, repo database.Repository, country Cou
 	duration := completedAt.Sub(startedAt)
 
 	if runID > 0 {
-		status := models.RunStatusSuccess
-		var errMsg *string
-		if ingestErr != nil {
-			status = models.RunStatusFailure
-			msg := ingestErr.Error()
-			errMsg = &msg
-		}
+		status, errMsg := runOutcome(result, ingestErr)
 		if completeErr := repo.CompleteIngestionRun(ctx, runID, status, result.EventsFetched, result.EventsStored, errMsg); completeErr != nil {
 			slog.Error("ingestion: failed to complete run record", "run_id", runID, "err", completeErr)
 		}
@@ -194,6 +217,7 @@ func IngestWithBudget(ctx context.Context, repo database.Repository, country Cou
 			"events_geom_unresolved", result.EventsGeomUnresolved,
 			"events_geom_resolved", result.EventsGeomResolved,
 			"events_metadata_only", result.EventsMetadataOnly,
+			"events_geom_upstream_failed", result.EventsGeomUpstreamFailed,
 			"err", ingestErr,
 		)
 		return result, ingestErr
@@ -209,6 +233,7 @@ func IngestWithBudget(ctx context.Context, repo database.Repository, country Cou
 		"events_geom_unresolved", result.EventsGeomUnresolved,
 		"events_geom_resolved", result.EventsGeomResolved,
 		"events_metadata_only", result.EventsMetadataOnly,
+		"events_geom_upstream_failed", result.EventsGeomUpstreamFailed,
 	)
 	return result, nil
 }
@@ -468,9 +493,12 @@ func processEONETBody(
 				source = *event.SourceURL
 			}
 
-			resolved, ok := gdacsBudget.resolve(ctx, source, positions)
-			if !ok {
+			resolved, failure := gdacsBudget.resolveTyped(ctx, source, positions)
+			if failure != resolveOK {
 				result.EventsGeomUnresolved++
+				if failure == resolveUpstream {
+					result.EventsGeomUpstreamFailed++
+				}
 
 				// ⚠️ Do NOT drop the whole event. Its geometry is suspect; its
 				// title, status, category and dates are not, and they do not depend

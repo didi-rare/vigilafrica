@@ -323,7 +323,9 @@ func (r *pgRepo) GetLastSuccessfulIngestionRun(ctx context.Context) (*models.Ing
 	query := `
 		SELECT id, country_code, started_at, completed_at, status, events_fetched, events_stored, error, created_at
 		FROM ingestion_runs
-		WHERE status = 'success'
+		-- degraded runs DID ingest data (fix-gdacs-degraded-run-status). Without
+		-- this, a GDACS outage would also fire a FALSE staleness alert.
+		WHERE status IN ('success', 'degraded')
 		ORDER BY completed_at DESC NULLS LAST, started_at DESC
 		LIMIT 1
 	`
