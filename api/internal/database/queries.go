@@ -293,6 +293,11 @@ func (r *pgRepo) GetLastIngestionRun(ctx context.Context) (*models.IngestionRun,
 	query := `
 		SELECT id, country_code, started_at, completed_at, status, events_fetched, events_stored, error, created_at
 		FROM ingestion_runs
+		-- Completed runs only (independent review, PR #280, round 3). Every
+		-- scheduled run inserts a 'running' row first; reading it made /health
+		-- report the in-progress run for the whole duration of each run, hiding a
+		-- failed or degraded state behind 'ok' — and a crash orphan hid it forever.
+		WHERE status <> 'running'
 		ORDER BY started_at DESC
 		LIMIT 1
 	`
@@ -412,8 +417,8 @@ func (r *pgRepo) GetPreviousCompletedIngestionRun(ctx context.Context, countryCo
 }
 
 // MarkIngestionRunAlerted — see the Repository interface.
-func (r *pgRepo) MarkIngestionRunAlerted(ctx context.Context, id int64) error {
-	if _, err := r.pool.Exec(ctx, `UPDATE ingestion_runs SET alert_sent_at = NOW() WHERE id = $1`, id); err != nil {
+func (r *pgRepo) MarkIngestionRunAlerted(ctx context.Context, id int64, deliveredAt time.Time) error {
+	if _, err := r.pool.Exec(ctx, `UPDATE ingestion_runs SET alert_sent_at = $2 WHERE id = $1`, id, deliveredAt); err != nil {
 		return fmt.Errorf("failed to mark ingestion run %d alerted: %w", id, err)
 	}
 	return nil
@@ -426,6 +431,7 @@ func (r *pgRepo) GetLastIngestionRunAllCountries(ctx context.Context) (map[strin
 		SELECT DISTINCT ON (country_code)
 			id, country_code, started_at, completed_at, status, events_fetched, events_stored, error, created_at
 		FROM ingestion_runs
+		WHERE status <> 'running' -- completed runs only; see GetLastIngestionRun
 		ORDER BY country_code, started_at DESC
 	`
 	rows, err := r.pool.Query(ctx, query)

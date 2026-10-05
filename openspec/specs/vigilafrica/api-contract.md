@@ -109,8 +109,8 @@ No query parameters. No request body.
 |-----------|--------|-----------------------------------------------------|
 | `status`  | string | `"ok"`, or `"degraded"` when any country's last ingestion run was `failure` or `degraded` |
 | `version` | string | Semantic version, injected at build time via ldflags |
-| `last_ingestion` | object\|null | Most recent run across all countries |
-| `last_ingestion_by_country` | object | Most recent run per country code |
+| `last_ingestion` | object\|null | Most recent **completed** run across all countries (in-progress runs are never reported) |
+| `last_ingestion_by_country` | object | Most recent **completed** run per country code |
 
 Run `status` is one of `running`, `success`, `failure`, `degraded`. **`degraded`**: the run completed, but GDACS returned no usable answer for at least one flood polygon (unreachable, erroring, rate-limited, or the per-run request budget ran out); new flood areas among them were not stored and existing ones kept their last verified outline. It counts as a completed run for staleness alerting; `failure` does not.
 

@@ -291,7 +291,7 @@ components:
 
     LastIngestion:
       type: object
-      description: Telemetry record for the most recent ingestion run, either globally or per country.
+      description: Telemetry record for the most recent COMPLETED ingestion run, either globally or per country. In-progress runs are never reported here, so `status` is not `running` in practice; it stays in the enum for compatibility.
       properties:
         country_code:
           type: string

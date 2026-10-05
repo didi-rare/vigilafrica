@@ -136,7 +136,8 @@ func TestPreviousCompletedRunSkipsRunningAndOtherCountries(t *testing.T) {
 	if err := testRepo.CompleteIngestionRun(ctx, degraded, models.RunStatusDegraded, 1, 0, &msg); err != nil {
 		t.Fatalf("complete: %v", err)
 	}
-	if err := testRepo.MarkIngestionRunAlerted(ctx, degraded); err != nil {
+	delivered := time.Date(2026, 10, 5, 9, 30, 0, 0, time.UTC)
+	if err := testRepo.MarkIngestionRunAlerted(ctx, degraded, delivered); err != nil {
 		t.Fatalf("mark alerted: %v", err)
 	}
 	if _, err := testRepo.CreateIngestionRun(ctx, time.Now(), cc); err != nil { // orphan: never completed
@@ -161,8 +162,8 @@ func TestPreviousCompletedRunSkipsRunningAndOtherCountries(t *testing.T) {
 	if prev == nil || prev.ID != degraded {
 		t.Fatalf("previous completed run = %+v, want id %d (skipping the orphan and country YY)", prev, degraded)
 	}
-	if prev.Status != models.RunStatusDegraded || prev.AlertSentAt == nil {
-		t.Errorf("previous run status=%q alerted=%v, want degraded and alerted", prev.Status, prev.AlertSentAt)
+	if prev.Status != models.RunStatusDegraded || prev.AlertSentAt == nil || !prev.AlertSentAt.Equal(delivered) {
+		t.Errorf("previous run status=%q alerted=%v, want degraded, alerted at exactly %v", prev.Status, prev.AlertSentAt, delivered)
 	}
 
 	none, err := testRepo.GetPreviousCompletedIngestionRun(ctx, "XX", current)
@@ -195,5 +196,43 @@ func TestMigration000016IsReplayable(t *testing.T) {
 	}
 	if _, err := tx.Exec(ctx, `INSERT INTO ingestion_runs (started_at, status, country_code) VALUES (now(), 'degraded', 'NG')`); err != nil {
 		t.Errorf("after replay, 'degraded' must still be accepted: %v", err)
+	}
+}
+
+// TestHealthQueriesIgnoreInProgressRuns (independent review, PR #280, round 3):
+// every scheduled run inserts a 'running' row first. Health must keep reporting
+// the latest COMPLETED run, or a degraded/failed state reads as ok for the whole
+// duration of every run — and forever behind a crash orphan.
+func TestHealthQueriesIgnoreInProgressRuns(t *testing.T) {
+	ctx := context.Background()
+	const cc = "QQ" // unique to this test
+	// Real timestamps, not future ones: future-dated rows would pollute "latest
+	// by started_at" for every test that runs after this one in the shared DB.
+	id, err := testRepo.CreateIngestionRun(ctx, time.Now(), cc)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	msg := "degraded"
+	if err := testRepo.CompleteIngestionRun(ctx, id, models.RunStatusDegraded, 1, 0, &msg); err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+	// A later, never-completed run: an in-progress run or a crash orphan.
+	if _, err := testRepo.CreateIngestionRun(ctx, time.Now(), cc); err != nil {
+		t.Fatalf("create running: %v", err)
+	}
+
+	byCountry, err := testRepo.GetLastIngestionRunAllCountries(ctx)
+	if err != nil {
+		t.Fatalf("by country: %v", err)
+	}
+	if got := byCountry[cc]; got == nil || got.Status != models.RunStatusDegraded {
+		t.Errorf("per-country health for %s = %+v, want the completed degraded run", cc, got)
+	}
+	last, err := testRepo.GetLastIngestionRun(ctx)
+	if err != nil {
+		t.Fatalf("last: %v", err)
+	}
+	if last == nil || last.Status == models.RunStatusRunning {
+		t.Errorf("global health read an in-progress run: %+v", last)
 	}
 }

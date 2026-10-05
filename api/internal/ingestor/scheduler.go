@@ -1,8 +1,8 @@
 package ingestor
 
 import (
-	"errors"
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -219,7 +219,8 @@ func notifyIfDegraded(ctx context.Context, repo database.Repository, alertClient
 		return
 	case degradedCarry:
 		if runID > 0 {
-			if err := repo.MarkIngestionRunAlerted(ctx, runID); err != nil {
+			// Carry the streak's ORIGINAL delivery time, not now: nothing was sent.
+			if err := repo.MarkIngestionRunAlerted(ctx, runID, *prev.AlertSentAt); err != nil {
 				slog.Warn("scheduler: could not carry alerted flag; next degraded run may re-alert",
 					"country", country.Code, "run_id", runID, "err", err)
 			}
@@ -232,7 +233,7 @@ func notifyIfDegraded(ctx context.Context, repo database.Repository, alertClient
 			return
 		}
 		if runID > 0 {
-			if err := repo.MarkIngestionRunAlerted(ctx, runID); err != nil {
+			if err := repo.MarkIngestionRunAlerted(ctx, runID, time.Now()); err != nil {
 				slog.Warn("scheduler: degraded alert sent but not recorded; next degraded run may re-alert",
 					"country", country.Code, "run_id", runID, "err", err)
 			}

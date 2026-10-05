@@ -270,3 +270,21 @@ func TestDegradedAlertAction(t *testing.T) {
 		})
 	}
 }
+
+// TestLongEventResolvesWithinProductionBudget (independent review, round 3): the
+// other 34-episode tests use an unbounded (nil) budget. This one uses the real
+// per-run budget, proving a realistic long event fits. A >=60-episode event
+// would not, and would degrade every run — an accepted, recorded limitation
+// (the longest NG/GH event in the past year reached 8 episodes).
+func TestLongEventResolvesWithinProductionBudget(t *testing.T) {
+	gdacsStub(t, manyEpisodes(34), func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("episodeid") == "34" {
+			_, _ = w.Write([]byte(`{"features":[{"properties":{"Class":"Poly_Affected","episodeid":34},"geometry":{"type":"Polygon","coordinates":` + fourVertexRing + `}}]}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"features":[]}`))
+	})
+	if _, got := NewRunBudget().resolveTyped(context.Background(), testSourceURL, ring4); got != resolveOK {
+		t.Errorf("34-episode event under the production budget: %v, want ok", got)
+	}
+}

@@ -103,7 +103,7 @@ func (m *mockRepo) GetLastIngestionRunAllCountries(ctx context.Context) (map[str
 func (m *mockRepo) GetPreviousCompletedIngestionRun(context.Context, string, int64) (*models.IngestionRun, error) {
 	return nil, nil
 }
-func (m *mockRepo) MarkIngestionRunAlerted(context.Context, int64) error { return nil }
+func (m *mockRepo) MarkIngestionRunAlerted(context.Context, int64, time.Time) error { return nil }
 func (m *mockRepo) GetEnrichmentStats(ctx context.Context) ([]database.EnrichmentStat, error) {
 	return nil, nil
 }

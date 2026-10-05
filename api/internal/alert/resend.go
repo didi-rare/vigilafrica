@@ -102,7 +102,7 @@ func (c *Client) SendIngestFailure(ctx context.Context, run *models.IngestionRun
 	headline := "An ingestion run failed."
 	verb := "failed"
 	if run.Status == models.RunStatusDegraded {
-		headline = "An ingestion run completed DEGRADED: some flood polygons could not be verified against GDACS (unreachable, erroring, rate-limited, a malformed response, or this run's request budget ran out). New flood areas among them are missing from the map; existing ones keep their last verified outline and may be out of date. Everything else ingested normally. Verification is retried on every run; this alert is sent once per degraded streak."
+		headline = "An ingestion run completed DEGRADED: some flood polygons could not be verified against GDACS (unreachable, erroring, rate-limited, a malformed response, or this run's request budget ran out). New flood areas among them are missing from the map; existing ones keep their last verified outline and may be out of date. Everything else ingested normally. Verification is retried on every run. You should normally get one of these per degraded streak; a duplicate is possible if delivery could not be recorded."
 		verb = "degraded"
 	}
 

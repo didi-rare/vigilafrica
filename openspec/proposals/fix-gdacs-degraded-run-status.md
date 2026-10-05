@@ -68,7 +68,7 @@ trains everyone to ignore it. Treat outages as refusals and nothing changes from
 4. **`/health`** reports `degraded` when any country's last run is `degraded` (as it already does for
    `failure`). **`/ready` returns 503 for `failure` or an unreadable database, never for `degraded`**: an upstream data provider being
    down does not make this API unable to serve, and readiness must not conflate the two.
-5. **One alert per degraded streak, keyed on delivery**: `ingestion_runs.alert_sent_at` records when
+5. **One alert per degraded streak in normal operation — at-least-once, not exactly-once — keyed on delivery**: `ingestion_runs.alert_sent_at` records when
    a degraded alert was actually delivered. After each degraded run the scheduler compares against
    the previous **completed** run for that country (never a `running` row). It suppresses the email
    only if that run was degraded **and its alert was delivered**, and then carries the flag forward.
@@ -134,6 +134,28 @@ Round-1 verdicts: 3 FIXED, 3 NOT FIXED, 1 **OVER-CORRECTED**. Verified before ac
 
 Tests added for every item, and each new guard re-broken and confirmed to fail: cap back to 20,
 inner-schema check removed, disabled-alerting check removed, migration made non-replayable.
+
+## Round 4 — third independent review; one real defect, one accepted limitation
+
+- **P1 — `/health` read in-progress runs (fixed).** Every scheduled run inserts a `running` row
+  first, and both health queries took the latest row of any status, so for the duration of EVERY
+  run `/health` reported the in-progress run and a degraded or failed state read as `ok`; a crash
+  orphan hid it indefinitely. Pre-existing for `failure`, but it undercut the signal this change
+  adds. Both queries now read the latest **completed** run.
+- **P2 — `alert_sent_at` was not a true delivery time (fixed).** Carry-forward stamped `NOW()`
+  though nothing was sent. It now copies the streak's original delivery time. The remaining
+  "once per streak" wording now says at-least-once.
+- **P3 — `gofmt` (fixed).**
+- **P1 — budget exhaustion can still degrade a long event every run (ACCEPTED, recorded).** The cap
+  is 100 but the whole NG+GH run has 60 GDACS requests, and one event costs 1 + its episode count,
+  so a ≥60-episode event (or several long ones together) would exhaust the budget on every run.
+  Measured before deciding: over the past year the longest NG event reached 8 episodes and GH 3, and
+  the live NG/GH feed on 2026-10-05 carried two polygon floods of 6 and 3 episodes. Crucially, the
+  `degraded` status would be **true** in that case — the flood genuinely is not being verified —
+  whereas before this change it was silently skipped forever. The real fix (persisting the matched
+  episode across runs so a long event is scanned once) is a separate change, worth doing only if
+  long events ever appear here. A test now proves a 34-episode event resolves within the
+  **production** budget rather than an unbounded one.
 
 ## Out of Scope
 

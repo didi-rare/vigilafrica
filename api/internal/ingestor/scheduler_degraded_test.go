@@ -61,11 +61,10 @@ func (l *runLedger) GetPreviousCompletedIngestionRun(_ context.Context, country 
 	return nil, nil
 }
 
-func (l *runLedger) MarkIngestionRunAlerted(_ context.Context, id int64) error {
+func (l *runLedger) MarkIngestionRunAlerted(_ context.Context, id int64, deliveredAt time.Time) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	now := time.Now()
-	l.runs[id-1].AlertSentAt = &now
+	l.runs[id-1].AlertSentAt = &deliveredAt
 	return nil
 }
 
@@ -155,6 +154,11 @@ func TestScheduledIngestDegradedAlertsOncePerStreak(t *testing.T) {
 	if resend.count() != 1 {
 		t.Errorf("run 2 (still degraded): %d alert(s) total, want 1 — the streak was re-alerted", resend.count())
 	}
+	// Carry-forward must keep the streak's ORIGINAL delivery time: nothing was
+	// sent for run 2, so stamping it "now" would make alert_sent_at a lie.
+	if a, b := ledger.runs[0].AlertSentAt, ledger.runs[1].AlertSentAt; a == nil || b == nil || !a.Equal(*b) {
+		t.Errorf("carry-forward delivery time = %v, want the original %v", b, a)
+	}
 
 	// ⚠️ Independent-review case: an orphaned 'running' row between two degraded
 	// runs must not look like the start of a new streak.
@@ -194,7 +198,7 @@ func TestScheduledIngestRetriesDegradedAlertAfterFailedSend(t *testing.T) {
 // error in the window between a successful send and recording it.
 type failingMarkLedger struct{ *runLedger }
 
-func (failingMarkLedger) MarkIngestionRunAlerted(context.Context, int64) error {
+func (failingMarkLedger) MarkIngestionRunAlerted(context.Context, int64, time.Time) error {
 	return errors.New("db unavailable")
 }
 

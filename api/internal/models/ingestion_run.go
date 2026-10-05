@@ -30,7 +30,8 @@ type IngestionRun struct {
 	EventsStored  int                `json:"events_stored"`
 	Error         *string            `json:"error"`
 	CreatedAt     time.Time          `json:"created_at"`
-	// AlertSentAt is when a degraded alert covering this run was delivered (or
-	// carried forward from the run before it). Internal: never serialised.
+	// AlertSentAt is when the degraded alert covering this run's streak was
+	// delivered — the ORIGINAL delivery time, carried forward unchanged while the
+	// streak lasts. Internal: never serialised.
 	AlertSentAt *time.Time `json:"-"`
 }
