@@ -24,7 +24,7 @@ const CHECKS = [
   { selector: '.staging-banner', pseudo: '::after',  label: 'staging glow',   mustStop: true },
   { selector: '.signal-dot',     pseudo: '::after',  label: 'signal ring',    mustStop: true },
   { selector: '.dashboard-fallback__progress', pseudo: '::after', label: 'load-progress segment', mustStop: true },
-  { selector: '.loading-state__spinner', pseudo: null, label: 'spinner', mustStop: false },
+  { selector: '.loading-state__spinner', pseudo: null, label: 'spinner', mustStop: true },
 ]
 
 const problems = []

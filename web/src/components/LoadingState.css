@@ -41,3 +41,12 @@
     padding: 3rem 1.25rem;
   }
 }
+
+/* Explicit, not left to App.css's catch-all `*` reduced-motion block — this
+   stylesheet is self-contained and must not depend on another file's rule
+   order (the same reasoning App.css records for `.signal-dot::after`). */
+@media (prefers-reduced-motion: reduce) {
+  .loading-state__spinner {
+    animation: none;
+  }
+}

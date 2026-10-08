@@ -19,7 +19,8 @@ const RUNS         = Number(process.env.RUNS ?? 8)
 // Default viewport is taller than the `.dashboard-fallback` cap, so the cap is
 // what governs the reservation rather than 100vh. `VIEWPORT=375x812` overrides
 // it — chore-web-audit-leftovers re-measured the three audit viewports this way.
-const [VW, VH]     = (process.env.VIEWPORT ?? '1920x1600').split('x').map(Number)
+const [VW, VH]     = (process.env.VIEWPORT ?? '1920x1600').toLowerCase().split('x').map(Number)
+if (!(VW > 0 && VH > 0)) throw new Error(`VIEWPORT must look like 1350x940, got ${JSON.stringify(process.env.VIEWPORT)}`)
 const VIEWPORT     = { width: VW, height: VH }
 // Without this the chunk arrives too fast to observe the shift it exists to prevent.
 const CHUNK_DELAY_MS = Number(process.env.CHUNK_DELAY_MS ?? 1200)

@@ -18,9 +18,11 @@ describe('App — dashboard chunk pending', () => {
   it('announces the wait through a polite status region inside the reservation', () => {
     render(<App />)
 
-    const status = screen.getByRole('status')
+    const status = screen.getByRole('status', { name: /loading status/i })
     expect(status).toHaveAttribute('aria-live', 'polite')
     expect(status).toHaveTextContent('Loading dashboard telemetry...')
+    // The region lives inside the height reservation (the CLS fix from #193),
+    // which has no accessible handle of its own.
     expect(status.closest('.dashboard-fallback')).not.toBeNull()
   })
 

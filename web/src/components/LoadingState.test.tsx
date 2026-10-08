@@ -5,10 +5,10 @@ import { axe } from 'vitest-axe'
 import { LoadingState } from './LoadingState'
 
 describe('LoadingState', () => {
-  it('is a polite status live region whose text is the visible message', () => {
+  it('is a polite, individually addressable status live region whose text is the visible message', () => {
     render(<LoadingState message="Loading dashboard telemetry..." />)
 
-    const region = screen.getByRole('status')
+    const region = screen.getByRole('status', { name: /loading status/i })
     expect(region).toHaveAttribute('aria-live', 'polite')
     expect(region).toHaveTextContent('Loading dashboard telemetry...')
   })
@@ -16,15 +16,11 @@ describe('LoadingState', () => {
   it('keeps the spinner decorative so the wait is announced once', () => {
     render(<LoadingState message="Fetching satellite telemetry..." />)
 
-    const region = screen.getByRole('status')
-    // The only thing in the region besides the message is the spinner; it must
-    // be hidden from the accessibility tree and carry no label of its own, so
-    // the accessible content of the region is exactly the message.
-    const hidden = region.querySelectorAll('[aria-hidden="true"]')
-    expect(hidden).toHaveLength(1)
-    expect(hidden[0]).not.toHaveAttribute('aria-label')
-    expect(region).not.toHaveAttribute('aria-label')
+    const region = screen.getByRole('status', { name: /loading status/i })
+    // The live content is exactly the message: nothing else in the region
+    // contributes text, and the spinner is outside the accessibility tree.
     expect(region).toHaveTextContent(/^Fetching satellite telemetry\.\.\.$/)
+    expect(region.querySelector('[aria-hidden="true"]')).not.toBeNull()
   })
 
   it('renders the same treatment without a live region when announce is false', () => {

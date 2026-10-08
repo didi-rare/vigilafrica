@@ -108,7 +108,15 @@ which passes under any regex and so pinned nothing — review caught it.)
   it — older screen readers.
 - The visible message *is* the live text. §9.8's `aria-label` on a bare spinner
   is for the case where there is no visible text; here there is, and labelling
-  the spinner as well would announce the wait twice.
+  the spinner as well would announce the wait twice. The *region* carries
+  `aria-label="Loading status"`, matching the convention the same file states
+  for its other two status regions ("each is individually addressable"): a live
+  region's announcement is its changed content, so the label does not
+  double-announce, and the tests can address the region by name instead of by
+  an empty name (second review finding).
+- The spinner's own stylesheet disables its animation under reduced motion
+  rather than relying on App.css's catch-all `*` rule (second review finding;
+  same reasoning App.css records for `.signal-dot::after`).
 - `aria-busy` is **not** placed on an ancestor of the live region. `aria-busy`
   asks assistive technology to defer exposing changes under the busy element
   until it clears, which would suppress exactly the announcement item 3 exists
@@ -188,17 +196,23 @@ CLS behaviour of #193/#198 is unchanged by construction. It is re-measured
 anyway (below) because "unchanged by construction" is the sentence that
 preceded both regressions the CLS harness has caught so far.
 
-## Out of scope (recorded, not forgotten)
+## Out of scope (recorded where archiving cannot delete it)
 
-- `EventDetail.tsx` has a fourth loading region (`.event-detail-state`,
+The three deferrals this change produces are registered in
+[`chore-deferred-work-register.md`](../proposals/chore-deferred-work-register.md)
+§F, because this section leaves the working set when the change is archived:
+
+- F1 `EventDetail.tsx` has a fourth loading region (`.event-detail-state`,
   "Loading event telemetry…") with the same two defects. The proposal names the
   two dashboard regions; the detail page is one `LoadingState` away and is left
   for its own small change rather than widened into this one.
-- The "Explore latest events" CTA targets `#dashboard`, which does not exist
+- F2 The "Explore latest events" CTA targets `#dashboard`, which does not exist
   while the chunk is loading, so a tap during the wait does nothing. Related to
-  item 4's user story but not in the proposal; recorded for the backlog.
+  item 4's user story but not in the proposal.
+- F3 The synthetic-UA false-positive rate stays unmeasured (needs raw-UA access
+  outside this repo).
 - Everything the proposal lists as out of scope (CSP nonces, HSTS preload,
-  `label-content-name-mismatch`).
+  `label-content-name-mismatch`) is unchanged.
 
 ## Acceptance criteria
 

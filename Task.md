@@ -61,6 +61,19 @@
 - [x] 3.5 `developers-react.md` §9.8 amended: it prescribed `aria-busy` on the
       container plus an `aria-label`led spinner, the exact shape this component
       argues against; the rule and its reference implementation now agree.
+      Decision-log row 22 records it (second review: a standards change inside
+      a feature PR needs its own entry).
+- [x] 3.6 Second review: the region now carries `aria-label="Loading status"`,
+      the convention the dashboard file states for its other status regions,
+      so tests address it by name rather than by an empty name; the spinner's
+      stylesheet carries its own reduced-motion rule instead of leaning on the
+      App.css catch-all.
+- [x] 3.7 The three deferrals (EventDetail region, `#dashboard` anchor, UA
+      rate) are registered in `chore-deferred-work-register.md` §F, not only
+      in the spec's "Out of scope", which archiving deletes. CLAUDE.md's claim
+      that stylelint enforces spacing/typography/z-index tokens was false
+      (colour only) and pointed at a `bench-design-tokens` script that does
+      not exist; corrected.
 
 ## 4. Above-the-fold affordance at phone widths
 

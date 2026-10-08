@@ -36,10 +36,14 @@ Read this before touching anything. It is short because the long version is in
   `scripts/test-api.ps1` there instead.
 - Web (from `web/`): `npm run lint`, `npm run type-check`,
   `npm run lint:styles`, `npm run test`, `npm run build`. Stylelint enforces
-  design tokens for colour, spacing, typography and z-index; a new literal in
-  component CSS fails CI — add a token to `web/src/styles/tokens.css`.
+  design tokens for **colour only** (`web/.stylelintrc.json`); a new colour
+  literal in component CSS fails CI — add a token to
+  `web/src/styles/tokens.css`. Spacing, typography and z-index tokens are
+  review-enforced (`developers-react.md` §7.5, §7.10, §7.11), not machine-checked.
 - A pure-CSS change needs pixel evidence, not just green checks:
-  `scripts/bench-design-tokens/README.md` has the two-arm screenshot protocol.
+  `scripts/bench-dashboard-cls/README.md` has the two-arm (control build vs
+  branch) protocol and the Playwright scripts for CLS, geometry and
+  reduced-motion checks.
 - `npm run web:build` regenerates `web/src/data/milestones.json`; don't commit
   that churn.
 - The database is PostGIS (`postgis/postgis:15-3.4` in `docker-compose.yml`).
