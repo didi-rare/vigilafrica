@@ -1,13 +1,15 @@
 ---
 id: chore-web-audit-leftovers
-status: in-progress
-proposal: ../proposals/chore-web-audit-leftovers.md
+status: archived
+proposal: proposal-chore-web-audit-leftovers.md
 branch: claude/chore-web-audit-leftovers-xt5v6i
+merged_pr: https://github.com/didi-rare/vigilafrica/pull/283
+archived_on: 2026-10-08
 ---
 
 # Spec: Close the Accepted Leftovers From the Web-Audit Batch
 
-Technical spec for [`chore-web-audit-leftovers`](../proposals/chore-web-audit-leftovers.md).
+Technical spec for [`chore-web-audit-leftovers`](proposal-chore-web-audit-leftovers.md).
 Five findings, all in `web/src/`, all small. Items 3, 4 and 5 share one mechanism
 (a single loading component used by every loading region), so they are designed
 together below; items 1 and 2 are independent.

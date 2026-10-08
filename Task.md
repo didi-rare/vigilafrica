@@ -1,8 +1,8 @@
 # chore-web-audit-leftovers
 
-**Branch:** `claude/chore-web-audit-leftovers-xt5v6i`
-**Proposal:** [openspec/proposals/chore-web-audit-leftovers.md](openspec/proposals/chore-web-audit-leftovers.md)
-**Spec:** [openspec/specs/chore-web-audit-leftovers.md](openspec/specs/chore-web-audit-leftovers.md)
+**Branch:** `claude/chore-web-audit-leftovers-xt5v6i` — **merged in #283, archived 2026-10-08**
+**Proposal:** [openspec/archive/proposal-chore-web-audit-leftovers.md](openspec/archive/proposal-chore-web-audit-leftovers.md)
+**Spec:** [openspec/archive/spec-chore-web-audit-leftovers.md](openspec/archive/spec-chore-web-audit-leftovers.md)
 **Origin:** five findings accepted-not-fixed in the 2026-07-26 web-audit batch
 (#189–#191, #193, #195, #197, #198), registered in #205
 

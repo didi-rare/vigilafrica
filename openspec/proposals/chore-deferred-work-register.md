@@ -10,7 +10,7 @@ branch: tbd
 
 Archiving a completed change **deletes its "Out of scope" section from the working set.** Three changes are archived in this batch. Two of them — [`feature-events-pagination`](../changes/archive/2026-08-07-feature-events-pagination/) (#221) and [`perf-boundary-area-precompute`](../changes/archive/2026-08-07-perf-boundary-area-precompute/) (#211) — carry **six unchecked deferrals** between them, plus two findings that were *measured during* #221 and never recorded anywhere at all. The third, [`feature-impact-categories`](../changes/archive/2026-08-07-feature-impact-categories/), is closed unimplemented and leaves one surviving idea (§C).
 
-This project has a documented failure mode of exactly this shape, and it is not hypothetical: **B6 below has been outstanding since v1.1** because it lives in a source comment that names a follow-up proposal nobody ever created. [`chore-web-audit-leftovers`](chore-web-audit-leftovers.md) exists for the same reason, for a different batch. This is that register for this batch.
+This project has a documented failure mode of exactly this shape, and it is not hypothetical: **B6 below has been outstanding since v1.1** because it lives in a source comment that names a follow-up proposal nobody ever created. [`chore-web-audit-leftovers`](../archive/proposal-chore-web-audit-leftovers.md) existed for the same reason, for a different batch (shipped in #283, archived). This is that register for this batch.
 
 **Nothing here is urgent, and nothing here should be done as one PR.** This is a holding record so the items are *visible*, not a plan to execute them together. Each numbered item is independently schedulable, and several will turn out to be "no, and here is why" — which is a valid outcome as long as it is a recorded one.
 
@@ -155,7 +155,7 @@ Added in that PR, on independent-review advice, because its spec's "Out of scope
 ## Out of Scope
 
 - Doing any of the above. This proposal is the record, not the work.
-- [`chore-web-audit-leftovers`](chore-web-audit-leftovers.md) — the register for the 2026-07-26 web-audit batch; implemented in #283, which added §F above.
+- [`chore-web-audit-leftovers`](../archive/proposal-chore-web-audit-leftovers.md) — the register for the 2026-07-26 web-audit batch; implemented in #283 and archived, which added §F above.
 
 ## Verification
 
