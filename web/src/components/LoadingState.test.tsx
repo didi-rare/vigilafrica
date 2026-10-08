@@ -27,6 +27,13 @@ describe('LoadingState', () => {
     expect(region).toHaveTextContent(/^Fetching satellite telemetry\.\.\.$/)
   })
 
+  it('renders the same treatment without a live region when announce is false', () => {
+    render(<LoadingState message="Loading map telemetry..." announce={false} />)
+
+    expect(screen.queryByRole('status')).toBeNull()
+    expect(screen.getByText('Loading map telemetry...')).toBeInTheDocument()
+  })
+
   it('has no accessibility violations', async () => {
     const { container } = render(<LoadingState message="Loading map telemetry..." />)
 

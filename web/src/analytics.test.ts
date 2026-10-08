@@ -128,19 +128,20 @@ describe('track — self-exclusion', () => {
     expect(trackMock).toHaveBeenCalledTimes(1)
   })
 
-  it('still records events when a proxy has appended its own token to a real UA', () => {
-    // chore-web-audit-leftovers item 2: the accepted false-positive surface is
-    // a UA carrying one of the three synthetic tokens verbatim. An appended
-    // diagnostic token that is NOT one of them must never read as synthetic —
-    // this is the case the unanchored match was accused of mishandling, pinned
-    // so the acceptance is asserted rather than assumed.
+  it('suppresses a token embedded inside a larger word — the accepted cost of the unanchored match', () => {
+    // chore-web-audit-leftovers item 2 chose to keep the unanchored substring
+    // match rather than anchor it. This is the one input on which that choice
+    // is observable: an anchored regex would record this UA, the unanchored
+    // one suppresses it. Pinned so the decision is asserted, not assumed — if
+    // the regex is ever anchored, this test fails and the decision is revisited
+    // in the open rather than drifting.
     stubUserAgent(
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 CorpProxy/3.1 (diag; lighthouse-audit-policy)',
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 FooPageSpeedBar/1.0',
     )
 
     track('state_filter_selected', { state: 'Kano' })
 
-    expect(trackMock).toHaveBeenCalledTimes(1)
+    expect(trackMock).not.toHaveBeenCalled()
   })
 
   it('records events when localStorage is absent entirely and the agent is real', () => {

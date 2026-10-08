@@ -60,20 +60,22 @@ Technical design in [`openspec/specs/chore-web-audit-leftovers.md`](../specs/cho
 | # | outcome |
 |---|---|
 | 1 | **Fixed.** Stripe stays static on `::before`; the glow is a static `box-shadow` on a new `::after` layer that animates `opacity` only. Reduced-motion rule moved with it. |
-| 2 | **Accepted and documented, regex unchanged.** Anchoring does not address the described failure (an appended proxy token is a whole token either way); a log-only path would be a seventh event the module refuses by design; the rate cannot be measured from this repo (Umami stores a parsed browser name, not the raw UA). Decision recorded at the regex; a test pins that a real UA with an appended proxy token is still recorded. |
-| 3 | **Fixed.** New `LoadingState` component — `role="status"`, `aria-live="polite"`, decorative spinner, visible message as the live text — used by all three loading regions (the map's Suspense fallback included; same line, same defect). |
-| 4 | **Fixed.** `DashboardFallback` renders a fixed, zero-footprint 3px progress bar (`.load-progress`, `transform`-only, static under reduced motion) for as long as the chunk is pending. Measured in view at 375×812; the in-flow card is still below the fold there, as before. |
+| 2 | **Accepted and documented, regex unchanged.** Anchoring does not address the described failure (an appended proxy token is a whole token either way); a log-only path would be a seventh event the module refuses by design; the rate cannot be measured from this repo (Umami stores a parsed browser name, not the raw UA). Decision recorded at the regex; a test pins it on the one observable input — a token embedded in a larger word is suppressed — so anchoring later would fail the test rather than drift. |
+| 3 | **Fixed.** New `LoadingState` component — `role="status"`, `aria-live="polite"`, decorative spinner, visible message as the live text — used by the outer fallback and the data-fetch state. The map's Suspense fallback uses the same treatment with `announce={false}` so one wait is one announcement. `developers-react.md` §9.8 amended to match (it prescribed `aria-busy` on the container, which can suppress the announcement). |
+| 4 | **Fixed.** `DashboardFallback` renders a fixed, zero-footprint 3px progress bar (`.dashboard-fallback__progress`, `transform`-only, static under reduced motion, z-index reusing `--z-dropdown` per §7.10) for as long as the chunk is pending. Measured in view at 375×812; the in-flow card is still below the fold there, as before. |
 | 5 | **Fixed.** The outer fallback renders the same `LoadingState` card as the inner states. The component carries its own stylesheet, which `App.tsx` importing it puts in the eager bundle — the dashboard's CSS only arrives with the lazy chunk, which is the reason the outer fallback was text-only in the first place. |
 
 Not done, recorded: the `EventDetail` loading region has the same two defects and was not in this proposal; the hero CTA's `#dashboard` anchor does not exist while the chunk loads.
 
+**Review rounds.** `/openspec-review` plus two independent adversarial reads (one against the first commit, one against the branch head) produced: §7.2 co-located stylesheet, §7.3/§7.10 naming and z-index reuse, §2.5 props type, §13.3 test queries, a fallback-state test that did not exist, a margin collapsing through `.dashboard-fallback` that grew the reservation 32px past its cap, an analytics test that pinned nothing, two bench scripts that printed but never failed, a chatty map-fallback announcement, and a standards rule the component contradicted. All fixed on the branch; none was found by the author's own pass.
+
 ## Verification
 
 - [x] Lighthouse 13.5.0 "Avoid non-composited animations" on a local **staging** build (mobile and desktop presets): control `origin/development` @ `3040a00` → **1 animated element** (`::before`, "Unsupported CSS Property: box-shadow"); branch → **not applicable, 0 elements**. The deployed staging URL is not reachable from this repo (nothing here deploys), so the control run is the positive control that the audit sees the defect.
-- [x] `prefers-reduced-motion` still suppresses the glow after the selector moved to `::after`: `scripts/bench-dashboard-cls/check-reduced-motion.mjs` reads computed `animation=none … opacity=0` under `reduce` and `staging-banner-stripe-pulse ×infinite 2.5s` under `no-preference`
-- [x] Both loading states are polite `role="status"` live regions whose text is the loading message; entering is the region mounting, leaving is announced by what replaces it (the result-count live region, or the error `role="alert"`). Asserted in `LoadingState.test.tsx` and `EventsDashboard.test.tsx`; **not** run against a real screen reader — the spec §3 records the fallback pattern to reach for if a manual pass shows the mount-time announcement is missed.
-- [x] A loading affordance is visible above the fold at 375×812: `capture-fallback.mjs` places `.load-progress` at y 0–3 inside an 812px viewport with the chunk held back; the control arm has no element in view (text-only fallback at y 1032).
-- [x] `npm run lint` / `type-check` / `lint:styles` / `test` (102/102) / `build` clean
+- [x] `prefers-reduced-motion` still suppresses the glow after the selector moved to `::after`: `scripts/bench-dashboard-cls/check-reduced-motion.mjs` reads computed `animation=none … opacity=0` under `reduce` and `staging-banner-stripe-pulse ×infinite 2.5s` under `no-preference`, and exits non-zero otherwise (negative control: run against a production build it exits 1)
+- [x] Both loading states are polite `role="status"` live regions whose text is the loading message; entering is the region mounting, leaving is announced by what replaces it (the result-count live region, or the error `role="alert"`). Asserted in `LoadingState.test.tsx`, `App.fallback.test.tsx` and `EventsDashboard.test.tsx`; **not** run against a real screen reader — the spec §3 records the fallback pattern to reach for if a manual pass shows the mount-time announcement is missed.
+- [x] A loading affordance is visible above the fold at 375×812: `capture-fallback.mjs` places `.dashboard-fallback__progress` at y 0–3 inside an 812px viewport with the chunk held back (and exits non-zero if the chunk mounts or an element is missing); the control arm has no element in view (text-only fallback at y 1032).
+- [x] `npm run lint` / `type-check` / `lint:styles` / `test` (106/106) / `build` clean
 - [x] CLS A/B against the control build, `measure-cls.mjs` with the new `VIEWPORT` override, 8 runs per cell — table below. The proposal's "still 0" was never literally true: the control carries the pre-existing freshness-banner residual at 1920×1600 that #221 recorded. The bar is what this change must not move, and it does not.
 
 | viewport | control (`3040a00`) | branch |
@@ -84,6 +86,8 @@ Not done, recorded: the `EventDetail` loading region has the same two defects an
 | 375×812 | 0.0003 (0/8) | 0.0003 (0/8) |
 
 Identical in every cell to four decimals. The sub-0.001 residual at the three audit viewports is the nav (`nav-station`, `nav-actions`) settling as fonts load, present on the control too; the 1920×1600 residual is the freshness banner. The progress bar never appears as a shift source, as a fixed element cannot.
+
+⚠️ Table measured before the `flow-root` margin fix (review finding). Re-measure after it: **in progress** — 1920×1600 so far: control 0.0054 (8/8), branch 0.0054 (6/8, two runs at 0.0000). Remaining cells to follow in the next commit.
 
 ## Origin
 

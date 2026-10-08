@@ -461,12 +461,16 @@ const results = useMemo(() => search(events, deferred), [events, deferred]);
 **§9.7 — Dynamic content updates are announced via `aria-live` or focus movement.**
 ✅ `<p aria-live="polite">{total} events found</p>`
 
-**§9.8 — Loading states use `aria-busy="true"` and a `role="status"` spinner with `aria-label`.**
+**§9.8 — Loading states are a `role="status"` region whose visible text is the announcement. A spinner with no visible text carries `aria-label` instead; a spinner next to visible text is `aria-hidden`.**
 ```tsx
-<div aria-busy={isPending}>
-  {isPending && <span role="status" aria-label="Loading events" className="spinner" />}
-</div>
+{isPending && (
+  <div role="status" aria-live="polite">
+    <span className="spinner" aria-hidden="true" />
+    <p>Loading events…</p>
+  </div>
+)}
 ```
+*Why not `aria-busy` on the container:* `aria-busy="true"` asks assistive technology to defer exposing changes under that element until it clears. Placed on an ancestor of the status region it can suppress the very announcement the region exists to make. Reserve `aria-busy` for a container whose contents are being replaced *without* a live region inside it. Reference implementation: `components/LoadingState.tsx` (amended in `chore-web-audit-leftovers`; the earlier wording prescribed `aria-busy` plus an `aria-label`led spinner, which the only component built for it contradicted).
 
 **§9.9 — Modals trap focus while open and return focus to the trigger on close.**
 

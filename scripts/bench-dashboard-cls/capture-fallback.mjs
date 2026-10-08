@@ -7,6 +7,10 @@
 // affordances sit relative to the fold — so "visible above the fold" is a
 // measured rectangle, not a claim.
 //
+// Exits non-zero when the measurement is not what it claims to be: the chunk
+// mounted anyway (route glob drifted), or a required element is missing. A
+// printout with nulls in it is not a pass.
+//
 // Usage (the target must already be built and served, see README.md):
 //   TARGET_URL=http://localhost:4173/ VIEWPORT=375x812 \
 //     OUT=/tmp/fallback-375.png node scripts/bench-dashboard-cls/capture-fallback.mjs
@@ -41,7 +45,8 @@ try {
     const status = document.querySelector('.dashboard-fallback [role="status"]')
     return {
       viewport: { width: window.innerWidth, height: window.innerHeight },
-      bar: rect('.load-progress'),
+      chunkMounted: document.querySelector('#dashboard') !== null,
+      bar: rect('.dashboard-fallback__progress'),
       fallback: rect('.dashboard-fallback'),
       card: rect('.dashboard-fallback .loading-state'),
       spinner: rect('.dashboard-fallback .loading-state__spinner'),
@@ -52,13 +57,23 @@ try {
 
   await page.screenshot({ path: OUT, fullPage: false })
 
-  const inView = (r) => r && r.top < report.viewport.height && r.bottom > 0
+  const inView = (r) => r !== null && r.height > 0 && r.top < report.viewport.height && r.bottom > 0
+  const problems = []
+  if (report.chunkMounted) problems.push('dashboard chunk mounted — the fallback was not held; check the route glob')
+  for (const key of ['bar', 'fallback', 'card', 'spinner']) {
+    if (report[key] === null) problems.push(`missing element: ${key}`)
+  }
+  if (report.statusText === null) problems.push('no role="status" region inside the fallback')
+
   console.log(JSON.stringify({
     ...report,
     barAboveFold: inView(report.bar),
     cardAboveFold: inView(report.card),
     screenshot: OUT,
+    problems,
   }, null, 2))
+
+  if (problems.length > 0) process.exitCode = 1
 } finally {
   await browser.close()
 }

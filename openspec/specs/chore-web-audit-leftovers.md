@@ -16,7 +16,8 @@ together below; items 1 and 2 are independent.
 
 | file | change |
 |---|---|
-| `web/src/App.css` | staging-banner glow moves to a `::after` layer animating `opacity`; new `.load-progress` bar; `.dashboard-fallback` becomes block flow; reduced-motion rules follow the animations |
+| `web/src/App.css` | staging-banner glow moves to a `::after` layer animating `opacity`; new `.dashboard-fallback__progress` bar (z-index reuses `--z-dropdown`, §7.10); `.dashboard-fallback` becomes `flow-root`; reduced-motion rules follow the animations |
+| `docs/standards/developers-react.md` | §9.8 amended: a loading state is a `role="status"` region whose visible text is the announcement; `aria-busy` is not placed on an ancestor of it (the old wording prescribed the shape this component argues against, so the rule and the reference implementation would otherwise disagree) |
 | `web/src/App.tsx` | Suspense fallback becomes `DashboardFallback`: the progress bar + the shared `LoadingState` |
 | `web/src/components/LoadingState.tsx` + `.css` | **new** — the one loading treatment: `role="status"` live region, decorative spinner, visible message; own co-located stylesheet (§1.5/§7.2) with component-prefixed classes (§7.3) |
 | `web/src/components/EventsDashboard.tsx` | both inner loading regions (`eventsLoading`, the map Suspense fallback) render `LoadingState` |
@@ -79,8 +80,11 @@ regex now states the known false-positive surface (any UA that carries one of
 the three tokens verbatim), why it is believed negligible, and what a real
 measurement would need (raw UA access on the analytics side, or a temporary
 server-side UA sample from the Caddy access log, neither of which is a web
-change). A test pins that a real browser UA with an appended proxy token is
-still recorded, so the accepted behaviour is asserted rather than assumed.
+change). A test pins the decision on the one input where it is observable: a
+token embedded inside a larger word (`FooPageSpeedBar/1.0`) is suppressed.
+Anchoring the regex would flip that test, so the decision cannot drift
+silently. (The first cut pinned an ordinary UA with an appended proxy token,
+which passes under any regex and so pinned nothing — review caught it.)
 
 ## 3. Loading regions announce themselves
 
@@ -117,6 +121,11 @@ still recorded, so the accepted behaviour is asserted rather than assumed.
   error card on failure. The Suspense boundary's exit is followed immediately
   by the inner loading state's entry, so a screen-reader user hears
   "Loading dashboard telemetry" → "Fetching satellite telemetry" → the count.
+- The map's Suspense fallback renders `LoadingState` with `announce={false}`:
+  same visual treatment, no live region. It mounts in the same instant as the
+  data-fetch state, and one wait should be one announcement rather than two
+  polite regions queued back to back (review finding). The map itself is a
+  `role="img"` with a text alternative, so its arrival needs no announcement.
 - Regions mount with their text already present, as `FreshnessIndicator` does.
   This is the project's established pattern; the alternative (an always-mounted
   empty region filled after mount) is more robust on some older VoiceOver
@@ -132,11 +141,12 @@ is one line of grey text that the user has to scroll to.
 
 **Design:** `DashboardFallback` renders, alongside the in-flow fallback, a
 `position: fixed` 3px progress bar across the top of the viewport
-(`.load-progress`) for exactly as long as the dashboard chunk is pending. It is
-`aria-hidden` (the live region carries the announcement), `pointer-events:
-none`, sits at `--z-load-progress: 300` (above the sticky nav's 100 and the
-staging banner, below the skip link's 1000), and takes **no layout space**, so
-it cannot contribute to CLS at any viewport. The indeterminate motion is a 40%
+(`.dashboard-fallback__progress`, §7.3) for exactly as long as the dashboard
+chunk is pending. It is `aria-hidden` (the live region carries the
+announcement), `pointer-events: none`, sits at `var(--z-dropdown)` = 200
+(above the sticky nav's 100 and the staging banner, below the skip link's
+1000; §7.10 says reuse an existing `--z-*` rather than add one), and takes
+**no layout space**, so it cannot contribute to CLS at any viewport. The indeterminate motion is a 40%
 segment translating across the track — `transform` only, compositor-driven, so
 it does not reintroduce the defect item 1 removes.
 
@@ -163,10 +173,15 @@ Two consequences:
   than sharing it across chunks. Because `App.tsx` imports the component, Vite
   places that stylesheet in the eager bundle. `.dashboard-state` stays in
   `EventsDashboard.css` for the error card; the now-unused `.spinner` goes.
-- `.dashboard-fallback` changes from a centred flex box to block flow with the
-  card as its only child, which top-aligns the card the way the #195 comment
-  requires without the flex alignment; the card spans the container width as
-  it does inside the dashboard sidebar.
+- `.dashboard-fallback` changes from a centred flex box to `display: flow-root`
+  with the card as its only child, which top-aligns the card the way the #195
+  comment requires. `flow-root`, not `block`: `.container` has no vertical
+  padding, so under `block` the card's `margin-top: 2rem` collapsed through the
+  fallback and grew the reservation's footprint by 32px beyond the documented
+  cap (review finding; measured fallback top = hero bottom + 32 before the fix,
+  = hero bottom after, with the fallback exactly 1530px tall at 1920×1600).
+  The card spans the container here, which is wider than the 400px sidebar it
+  occupies once mounted — same treatment, different width.
 
 The outer card sits inside the existing reservation at ≥481px, so the measured
 CLS behaviour of #193/#198 is unchanged by construction. It is re-measured
@@ -191,9 +206,10 @@ preceded both regressions the CLS harness has caught so far.
    non-composited animations" on a **staging** build reports 0 elements.
 2. With `prefers-reduced-motion: reduce` emulated, the computed
    `animation-name` of `.staging-banner::after` is `none` and its opacity is 0.
-3. Each of the three loading regions is a `role="status"` element whose
-   accessible text is the visible loading message; axe reports no violations
-   with any of them mounted.
+3. The outer fallback and the data-fetch state are `role="status"` elements
+   whose accessible text is the visible loading message; the map fallback
+   shares the treatment without a live region (`announce={false}`); axe
+   reports no violations with any of them mounted.
 4. At 375×812 with the dashboard chunk delayed, a screenshot taken before the
    chunk arrives shows the progress bar inside the viewport.
 5. The outer fallback and the inner loading state render the same component

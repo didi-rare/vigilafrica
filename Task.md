@@ -32,8 +32,11 @@
       way), a log-only path would be a seventh event the module deliberately
       refuses, and the rate cannot be measured from this repo (Umami stores a
       parsed browser name, not the raw UA).
-- [x] 2.2 `analytics.test.ts`: a real Chrome UA with an appended
-      `CorpProxy/3.1 (diag; lighthouse-audit-policy)` token is still recorded.
+- [x] 2.2 `analytics.test.ts`: a token embedded inside a larger word
+      (`FooPageSpeedBar/1.0`) is suppressed — the one input on which
+      "unanchored, accepted" is observable, so anchoring later fails the test.
+      (The first cut asserted an appended proxy token is still recorded, which
+      passes under any regex and pinned nothing — review caught it.)
 
 ## 3 + 5. One announced loading treatment
 
@@ -52,13 +55,25 @@
       (never-resolving chunk mock: status region inside the reservation,
       decorative bar, axe clean) and a new `EventsDashboard.test.tsx` case that
       holds the fetch open, asserts the status region, runs axe, then resolves
-      and asserts the region is gone. 105/105 tests.
+      and asserts the region is gone. The map fallback renders with
+      `announce={false}` (one wait, one announcement — review finding) and
+      `LoadingState.test.tsx` pins that path too. 106/106 tests.
+- [x] 3.5 `developers-react.md` §9.8 amended: it prescribed `aria-busy` on the
+      container plus an `aria-label`led spinner, the exact shape this component
+      argues against; the rule and its reference implementation now agree.
 
 ## 4. Above-the-fold affordance at phone widths
 
-- [x] 4.1 `.load-progress`: fixed 3px bar, `--z-load-progress: 300`,
-      `transform`-only segment, static full-width under reduced motion
-      (`check-reduced-motion.mjs`: `animation=none … width=1350px`)
+- [x] 4.1 `.dashboard-fallback__progress` (§7.3): fixed 3px bar, z-index
+      `var(--z-dropdown)` (§7.10 says reuse, not invent — the first cut added
+      `--z-load-progress: 300`), `transform`-only segment, static full-width
+      under reduced motion (`check-reduced-motion.mjs`: `animation=none …
+      width=1350px`, and the script now exits 1 if any must-stop animation
+      still runs or an element is missing)
+- [x] 4.3 `.dashboard-fallback` is `flow-root`, not `block`: review measured
+      the card's 2rem top margin collapsing through the fallback and growing
+      the reservation 32px past its cap. After the fix the fallback starts at
+      the hero's bottom edge and is exactly 1530px tall at 1920×1600.
 - [x] 4.2 `capture-fallback.mjs` at 375×812, chunk held back: bar at
       y 0–3 (**in view**), card at y 1064–1244 (below the fold, as before);
       control arm has no bar and a 26px text-only fallback at y 1032.
@@ -67,7 +82,7 @@
 ## Verification
 
 - [x] V1 `npm run lint` / `type-check` / `lint:styles` / `test` / `build` —
-      all clean, 102/102
+      all clean, 106/106
 - [x] V2 CLS A/B against the control build (`measure-cls.mjs`, new `VIEWPORT`
       override, 8 runs/cell): control = branch to four decimals in every cell —
       1920×1600 0.0054/0.0054, 1350×940 0.0001/0.0001, 768×1024 0.0002/0.0002,

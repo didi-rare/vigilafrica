@@ -607,7 +607,9 @@ export function EventsDashboard() {
           </div>
 
           <div className="dashboard-map-container">
-            <Suspense fallback={<LoadingState message="Loading map telemetry..." />}>
+            {/* announce={false}: this mounts alongside the data-fetch status
+                region; one wait, one announcement. The visible text stays. */}
+            <Suspense fallback={<LoadingState message="Loading map telemetry..." announce={false} />}>
               <Map events={mapEvents} center={mapCenter} />
             </Suspense>
           </div>

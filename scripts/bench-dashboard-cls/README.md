@@ -128,10 +128,12 @@ TARGET_URL=http://localhost:4173/ VIEWPORT=375x812 OUT=/tmp/fallback.png \
 ```
 
 Holds the dashboard chunk back forever, screenshots the viewport and prints
-the bounding boxes of `.load-progress`, the fallback card and the spinner, plus
-`barAboveFold` / `cardAboveFold`. At 375x812 on `chore-web-audit-leftovers`:
-bar at y 0–3 (in view), card at y 1064–1244 (below the fold, as before — the
-bar is what the phone user sees without scrolling).
+the bounding boxes of `.dashboard-fallback__progress`, the fallback card and
+the spinner, plus `barAboveFold` / `cardAboveFold`. It exits non-zero if the
+chunk mounted anyway or an element is missing, so a printout full of `null`s
+is a failure, not a pass. At 375x812 on `chore-web-audit-leftovers`: bar at
+y 0–3 (in view), card at y 1064–1244 (below the fold, as before — the bar is
+what the phone user sees without scrolling).
 
 ## Checking reduced motion
 
@@ -140,9 +142,12 @@ TARGET_URL=http://localhost:4175/ node scripts/bench-dashboard-cls/check-reduced
 ```
 
 Prints the computed `animation-name`, iteration count, opacity and transform
-of each animated pseudo-element under both media states. The staging glow must
-read `animation=none … opacity=0` under `reduce`; the progress segment must
-read `animation=none … width=<viewport>` (static full-width bar).
+of each animated pseudo-element under both media states, and exits non-zero
+if any animation that must stop under `reduce` still has a name, or if an
+element is missing (run against a production build, the banner rows are
+absent and the script fails — by design). The staging glow must read
+`animation=none … opacity=0` under `reduce`; the progress segment must read
+`animation=none … width=<viewport>` (static full-width bar).
 
 ## Notes
 

@@ -15,14 +15,21 @@ import './LoadingState.css'
  * `aria-label` — labelling both would announce the wait twice. No `aria-busy`
  * is set on an ancestor: it asks assistive technology to defer changes under
  * the busy element, which would suppress exactly this announcement.
+ *
+ * `announce={false}` renders the same visual treatment without the live
+ * region. The map's Suspense fallback uses it: it mounts in the same instant as
+ * the data-fetch state, and one wait should be one announcement, not two
+ * polite regions queued back to back (review finding on this change).
  */
 type Props = {
   message: string
+  announce?: boolean
 }
 
-export function LoadingState({ message }: Props) {
+export function LoadingState({ message, announce = true }: Props) {
+  const liveProps = announce ? { role: 'status', 'aria-live': 'polite' as const } : {}
   return (
-    <div className="loading-state" role="status" aria-live="polite">
+    <div className="loading-state" {...liveProps}>
       <span className="loading-state__spinner" aria-hidden="true" />
       <p>{message}</p>
     </div>

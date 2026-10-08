@@ -124,12 +124,12 @@ function StagingBanner() {
 // DashboardFallback is on screen for exactly as long as the lazy dashboard chunk
 // is pending (chore-web-audit-leftovers items 3–5).
 //
-// `.load-progress` is a fixed 3px bar across the top of the viewport. It exists
-// because at 375x812 the in-flow fallback starts at y≈1098 — below the fold — so
-// without it a phone user on a slow connection sees the hero and nothing that
-// says anything is loading. Fixed positioning means no layout footprint and
-// therefore no CLS contribution at any viewport. It is aria-hidden: the
-// LoadingState live region carries the announcement.
+// `.dashboard-fallback__progress` is a fixed 3px bar across the top of the
+// viewport. It exists because at 375x812 the in-flow fallback starts at y≈1098
+// — below the fold — so without it a phone user on a slow connection sees the
+// hero and nothing that says anything is loading. Fixed positioning means no
+// layout footprint and therefore no CLS contribution at any viewport. It is
+// aria-hidden: the LoadingState live region carries the announcement.
 //
 // `dashboard-fallback` reserves viewport height while the chunk loads. Without
 // it the fallback is ~26px and the mounted dashboard is ~1459px (desktop), so
@@ -139,7 +139,7 @@ function StagingBanner() {
 function DashboardFallback() {
   return (
     <>
-      <div className="load-progress" aria-hidden="true" />
+      <div className="dashboard-fallback__progress" aria-hidden="true" />
       <div className="container section dashboard-fallback">
         <LoadingState message="Loading dashboard telemetry..." />
       </div>

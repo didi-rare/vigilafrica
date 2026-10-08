@@ -30,7 +30,7 @@ describe('App — dashboard chunk pending', () => {
     // Decorative by design (the status region carries the announcement), so it
     // has no accessible handle to query by; the class is the contract the CLS
     // and fallback-capture harnesses measure against.
-    const bar = container.querySelector('.load-progress')
+    const bar = container.querySelector('.dashboard-fallback__progress')
     expect(bar).not.toBeNull()
     expect(bar).toHaveAttribute('aria-hidden', 'true')
   })

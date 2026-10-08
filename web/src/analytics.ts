@@ -57,8 +57,9 @@ declare global {
 //   - The rate is unmeasured because it cannot be measured from here: Umami
 //     stores a parsed browser name, not the raw UA. A real number needs a
 //     raw-UA sample on the analytics or edge side; until one exists this stays.
-// `analytics.test.ts` pins that an ordinary UA with an appended proxy token is
-// still recorded, so the accepted behaviour is asserted rather than assumed.
+// `analytics.test.ts` pins the decision on the one input where it is
+// observable: a token embedded inside a larger word (`FooPageSpeedBar/1.0`) is
+// suppressed. Anchoring the regex would flip that test, which is the point.
 const SYNTHETIC_USER_AGENT = /Chrome-Lighthouse|HeadlessChrome|PageSpeed/i
 
 // Umami's own documented opt-out key. Set it per browser, per device:

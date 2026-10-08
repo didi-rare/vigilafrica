@@ -18,7 +18,6 @@
   /* z-index */
   --z-nav: 100;
   --z-dropdown: 200;
-  --z-load-progress: 300;
   --z-skip-link: 1000;
 }
 
@@ -509,12 +508,19 @@ h2[id],
     previously saw "Loading dashboard telemetry...". Keeping the content at the
     top of the reservation is the only position that stays on screen.
 
-    Block flow does that on its own now that the fallback's only child is the
-    shared `.loading-state` card (chore-web-audit-leftovers item 5): the card
-    spans the container and sits at the top of the reservation, exactly as it
-    does inside the dashboard sidebar once the chunk mounts.
+    The fallback's only child is now the shared `.loading-state` card
+    (chore-web-audit-leftovers item 5), which top-aligns itself in block flow.
+    `flow-root` rather than `block`: `.container` has no vertical padding, so
+    with plain `block` the card's `margin-top: 2rem` collapses THROUGH this box
+    and lands outside the reservation, growing its footprint by 32px beyond the
+    cap documented above (caught in review — the first cut did exactly that).
+    `flow-root` keeps the margin inside, so `min-height` is the footprint again.
+
+    The card spans the container here (it is the only thing in the reservation),
+    which is wider than the 400px sidebar it occupies once the chunk mounts —
+    the treatment is the same, the width is not, and that is fine.
   */
-  display: block;
+  display: flow-root;
 }
 
 /*
@@ -551,20 +557,25 @@ h2[id],
 
   The indeterminate segment moves with `transform` only — compositor-driven, so
   it does not reintroduce the non-composited-animation defect item 1 removes.
+
+  z-index: `--z-dropdown` (200) is reused rather than a new property — §7.10
+  says reuse an existing `--z-*` until the scale consolidates into tokens.css.
+  The requirement is only "above the sticky nav (100), below the skip link
+  (1000)", which 200 satisfies.
 */
-.load-progress {
+.dashboard-fallback__progress {
   position: fixed;
   top: 0;
   left: 0;
   width: 100%;
   height: 3px;
-  z-index: var(--z-load-progress);
+  z-index: var(--z-dropdown);
   overflow: hidden;
   pointer-events: none;
   background: var(--surface-amber-medium);
 }
 
-.load-progress::after {
+.dashboard-fallback__progress::after {
   content: "";
   position: absolute;
   top: 0;
@@ -788,7 +799,7 @@ h2[id],
   }
 
   /* Still an affordance without the motion: a static full-width bar. */
-  .load-progress::after {
+  .dashboard-fallback__progress::after {
     animation: none;
     transform: none;
     width: 100%;

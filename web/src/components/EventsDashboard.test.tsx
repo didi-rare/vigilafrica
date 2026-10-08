@@ -148,11 +148,12 @@ describe('EventsDashboard', () => {
 
     const { container } = renderWithProviders(<EventsDashboard />)
 
-    // The freshness banner is a named status region that may already be
-    // mounted; the loading region is the one whose accessible name is empty
-    // because its visible text is the live content.
-    const loading = await screen.findByRole('status', { name: '' })
-    expect(loading).toHaveTextContent('Fetching satellite telemetry...')
+    // Located by its visible text, then checked for the live-region contract:
+    // other polite status regions (freshness banner, result count) may also be
+    // mounted, so a bare role query would be ambiguous.
+    const message = await screen.findByText('Fetching satellite telemetry...')
+    const loading = message.closest('[role="status"]')
+    expect(loading).not.toBeNull()
     expect(loading).toHaveAttribute('aria-live', 'polite')
 
     const results = await axe(container)
