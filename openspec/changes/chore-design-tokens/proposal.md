@@ -1,10 +1,12 @@
 ---
 id: chore-design-tokens
-status: proposed
-branch: tbd
+status: in-progress
+branch: chore/design-tokens
 ---
 
 # Proposal: Finish the Design-Token Migration (chore-design-tokens)
+
+> Technical plan and decision log: [`spec.md`](spec.md). Task ledger: [`tasks.md`](tasks.md).
 
 > **Supersedes and replaces four separate proposals**, collapsed 2026-08-07:
 > `chore-spacing-tokens`, `chore-type-tokens`, `chore-z-index-tokens` and
