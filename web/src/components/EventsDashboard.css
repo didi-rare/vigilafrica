@@ -104,6 +104,7 @@
   width: 1px;
   height: 1px;
   padding: 0;
+  /* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- -1px is the visually-hidden idiom (pull the 1px box out of flow), not spacing. */
   margin: -1px;
   overflow: hidden;
   clip: rect(0, 0, 0, 0);

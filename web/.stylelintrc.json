@@ -1,6 +1,10 @@
 {
-  "extends": ["stylelint-config-standard"],
-  "plugins": ["stylelint-declaration-strict-value"],
+  "extends": [
+    "stylelint-config-standard"
+  ],
+  "plugins": [
+    "stylelint-declaration-strict-value"
+  ],
   "rules": {
     "scale-unlimited/declaration-strict-value": [
       [
@@ -13,21 +17,126 @@
         "border-top-color",
         "border-right-color",
         "border-bottom-color",
-        "border-left-color"
+        "border-left-color",
+        "/^padding(-(top|right|bottom|left))?$/",
+        "/^margin(-(top|right|bottom|left))?$/",
+        "/^(row-|column-)?gap$/",
+        "font-size",
+        "font-weight",
+        "line-height",
+        "letter-spacing",
+        "z-index"
       ],
       {
-        "ignoreValues": [
-          "currentColor",
-          "inherit",
-          "initial",
-          "transparent",
-          "unset",
-          "none",
-          "/^var\\(--/",
-          "/^linear-gradient\\(/",
-          "/^radial-gradient\\(/",
-          "black"
-        ],
+        "ignoreValues": {
+          "/color$/": [
+            "currentColor",
+            "inherit",
+            "initial",
+            "transparent",
+            "unset",
+            "none",
+            "/^var\\(--/",
+            "/^linear-gradient\\(/",
+            "/^radial-gradient\\(/",
+            "black"
+          ],
+          "background-color": [
+            "currentColor",
+            "inherit",
+            "initial",
+            "transparent",
+            "unset",
+            "none",
+            "/^var\\(--/",
+            "/^linear-gradient\\(/",
+            "/^radial-gradient\\(/",
+            "black"
+          ],
+          "background": [
+            "currentColor",
+            "inherit",
+            "initial",
+            "transparent",
+            "unset",
+            "none",
+            "/^var\\(--/",
+            "/^linear-gradient\\(/",
+            "/^radial-gradient\\(/",
+            "black"
+          ],
+          "fill": [
+            "currentColor",
+            "inherit",
+            "initial",
+            "transparent",
+            "unset",
+            "none",
+            "/^var\\(--/"
+          ],
+          "stroke": [
+            "currentColor",
+            "inherit",
+            "initial",
+            "transparent",
+            "unset",
+            "none",
+            "/^var\\(--/"
+          ],
+          "/^padding(-(top|right|bottom|left))?$/": [
+            "inherit",
+            "initial",
+            "unset",
+            "/^(0|auto|var\\(--[\\w-]+\\))(\\s+(0|auto|var\\(--[\\w-]+\\)))*$/"
+          ],
+          "/^margin(-(top|right|bottom|left))?$/": [
+            "inherit",
+            "initial",
+            "unset",
+            "/^(0|auto|var\\(--[\\w-]+\\))(\\s+(0|auto|var\\(--[\\w-]+\\)))*$/"
+          ],
+          "/^(row-|column-)?gap$/": [
+            "inherit",
+            "initial",
+            "unset",
+            "normal",
+            "/^(0|var\\(--[\\w-]+\\))(\\s+(0|var\\(--[\\w-]+\\)))*$/"
+          ],
+          "font-size": [
+            "inherit",
+            "initial",
+            "unset",
+            "/^var\\(--/"
+          ],
+          "font-weight": [
+            "inherit",
+            "initial",
+            "unset",
+            "/^var\\(--/"
+          ],
+          "line-height": [
+            "inherit",
+            "initial",
+            "unset",
+            "normal",
+            "/^var\\(--/"
+          ],
+          "letter-spacing": [
+            "inherit",
+            "initial",
+            "unset",
+            "normal",
+            "/^var\\(--/"
+          ],
+          "z-index": [
+            "auto",
+            "inherit",
+            "initial",
+            "unset",
+            "/^var\\(--/",
+            "/^-?[0-2]$/"
+          ]
+        },
         "disableFix": true
       }
     ],
@@ -49,7 +158,9 @@
   },
   "overrides": [
     {
-      "files": ["src/styles/tokens.css"],
+      "files": [
+        "src/styles/tokens.css"
+      ],
       "rules": {
         "scale-unlimited/declaration-strict-value": null
       }
