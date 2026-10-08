@@ -1,0 +1,86 @@
+// Is a loading affordance visible ABOVE THE FOLD while the dashboard chunk loads?
+//
+// chore-web-audit-leftovers item 4: at 375x812 the `.dashboard-fallback` starts
+// below the fold (y≈1098), so a phone user on a slow connection saw the hero and
+// nothing that said anything was loading. This script holds the dashboard chunk
+// back indefinitely, screenshots the viewport, and reports where the fallback's
+// affordances sit relative to the fold — so "visible above the fold" is a
+// measured rectangle, not a claim.
+//
+// Exits non-zero when the measurement is not what it claims to be: the chunk
+// mounted anyway (route glob drifted), or a required element is missing. A
+// printout with nulls in it is not a pass.
+//
+// Usage (the target must already be built and served, see README.md):
+//   TARGET_URL=http://localhost:4173/ VIEWPORT=375x812 \
+//     OUT=/tmp/fallback-375.png node scripts/bench-dashboard-cls/capture-fallback.mjs
+import { chromium } from 'playwright'
+
+const TARGET_URL = process.env.TARGET_URL ?? 'http://localhost:4173/'
+const { width: VW, height: VH } = parseViewport(process.env.VIEWPORT ?? '375x812')
+const OUT        = process.env.OUT ?? `fallback-${VW}x${VH}.png`
+
+// Same contract as measure-cls.mjs: exactly two positive integers, or fail now.
+function parseViewport(raw) {
+  const m = /^(\d+)[xX](\d+)$/.exec(raw.trim())
+  if (!m) throw new Error(`VIEWPORT must look like 375x812, got ${JSON.stringify(raw)}`)
+  return { width: Number(m[1]), height: Number(m[2]) }
+}
+
+const browser = await chromium.launch()
+try {
+  const page = await browser.newPage({ viewport: { width: VW, height: VH } })
+
+  await page.route('**/health', r => r.fulfill({ json: { status: 'ok', version: 'bench', last_ingestion: null } }))
+  await page.route('**/v1/context', r => r.fulfill({ json: { location: null, nearby_events: [] } }))
+  await page.route('**/v1/states**', r => r.fulfill({ json: { states: [] } }))
+  await page.route('**/v1/events**', r => r.fulfill({ json: { data: [], meta: { total: 0, limit: 50, offset: 0 } } }))
+  // Never let the chunk arrive: the fallback is the steady state under test.
+  await page.route('**/assets/EventsDashboard-*.js', () => new Promise(() => {}))
+
+  await page.goto(TARGET_URL, { waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('.dashboard-fallback', { timeout: 15000 })
+  await page.waitForTimeout(500)
+
+  const report = await page.evaluate(() => {
+    const rect = (sel) => {
+      const el = document.querySelector(sel)
+      if (!el) return null
+      const r = el.getBoundingClientRect()
+      return { top: Math.round(r.top), bottom: Math.round(r.bottom), height: Math.round(r.height) }
+    }
+    const status = document.querySelector('.dashboard-fallback [role="status"]')
+    return {
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      chunkMounted: document.querySelector('#dashboard') !== null,
+      bar: rect('.dashboard-fallback__progress'),
+      fallback: rect('.dashboard-fallback'),
+      card: rect('.dashboard-fallback .loading-state'),
+      spinner: rect('.dashboard-fallback .loading-state__spinner'),
+      statusText: status?.textContent?.trim() ?? null,
+      ariaLive: status?.getAttribute('aria-live') ?? null,
+    }
+  })
+
+  await page.screenshot({ path: OUT, fullPage: false })
+
+  const inView = (r) => r !== null && r.height > 0 && r.top < report.viewport.height && r.bottom > 0
+  const problems = []
+  if (report.chunkMounted) problems.push('dashboard chunk mounted — the fallback was not held; check the route glob')
+  for (const key of ['bar', 'fallback', 'card', 'spinner']) {
+    if (report[key] === null) problems.push(`missing element: ${key}`)
+  }
+  if (report.statusText === null) problems.push('no role="status" region inside the fallback')
+
+  console.log(JSON.stringify({
+    ...report,
+    barAboveFold: inView(report.bar),
+    cardAboveFold: inView(report.card),
+    screenshot: OUT,
+    problems,
+  }, null, 2))
+
+  if (problems.length > 0) process.exitCode = 1
+} finally {
+  await browser.close()
+}

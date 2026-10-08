@@ -136,10 +136,26 @@ They are now `openspec/archive/design-fix-{border-event-enrichment,ingest-bbox-v
 
 ⚠️ **The two remaining files in `openspec/specs/`** — `feature-ai-digest-narrative.md` and `feature-secondary-oracle.md` — are **correct and were left alone**: both have live proposals in `openspec/proposals/`, so their companion links resolve. That is what the directory is for.
 
+## F. Deferred by `chore-web-audit-leftovers` (#283)
+
+Added in that PR, on independent-review advice, because its spec's "Out of scope" section will leave the working set when the change is archived — the exact failure mode this register exists for.
+
+### F1. `EventDetail` loading region has no live region and its own text-only treatment
+
+`web/src/pages/EventDetail.tsx` renders `<div className="event-detail-state">Loading event telemetry...</div>` — the same two defects #283 fixed for the dashboard (no `role="status"`, a different treatment from the spinner card). The loading branch is one `LoadingState` away; `.event-detail-state` stays, because it is also the not-found card (`EventDetail.tsx:73`).
+
+### F2. The hero CTA's `#dashboard` anchor does not exist while the chunk loads
+
+`Explore latest events` is `href="#dashboard"`, and `#dashboard` is rendered by the lazy `EventsDashboard`. A tap during the wait does nothing — on a slow phone connection, precisely the moment the user is most likely to tap it. Giving the Suspense fallback the id, or scrolling on mount, are both small; measure which reads better with the #193 reservation.
+
+### F3. Synthetic-user-agent false-positive rate is still unmeasured
+
+#283 kept the unanchored regex in `web/src/analytics.ts` on the proposal's own "measure before changing" rule, because the rate cannot be measured from this repo: Umami stores a parsed browser name, not the raw UA. A real number needs a raw-UA sample on the analytics or edge side (a temporary Caddy access-log sample would do). Until one exists the decision is recorded at the regex and pinned by a test (`FooPageSpeedBar/1.0` is suppressed) so that anchoring later is a visible choice, not drift.
+
 ## Out of Scope
 
 - Doing any of the above. This proposal is the record, not the work.
-- [`chore-web-audit-leftovers`](chore-web-audit-leftovers.md) — the equivalent register for the 2026-07-26 web-audit batch, still open and unaffected.
+- [`chore-web-audit-leftovers`](chore-web-audit-leftovers.md) — the register for the 2026-07-26 web-audit batch; implemented in #283, which added §F above.
 
 ## Verification
 

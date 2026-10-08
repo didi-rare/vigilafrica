@@ -8,6 +8,7 @@ import { track } from '../analytics'
 import { Droplet, Flame, MapPin, CircleCheck, Clock, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react'
 
 import { Select, type SelectOption } from './Select'
+import { LoadingState } from './LoadingState'
 import './EventsDashboard.css'
 
 const STALENESS_THRESHOLD_HOURS = 2
@@ -513,12 +514,7 @@ export function EventsDashboard() {
 
         <div className="dashboard-layout">
           <div className="dashboard-sidebar">
-            {eventsLoading && (
-              <div className="dashboard-state loading">
-                <div className="spinner"></div>
-                <p>Fetching satellite telemetry...</p>
-              </div>
-            )}
+            {eventsLoading && <LoadingState message="Fetching satellite telemetry..." />}
 
             {eventsError && (
               <div className="dashboard-state error" role="alert">
@@ -611,7 +607,9 @@ export function EventsDashboard() {
           </div>
 
           <div className="dashboard-map-container">
-            <Suspense fallback={<div className="dashboard-state loading"><div className="spinner"></div><p>Loading map telemetry...</p></div>}>
+            {/* announce={false}: this mounts alongside the data-fetch status
+                region; one wait, one announcement. The visible text stays. */}
+            <Suspense fallback={<LoadingState message="Loading map telemetry..." announce={false} />}>
               <Map events={mapEvents} center={mapCenter} />
             </Suspense>
           </div>

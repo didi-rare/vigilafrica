@@ -136,6 +136,32 @@ describe('EventsDashboard', () => {
     expect(screen.getByRole('img', { name: /event locations map/i })).toHaveTextContent('Lagos Flood 42')
   })
 
+  it('announces the events fetch as a polite status region while it is pending', async () => {
+    // chore-web-audit-leftovers item 3: the loading card was a plain div, so
+    // screen-reader users got no announcement that content was on its way.
+    let resolveEvents: (value: typeof eventsResponse) => void = () => {}
+    mockFetchEvents.mockReturnValueOnce(
+      new Promise<typeof eventsResponse>((resolve) => {
+        resolveEvents = resolve
+      }),
+    )
+
+    const { container } = renderWithProviders(<EventsDashboard />)
+
+    // Named, like the freshness banner and the result count, so each status
+    // region is individually addressable.
+    const loading = await screen.findByRole('status', { name: /loading status/i })
+    expect(loading).toHaveTextContent('Fetching satellite telemetry...')
+    expect(loading).toHaveAttribute('aria-live', 'polite')
+
+    const results = await axe(container)
+    expect(results.violations).toHaveLength(0)
+
+    resolveEvents(eventsResponse)
+    await screen.findByRole("heading", { level: 3, name: /Lagos Flood 42/i })
+    expect(screen.queryByText('Fetching satellite telemetry...')).not.toBeInTheDocument()
+  })
+
   it('shows a generic degraded banner without leaking ingestion error details', async () => {
     mockFetchHealth.mockResolvedValueOnce({
       ...okHealth,
