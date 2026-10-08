@@ -1,5 +1,7 @@
 /* VigilAfrica — Design System */
+
 /* F-009: VigilAfrica Landing Page */
+
 /* Colour tokens live in styles/tokens.css (loaded first by main.tsx). */
 
 /* ─────────────────────────────────────
@@ -190,6 +192,7 @@ h2[id],
 
 .staging-banner__icon {
   flex-shrink: 0;
+
   /* Explicit colour decouples the icon from any future banner text-colour change */
   color: var(--accent-amber);
 }
@@ -455,6 +458,7 @@ h2[id],
     the real mounted height, or it under-reserves there instead.
   */
   min-height: min(100vh, 1530px);
+
   /*
     Top-aligned, NOT centred. The reserved box starts near the bottom of the
     fold (y≈710 at 1350x940), so centring pushed the loading text to y≈1180 —
@@ -491,6 +495,7 @@ h2[id],
 
 .signal-dot {
   position: relative;
+
   /* Contains the ring's z-index: -1 so it sits behind the dot but cannot
      escape into the surrounding stacking context. */
   isolation: isolate;
@@ -535,9 +540,20 @@ h2[id],
 }
 
 @keyframes signal-ping {
-  0%   { transform: scale(1);    opacity: 1; }
-  70%  { transform: scale(2.75); opacity: 0; }
-  100% { transform: scale(2.75); opacity: 0; }
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  70% {
+    transform: scale(2.75);
+    opacity: 0;
+  }
+
+  100% {
+    transform: scale(2.75);
+    opacity: 0;
+  }
 }
 
 /* Telemetry panel — instrument readout that breaks the centred single column */
@@ -645,8 +661,15 @@ h2[id],
 /* Hero entrance — instrument "acquiring" sequence: the graticule fades in,
    then the readout → headline → copy → CTAs → telemetry panel stagger up. */
 @keyframes reveal-up {
-  from { opacity: 0; transform: translateY(14px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes graticule-in {
@@ -1122,7 +1145,11 @@ h2[id],
 
   .status-card { padding: var(--space-7) var(--space-5); }
 
-  .hero-cta { flex-direction: column; align-items: flex-start; gap: var(--space-3); }
+  .hero-cta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-3);
+  }
 }
 
 @media (max-width: 480px) {

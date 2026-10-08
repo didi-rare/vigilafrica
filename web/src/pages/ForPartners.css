@@ -42,15 +42,15 @@
   margin-bottom: var(--space-3-5);
 }
 
-/* Sections already introduced by a .section-label kicker keep a single tick. */
-.partners-section .section-label ~ .section-title::before {
-  content: none;
-}
-
 /* Centred contact card — centre the tick under the centred heading. */
 .partners-contact-card .section-title::before {
   margin-left: auto;
   margin-right: auto;
+}
+
+/* Sections already introduced by a .section-label kicker keep a single tick. */
+.partners-section .section-label ~ .section-title::before {
+  content: none;
 }
 
 /* ── Capability cards ── */

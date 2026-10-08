@@ -67,14 +67,14 @@
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-.dashboard-retry-button:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-amber-glow);
-}
-
 .dashboard-retry-button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.dashboard-retry-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-amber-glow);
 }
 
 .spinner {
@@ -107,6 +107,7 @@
   /* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- -1px is the visually-hidden idiom (pull the 1px box out of flow), not spacing. */
   margin: -1px;
   overflow: hidden;
+  /* stylelint-disable-next-line property-no-deprecated -- clip is the widest-supported visually-hidden idiom; clip-path: inset(50%) is its modern pair and can replace it once the support floor moves. */
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
@@ -137,6 +138,7 @@
 .dashboard-results__count strong {
   color: var(--text-primary);
   font-weight: var(--font-weight-semibold);
+
   /* Tabular figures so the count does not jitter horizontally as digits change. */
   font-variant-numeric: tabular-nums;
 }
@@ -166,19 +168,20 @@
   cursor: pointer;
   font-weight: var(--font-weight-semibold);
   font-size: var(--font-size-13-6);
+
   /* Only `border-color` — not `all`/`transform` — so this stays off the
      compositor's non-composited-animation list, which the web audit drove to 0. */
   transition: border-color 0.2s ease, color 0.2s ease;
 }
 
-.dashboard-page-button:hover:not(:disabled) {
-  border-color: var(--accent-amber);
-  color: var(--accent-amber);
-}
-
 .dashboard-page-button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+.dashboard-page-button:hover:not(:disabled) {
+  border-color: var(--accent-amber);
+  color: var(--accent-amber);
 }
 
 .dashboard-layout {
@@ -201,9 +204,11 @@
 .dashboard-sidebar::-webkit-scrollbar {
   width: 4px;
 }
+
 .dashboard-sidebar::-webkit-scrollbar-track {
   background: var(--surface-white-soft);
 }
+
 .dashboard-sidebar::-webkit-scrollbar-thumb {
   background: var(--accent-amber);
   border-radius: 10px;
@@ -273,6 +278,7 @@
 .event-card--fire {
   border-bottom: 2px solid var(--border-amber-strong);
 }
+
 .event-card--fire:hover {
   border-bottom-color: var(--accent-amber);
 }
@@ -280,6 +286,7 @@
 .event-card--flood {
   border-bottom: 2px solid var(--border-sky-medium);
 }
+
 .event-card--flood:hover {
   border-bottom-color: var(--accent-blue);
 }
@@ -329,6 +336,7 @@
   border-radius: 10px;
   background: var(--surface-white-faint);
   border: 1px solid var(--surface-white-soft);
+  /* stylelint-disable-next-line declaration-property-value-keyword-no-deprecated -- break-word is deprecated in favour of overflow-wrap: anywhere; swapping it changes wrapping on real overflow and is verified separately, not in this values-only refactor. */
   word-break: break-word;
 }
 
@@ -438,6 +446,7 @@
   gap: var(--space-2-5);
   padding: var(--space-3) var(--space-4);
   border-radius: 10px;
+
   /* The freshness line is a station status readout — mono data voice. */
   font-family: var(--font-mono);
   font-size: var(--font-size-13);
