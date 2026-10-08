@@ -128,6 +128,21 @@ describe('track — self-exclusion', () => {
     expect(trackMock).toHaveBeenCalledTimes(1)
   })
 
+  it('still records events when a proxy has appended its own token to a real UA', () => {
+    // chore-web-audit-leftovers item 2: the accepted false-positive surface is
+    // a UA carrying one of the three synthetic tokens verbatim. An appended
+    // diagnostic token that is NOT one of them must never read as synthetic —
+    // this is the case the unanchored match was accused of mishandling, pinned
+    // so the acceptance is asserted rather than assumed.
+    stubUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 CorpProxy/3.1 (diag; lighthouse-audit-policy)',
+    )
+
+    track('state_filter_selected', { state: 'Kano' })
+
+    expect(trackMock).toHaveBeenCalledTimes(1)
+  })
+
   it('records events when localStorage is absent entirely and the agent is real', () => {
     // The real state of this test environment, and of locked-down browsers. An
     // unavailable store must not read as "excluded".
