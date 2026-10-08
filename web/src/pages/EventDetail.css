@@ -33,13 +33,13 @@
 
 .header-main h1 {
   margin: var(--space-3) 0 0;
-  font-size: 2.5rem;
+  font-size: var(--font-size-40);
   color: var(--white);
 }
 
 .event-detail-disclaimer {
   margin: var(--space-3) 0 0;
-  font-size: 0.85rem;
+  font-size: var(--font-size-13-6);
   color: var(--color-text-dim);
   font-style: italic;
   max-width: 60ch;
@@ -58,8 +58,8 @@
   align-items: center;
   gap: var(--space-1-5);
   font-family: var(--font-mono);
-  font-size: 0.8125rem;
-  letter-spacing: 0.04em;
+  font-size: var(--font-size-13);
+  letter-spacing: var(--letter-spacing-4);
   color: var(--coordinate-text);
 }
 
@@ -77,7 +77,7 @@
 .info-group label {
   display: block;
   font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-size: var(--font-size-12);
   color: var(--color-primary);
   text-transform: uppercase;
   margin-bottom: var(--space-4);
@@ -92,7 +92,7 @@
 }
 
 .telemetry-log li {
-  font-size: 0.9rem;
+  font-size: var(--font-size-14-4);
   color: var(--color-text-dim);
 }
 
@@ -139,7 +139,7 @@
   }
 
   .header-main h1 {
-    font-size: 2rem;
+    font-size: var(--font-size-32);
     overflow-wrap: anywhere;
   }
 

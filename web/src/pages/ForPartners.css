@@ -91,15 +91,15 @@
 }
 
 .partners-card__title {
-  font-size: 1.0625rem;
-  font-weight: 600;
+  font-size: var(--font-size-17);
+  font-weight: var(--font-weight-semibold);
   color: var(--text-primary);
   margin: 0 0 var(--space-2);
 }
 
 .partners-card__desc {
-  font-size: 0.9375rem;
-  line-height: 1.65;
+  font-size: var(--font-size-15);
+  line-height: var(--line-height-1-65);
   color: var(--text-secondary);
   margin: 0;
 }
@@ -108,7 +108,7 @@
 .partners-inline-code,
 .partners-endpoint__path {
   font-family: var(--font-mono);
-  font-size: 0.875rem;
+  font-size: var(--font-size-14);
   color: var(--text-primary);
 }
 
@@ -166,9 +166,9 @@
 
 .partners-endpoint__method {
   font-family: var(--font-mono);
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
+  font-size: var(--font-size-11);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-6);
   padding: var(--space-0-75) var(--space-2);
   border-radius: 6px;
   color: var(--accent-green);
@@ -179,14 +179,14 @@
 .partners-endpoint__desc {
   flex: 1 1 16rem;
   margin: 0;
-  font-size: 0.9rem;
-  line-height: 1.55;
+  font-size: var(--font-size-14-4);
+  line-height: var(--line-height-1-55);
   color: var(--text-secondary);
 }
 
 .partners-links {
   margin-top: var(--space-5);
-  font-size: 0.9375rem;
+  font-size: var(--font-size-15);
   color: var(--text-muted);
 }
 
@@ -221,15 +221,15 @@
 }
 
 .partners-callout__title {
-  font-size: 1.25rem;
-  font-weight: 700;
+  font-size: var(--font-size-20);
+  font-weight: var(--font-weight-bold);
   color: var(--text-primary);
   margin: var(--space-0-5) 0 var(--space-2-5);
 }
 
 .partners-callout__body {
-  font-size: 0.9375rem;
-  line-height: 1.7;
+  font-size: var(--font-size-15);
+  line-height: var(--line-height-1-7);
   color: var(--text-secondary);
   margin: 0;
   max-width: 68ch;
@@ -245,8 +245,8 @@
 .partners-contact-card p {
   max-width: 60ch;
   margin: var(--space-3) auto 0;
-  font-size: 1rem;
-  line-height: 1.7;
+  font-size: var(--font-size-16);
+  line-height: var(--line-height-1-7);
   color: var(--text-secondary);
 }
 

@@ -34,7 +34,7 @@ body {
   font-family: var(--font-sans);
   background-color: var(--bg-primary);
   color: var(--text-primary);
-  line-height: 1.65;
+  line-height: var(--line-height-1-65);
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
 }
@@ -60,9 +60,9 @@ a {
   align-items: center;
   gap: var(--space-2-5);
   font-family: var(--font-mono);
-  font-size: 0.6875rem;
-  font-weight: 500;
-  letter-spacing: 0.2em;
+  font-size: var(--font-size-11);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: var(--letter-spacing-20);
   text-transform: uppercase;
   color: var(--coordinate-text);
   margin-bottom: var(--space-4-5);
@@ -78,19 +78,19 @@ a {
 
 .section-title {
   font-family: var(--font-display);
-  font-size: clamp(1.75rem, 4vw, 2.5rem);
-  font-weight: 700;
+  font-size: var(--font-size-display-lg);
+  font-weight: var(--font-weight-bold);
   color: var(--text-primary);
   margin-bottom: var(--space-4);
-  line-height: 1.15;
-  letter-spacing: -0.02em;
+  line-height: var(--line-height-1-15);
+  letter-spacing: var(--letter-spacing-minus-2);
 }
 
 .section-subtitle {
-  font-size: 1.0625rem;
+  font-size: var(--font-size-17);
   color: var(--text-secondary);
   max-width: 560px;
-  line-height: 1.7;
+  line-height: var(--line-height-1-7);
 }
 
 section[id],
@@ -109,8 +109,8 @@ h2[id],
   padding: var(--space-2-75) var(--space-5-5);
   border-radius: 8px;
   font-family: var(--font-sans);
-  font-size: 0.9375rem;
-  font-weight: 600;
+  font-size: var(--font-size-15);
+  font-weight: var(--font-weight-semibold);
   cursor: pointer;
   transition:
     background 0.2s ease,
@@ -162,7 +162,7 @@ h2[id],
   color: var(--text-on-accent);
   padding: var(--space-2) var(--space-3-5);
   border-radius: 6px;
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 
 .skip-link:focus {
@@ -181,10 +181,10 @@ h2[id],
   background: linear-gradient(90deg, var(--surface-amber-strong), var(--surface-amber-medium));
   border-bottom: 1px solid var(--border-amber-emphatic);
   padding: var(--space-2-5) var(--space-4) var(--space-2-5) var(--space-5);
-  font-size: 0.8125rem;
-  font-weight: 600;
+  font-size: var(--font-size-13);
+  font-weight: var(--font-weight-semibold);
   color: var(--accent-amber);
-  letter-spacing: 0.01em;
+  letter-spacing: var(--letter-spacing-1);
 }
 
 .staging-banner::before {
@@ -279,17 +279,17 @@ h2[id],
 
 .logo-text {
   font-family: var(--font-display);
-  font-size: 1.0625rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  font-size: var(--font-size-17);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-minus-1);
   color: var(--text-primary);
 }
 
 .nav-station {
   font-family: var(--font-mono);
-  font-size: 0.6875rem;
-  font-weight: 500;
-  letter-spacing: 0.08em;
+  font-size: var(--font-size-11);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: var(--letter-spacing-8);
   color: var(--coordinate-text);
   padding: var(--space-0-5) var(--space-1-5);
   border: 1px solid var(--border-amber-soft);
@@ -304,8 +304,8 @@ h2[id],
 }
 
 .nav-link {
-  font-size: 0.9375rem;
-  font-weight: 600;
+  font-size: var(--font-size-15);
+  font-weight: var(--font-weight-semibold);
   color: var(--text-secondary);
   text-decoration: none;
   white-space: nowrap;
@@ -331,7 +331,7 @@ h2[id],
   color: var(--text-secondary);
   text-decoration: none;
   font-family: var(--font-mono);
-  font-size: 0.8rem;
+  font-size: var(--font-size-12-8);
   transition: color 0.2s;
 }
 
@@ -395,9 +395,9 @@ h2[id],
   flex-wrap: wrap;
   gap: var(--space-2-5);
   font-family: var(--font-mono);
-  font-size: 0.75rem;
-  font-weight: 500;
-  letter-spacing: 0.06em;
+  font-size: var(--font-size-12);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: var(--letter-spacing-6);
   color: var(--text-secondary);
   padding: var(--space-1-75) var(--space-3-5);
   border: 1px solid var(--border-subtle);
@@ -573,9 +573,9 @@ h2[id],
 
 .mono-label {
   font-family: var(--font-mono);
-  font-size: 0.6875rem;
-  font-weight: 500;
-  letter-spacing: 0.12em;
+  font-size: var(--font-size-11);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: var(--letter-spacing-12);
   color: var(--text-secondary);
 }
 
@@ -597,17 +597,17 @@ h2[id],
 
 .hero__telemetry-row dt {
   font-family: var(--font-mono);
-  font-size: 0.6875rem;
-  font-weight: 500;
-  letter-spacing: 0.08em;
+  font-size: var(--font-size-11);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: var(--letter-spacing-8);
   text-transform: uppercase;
   color: var(--text-muted);
 }
 
 .hero__telemetry-row dd {
   margin: 0;
-  font-size: 0.9375rem;
-  font-weight: 500;
+  font-size: var(--font-size-15);
+  font-weight: var(--font-weight-medium);
   color: var(--text-primary);
   text-align: right;
 }
@@ -623,8 +623,8 @@ h2[id],
   display: inline-flex;
   align-items: center;
   gap: var(--space-1-25);
-  font-size: 0.8125rem;
-  font-weight: 500;
+  font-size: var(--font-size-13);
+  font-weight: var(--font-weight-medium);
   padding: var(--space-0-75) var(--space-2-5);
   border-radius: 6px;
 }
@@ -733,9 +733,9 @@ h2[id],
   gap: var(--space-1-5);
   padding: var(--space-1-25) var(--space-3-5);
   border-radius: 999px;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  letter-spacing: 0.01em;
+  font-size: var(--font-size-13);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--letter-spacing-1);
 }
 
 .badge--flood {
@@ -752,10 +752,10 @@ h2[id],
 
 .hero-title {
   font-family: var(--font-display);
-  font-size: clamp(2.6rem, 5.6vw, 4.1rem);
-  font-weight: 700;
-  line-height: 1.04;
-  letter-spacing: -0.025em;
+  font-size: var(--font-size-display-xl);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-1-04);
+  letter-spacing: var(--letter-spacing-minus-2-5);
   margin-bottom: var(--space-6);
   color: var(--text-primary);
 }
@@ -765,10 +765,10 @@ h2[id],
 }
 
 .hero-desc {
-  font-size: 1.125rem;
+  font-size: var(--font-size-18);
   color: var(--text-secondary);
   max-width: 540px;
-  line-height: 1.7;
+  line-height: var(--line-height-1-7);
   margin-bottom: var(--space-9);
 }
 
@@ -837,9 +837,9 @@ h2[id],
 
 .step-index {
   font-family: var(--font-mono);
-  font-size: 0.8125rem;
-  font-weight: 500;
-  letter-spacing: 0.14em;
+  font-size: var(--font-size-13);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: var(--letter-spacing-14);
   color: var(--text-muted);
 }
 
@@ -860,16 +860,16 @@ h2[id],
 .step:nth-child(3) .step-icon { color: var(--accent-blue); }
 
 .step h3 {
-  font-size: 1.25rem;
-  font-weight: 700;
+  font-size: var(--font-size-20);
+  font-weight: var(--font-weight-bold);
   margin-bottom: var(--space-3);
   color: var(--text-primary);
 }
 
 .step p {
-  font-size: 0.9375rem;
+  font-size: var(--font-size-15);
   color: var(--text-secondary);
-  line-height: 1.7;
+  line-height: var(--line-height-1-7);
 }
 
 @media (max-width: 768px) {
@@ -915,22 +915,22 @@ h2[id],
 }
 
 .audience-icon {
-  font-size: 1.75rem;
+  font-size: var(--font-size-28);
   display: block;
   margin-bottom: var(--space-3-5);
 }
 
 .audience-card h3 {
-  font-size: 1rem;
-  font-weight: 700;
+  font-size: var(--font-size-16);
+  font-weight: var(--font-weight-bold);
   margin-bottom: var(--space-1-5);
   color: var(--text-primary);
 }
 
 .audience-card p {
-  font-size: 0.9rem;
+  font-size: var(--font-size-14-4);
   color: var(--text-secondary);
-  line-height: 1.6;
+  line-height: var(--line-height-1-6);
 }
 
 /* ─────────────────────────────────────
@@ -953,10 +953,10 @@ h2[id],
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  font-size: 0.8125rem;
-  font-weight: 600;
+  font-size: var(--font-size-13);
+  font-weight: var(--font-weight-semibold);
   color: var(--accent-amber);
-  letter-spacing: 0.08em;
+  letter-spacing: var(--letter-spacing-8);
   text-transform: uppercase;
   margin-bottom: var(--space-5);
 }
@@ -976,16 +976,16 @@ h2[id],
 }
 
 .status-card h2 {
-  font-size: clamp(1.5rem, 3vw, 2rem);
-  font-weight: 700;
+  font-size: var(--font-size-display-md);
+  font-weight: var(--font-weight-bold);
   margin-bottom: var(--space-4);
-  line-height: 1.25;
+  line-height: var(--line-height-1-25);
 }
 
 .status-card > p {
-  font-size: 1rem;
+  font-size: var(--font-size-16);
   color: var(--text-secondary);
-  line-height: 1.75;
+  line-height: var(--line-height-1-75);
   margin-bottom: var(--space-8);
 }
 
@@ -1014,7 +1014,7 @@ h2[id],
   justify-content: space-between;
   padding: var(--space-4) var(--space-4) var(--space-4) var(--space-13);
   border-radius: 8px;
-  font-size: 0.9375rem;
+  font-size: var(--font-size-15);
   color: var(--text-muted);
   background: transparent;
   border: 1px solid transparent;
@@ -1038,7 +1038,7 @@ h2[id],
 
 .milestone--active {
   color: var(--text-primary);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 
 .milestone--active::after {
@@ -1050,8 +1050,8 @@ h2[id],
   display: inline-flex;
   align-items: center;
   gap: var(--space-1-25);
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: var(--font-size-12);
+  font-weight: var(--font-weight-semibold);
   padding: var(--space-0-75) var(--space-2-5);
   border-radius: 999px;
   background: var(--surface-amber-medium);
@@ -1091,7 +1091,7 @@ h2[id],
 }
 
 .footer p {
-  font-size: 0.9rem;
+  font-size: var(--font-size-14-4);
   color: var(--text-secondary);
 }
 
@@ -1109,14 +1109,14 @@ h2[id],
 }
 
 .footer-disclaimer {
-  font-size: 0.9rem;
+  font-size: var(--font-size-14-4);
   color: var(--text-primary);
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
 }
 
 .footer-sub {
   font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-size: var(--font-size-12);
   color: var(--text-secondary);
 }
 
@@ -1136,7 +1136,7 @@ h2[id],
 }
 
 @media (max-width: 480px) {
-  .hero-title { font-size: 2.25rem; }
+  .hero-title { font-size: var(--font-size-36); }
   .steps { flex-direction: column; }
 
   /* Keep the nav on one line: tighten the action group and drop the GitHub

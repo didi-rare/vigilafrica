@@ -34,7 +34,7 @@
 }
 
 .dashboard-state-detail {
-  font-size: 0.85rem;
+  font-size: var(--font-size-13-6);
   margin-top: var(--space-2);
   word-break: break-all;
 }
@@ -51,7 +51,7 @@
 
 .dashboard-state-detail--muted {
   opacity: 0.7;
-  font-size: 0.8rem;
+  font-size: var(--font-size-12-8);
 }
 
 .dashboard-retry-button {
@@ -62,8 +62,8 @@
   border: none;
   border-radius: var(--radius-md);
   cursor: pointer;
-  font-weight: 600;
-  font-size: 0.9rem;
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-14-4);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -129,13 +129,13 @@
 
 .dashboard-results__count {
   margin: 0;
-  font-size: 0.9rem;
+  font-size: var(--font-size-14-4);
   color: var(--text-secondary);
 }
 
 .dashboard-results__count strong {
   color: var(--text-primary);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   /* Tabular figures so the count does not jitter horizontally as digits change. */
   font-variant-numeric: tabular-nums;
 }
@@ -147,7 +147,7 @@
 }
 
 .dashboard-results__page {
-  font-size: 0.85rem;
+  font-size: var(--font-size-13-6);
   color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -163,8 +163,8 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   cursor: pointer;
-  font-weight: 600;
-  font-size: 0.85rem;
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-13-6);
   /* Only `border-color` — not `all`/`transform` — so this stays off the
      compositor's non-composited-animation list, which the web audit drove to 0. */
   transition: border-color 0.2s ease, color 0.2s ease;
@@ -292,16 +292,16 @@
 .event-date {
   /* Dates are telemetry — render in the mono data voice (Ground Truth). */
   font-family: var(--font-mono);
-  font-size: 0.75rem;
-  font-weight: 500;
+  font-size: var(--font-size-12);
+  font-weight: var(--font-weight-medium);
   color: var(--text-muted);
-  letter-spacing: 0.02em;
+  letter-spacing: var(--letter-spacing-2);
 }
 
 .event-title {
-  font-size: 1.125rem;
-  font-weight: 600;
-  line-height: 1.4;
+  font-size: var(--font-size-18);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-1-4);
   margin: 0;
   color: var(--text-primary);
   min-height: 3.2rem;
@@ -312,9 +312,9 @@
 }
 
 .event-id {
-  font-size: 0.875rem;
+  font-size: var(--font-size-14);
   color: var(--text-muted);
-  font-weight: 400;
+  font-weight: var(--font-weight-regular);
   font-family: var(--font-mono); /* §7.11 — type tokens, not raw font names */
 }
 
@@ -332,25 +332,25 @@
 }
 
 .location-pin {
-  font-size: 0.9rem;
+  font-size: var(--font-size-14-4);
   filter: grayscale(0.2);
   flex-shrink: 0;
 }
 
 .location-text {
-  font-size: 0.875rem;
+  font-size: var(--font-size-14);
   color: var(--text-secondary);
   min-width: 0;
 }
 
 .location-text strong {
   color: var(--text-primary);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 
 .location-text.coords {
   font-family: var(--font-mono); /* §7.11 — type tokens, not raw font names */
-  letter-spacing: -0.01em;
+  letter-spacing: var(--letter-spacing-minus-1);
 }
 
 .event-meta {
@@ -366,11 +366,11 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  font-size: 0.8125rem;
-  font-weight: 600;
+  font-size: var(--font-size-13);
+  font-weight: var(--font-weight-semibold);
   color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: var(--letter-spacing-5);
 }
 
 .status-dot {
@@ -392,8 +392,8 @@
 .event-link {
   color: var(--accent-amber);
   text-decoration: none;
-  font-size: 0.8125rem;
-  font-weight: 700;
+  font-size: var(--font-size-13);
+  font-weight: var(--font-weight-bold);
   transition: color 0.2s;
 }
 
@@ -413,16 +413,16 @@
   background: var(--surface-amber-subtle);
   border: 1px solid var(--border-amber-medium);
   color: var(--text-disclaimer);
-  font-size: 0.875rem;
-  line-height: 1.5;
+  font-size: var(--font-size-14);
+  line-height: var(--line-height-1-5);
 }
 
 .dashboard-disclaimer__icon {
   flex-shrink: 0;
-  font-size: 1.1rem;
-  font-weight: 700;
+  font-size: var(--font-size-17-6);
+  font-weight: var(--font-weight-bold);
   color: var(--disclaimer-icon);
-  line-height: 1.4;
+  line-height: var(--line-height-1-4);
 }
 
 .dashboard-disclaimer p {
@@ -439,9 +439,9 @@
   border-radius: 10px;
   /* The freshness line is a station status readout — mono data voice. */
   font-family: var(--font-mono);
-  font-size: 0.8125rem;
-  font-weight: 500;
-  letter-spacing: 0.01em;
+  font-size: var(--font-size-13);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: var(--letter-spacing-1);
   margin-bottom: var(--space-2);
   border: 1px solid;
 }
@@ -466,7 +466,7 @@
 
 .freshness-icon {
   flex-shrink: 0;
-  font-size: 1rem;
+  font-size: var(--font-size-16);
 }
 
 @media (max-width: 768px) {
