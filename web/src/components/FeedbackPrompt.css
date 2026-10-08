@@ -3,13 +3,13 @@
    spacing uses rem literals to match the sibling detail-page components. */
 
 .feedback-prompt {
-  margin-top: 3rem;
-  padding-top: 1.5rem;
+  margin-top: var(--space-12);
+  padding-top: var(--space-6);
   border-top: 1px solid var(--color-border);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 1rem;
+  gap: var(--space-4);
 }
 
 .feedback-prompt__question {
@@ -21,14 +21,14 @@
 
 .feedback-prompt__actions {
   display: flex;
-  gap: 0.75rem;
+  gap: var(--space-3);
 }
 
 .feedback-prompt__button {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.45rem 1.1rem;
+  gap: var(--space-1-6);
+  padding: var(--space-1-8) var(--space-4-4);
   font-size: 0.9rem;
   font-weight: 500;
   color: var(--text-primary);

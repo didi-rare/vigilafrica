@@ -24,24 +24,24 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 5rem;
+  padding: var(--space-20);
   background: var(--bg-card);
   border-radius: var(--radius-xl);
   border: 1px dashed var(--border);
-  margin-top: 2rem;
+  margin-top: var(--space-8);
   color: var(--text-secondary);
   text-align: center;
 }
 
 .dashboard-state-detail {
   font-size: 0.85rem;
-  margin-top: 0.5rem;
+  margin-top: var(--space-2);
   word-break: break-all;
 }
 
 .dashboard-state-detail code {
   background: var(--surface-white-soft);
-  padding: 0.1rem 0.4rem;
+  padding: var(--space-0-4) var(--space-1-6);
   border-radius: 4px;
 }
 
@@ -55,8 +55,8 @@
 }
 
 .dashboard-retry-button {
-  margin-top: 1.25rem;
-  padding: 0.55rem 1.4rem;
+  margin-top: var(--space-5);
+  padding: var(--space-2-2) var(--space-5-6);
   background: linear-gradient(135deg, var(--accent-amber), var(--amber-600));
   color: var(--text-on-accent);
   border: none;
@@ -84,7 +84,7 @@
   border-top-color: var(--accent-amber);
   border-radius: 50%;
   animation: spin 0.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--space-6);
 }
 
 @keyframes spin {
@@ -93,9 +93,9 @@
 
 .dashboard-filters {
   display: flex;
-  gap: 0.75rem;
+  gap: var(--space-3);
   flex-wrap: wrap;
-  margin-top: 1.5rem;
+  margin-top: var(--space-6);
 }
 
 /* §9.3: visible-to-AT, hidden-visually label pattern */
@@ -122,8 +122,8 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem 1.5rem;
-  margin-top: 1.5rem;
+  gap: var(--space-3) var(--space-6);
+  margin-top: var(--space-6);
   min-height: 2.5rem;
 }
 
@@ -143,7 +143,7 @@
 .dashboard-results__controls {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--space-3);
 }
 
 .dashboard-results__page {
@@ -156,8 +156,8 @@
 .dashboard-page-button {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  padding: 0.45rem 0.9rem;
+  gap: var(--space-1-2);
+  padding: var(--space-1-8) var(--space-3-6);
   background: var(--surface-white-soft);
   color: var(--text-primary);
   border: 1px solid var(--border);
@@ -182,18 +182,18 @@
 
 .dashboard-layout {
   display: flex;
-  gap: 2rem;
-  margin-top: 40px;
+  gap: var(--space-8);
+  margin-top: var(--space-10);
   height: 800px;
 }
 
 .dashboard-sidebar {
   flex: 0 0 400px;
   overflow-y: auto;
-  padding-right: 1.5rem;
+  padding-right: var(--space-6);
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: var(--space-6);
 }
 
 /* Sidebar scrollbar styling */
@@ -217,7 +217,7 @@
 .events-list {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: var(--space-6);
 }
 
 .event-card-link {
@@ -235,7 +235,7 @@
   background: var(--bg-elevated);
   border: 1px solid var(--glass-border);
   border-radius: 16px;
-  padding: 24px;
+  padding: var(--inset-card);
   width: 100%;
   transition:
     transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
@@ -244,7 +244,7 @@
     background 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: var(--space-4-5);
   position: relative;
   box-shadow: var(--shadow-card-faint);
   cursor: pointer;
@@ -322,9 +322,9 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: var(--space-2-5);
   min-width: 0;
-  padding: 12px 14px;
+  padding: var(--space-3) var(--space-3-5);
   border-radius: 10px;
   background: var(--surface-white-faint);
   border: 1px solid var(--surface-white-soft);
@@ -357,7 +357,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding-top: 14px;
+  padding-top: var(--space-3-5);
   border-top: 1px solid var(--border);
   margin-top: auto;
 }
@@ -365,7 +365,7 @@
 .status-indicator {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   font-size: 0.8125rem;
   font-weight: 600;
   color: var(--text-muted);
@@ -406,9 +406,9 @@
 .dashboard-disclaimer {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
-  padding: 14px 18px;
-  margin-bottom: 12px;
+  gap: var(--space-3);
+  padding: var(--space-3-5) var(--space-4-5);
+  margin-bottom: var(--space-3);
   border-radius: 10px;
   background: var(--surface-amber-subtle);
   border: 1px solid var(--border-amber-medium);
@@ -434,15 +434,15 @@
 .freshness-banner {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 16px;
+  gap: var(--space-2-5);
+  padding: var(--space-3) var(--space-4);
   border-radius: 10px;
   /* The freshness line is a station status readout — mono data voice. */
   font-family: var(--font-mono);
   font-size: 0.8125rem;
   font-weight: 500;
   letter-spacing: 0.01em;
-  margin-bottom: 8px;
+  margin-bottom: var(--space-2);
   border: 1px solid;
 }
 
@@ -473,7 +473,7 @@
   .dashboard-layout {
     flex-direction: column;
     height: auto;
-    gap: 1.25rem;
+    gap: var(--space-5);
   }
 
   .dashboard-sidebar {
@@ -491,6 +491,6 @@
   }
 
   .dashboard-state {
-    padding: 3rem 1.25rem;
+    padding: var(--space-12) var(--space-5);
   }
 }

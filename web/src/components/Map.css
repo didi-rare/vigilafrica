@@ -19,11 +19,11 @@
   pointer-events: none;
   background: var(--bg-hud-overlay);
   backdrop-filter: blur(8px);
-  padding: 0.5rem 1rem;
+  padding: var(--space-2) var(--space-4);
   border-left: 3px solid var(--color-primary);
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--space-1);
   z-index: var(--z-map-hud);
 }
 
@@ -40,7 +40,7 @@
   color: var(--white);
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 .hud-status .online {
@@ -172,7 +172,7 @@
   backdrop-filter: blur(12px);
   border: 1px solid var(--border);
   color: var(--white) !important;
-  padding: 1rem !important;
+  padding: var(--space-4) !important;
   border-radius: var(--radius-md) !important;
 }
 

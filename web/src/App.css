@@ -11,10 +11,6 @@
      --font-sans kept as a body alias for legacy component references. */
   --font-sans: var(--font-body);
 
-  /* Spacing */
-  --container-max: 1160px;
-  --section-py: 128px;
-
   /* z-index */
   --z-nav: 100;
   --z-dropdown: 200;
@@ -54,7 +50,7 @@ a {
 .container {
   max-width: var(--container-max);
   margin: 0 auto;
-  padding: 0 24px;
+  padding: 0 var(--container-gutter);
 }
 
 /* Cartographic section index — mono label preceded by a measured amber rule
@@ -62,14 +58,14 @@ a {
 .section-label {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-2-5);
   font-family: var(--font-mono);
   font-size: 0.6875rem;
   font-weight: 500;
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: var(--coordinate-text);
-  margin-bottom: 18px;
+  margin-bottom: var(--space-4-5);
 }
 
 .section-label::before {
@@ -85,7 +81,7 @@ a {
   font-size: clamp(1.75rem, 4vw, 2.5rem);
   font-weight: 700;
   color: var(--text-primary);
-  margin-bottom: 16px;
+  margin-bottom: var(--space-4);
   line-height: 1.15;
   letter-spacing: -0.02em;
 }
@@ -109,8 +105,8 @@ h2[id],
 .btn {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 11px 22px;
+  gap: var(--space-2);
+  padding: var(--space-2-75) var(--space-5-5);
   border-radius: 8px;
   font-family: var(--font-sans);
   font-size: 0.9375rem;
@@ -164,7 +160,7 @@ h2[id],
   z-index: var(--z-skip-link);
   background: var(--accent-amber);
   color: var(--text-on-accent);
-  padding: 8px 14px;
+  padding: var(--space-2) var(--space-3-5);
   border-radius: 6px;
   font-weight: 600;
 }
@@ -181,10 +177,10 @@ h2[id],
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--space-2);
   background: linear-gradient(90deg, var(--surface-amber-strong), var(--surface-amber-medium));
   border-bottom: 1px solid var(--border-amber-emphatic);
-  padding: 10px 16px 10px 20px;
+  padding: var(--space-2-5) var(--space-4) var(--space-2-5) var(--space-5);
   font-size: 0.8125rem;
   font-weight: 600;
   color: var(--accent-amber);
@@ -235,7 +231,7 @@ h2[id],
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 32px;
+  padding: var(--space-4) var(--space-8);
   background: var(--bg-nav);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
@@ -245,7 +241,7 @@ h2[id],
 .nav-logo {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-2-5);
   text-decoration: none;
   border-radius: 6px;
 }
@@ -295,16 +291,16 @@ h2[id],
   font-weight: 500;
   letter-spacing: 0.08em;
   color: var(--coordinate-text);
-  padding: 2px 6px;
+  padding: var(--space-0-5) var(--space-1-5);
   border: 1px solid var(--border-amber-soft);
   border-radius: 4px;
-  margin-left: 2px;
+  margin-left: var(--space-0-5);
 }
 
 .nav-actions {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: var(--space-5);
 }
 
 .nav-link {
@@ -313,7 +309,7 @@ h2[id],
   color: var(--text-secondary);
   text-decoration: none;
   white-space: nowrap;
-  padding: 10px 0;
+  padding: var(--space-2-5) 0;
   transition: color 0.2s ease;
 }
 
@@ -348,7 +344,7 @@ h2[id],
 ───────────────────────────────────── */
 .hero {
   position: relative;
-  padding: 88px 0 96px;
+  padding: var(--space-22) 0 var(--space-24);
   overflow: hidden;
   border-bottom: 1px solid var(--border);
 }
@@ -384,7 +380,7 @@ h2[id],
   z-index: 1;
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.9fr);
-  gap: 56px;
+  gap: var(--space-14);
   align-items: center;
 }
 
@@ -397,17 +393,17 @@ h2[id],
   display: inline-flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: var(--space-2-5);
   font-family: var(--font-mono);
   font-size: 0.75rem;
   font-weight: 500;
   letter-spacing: 0.06em;
   color: var(--text-secondary);
-  padding: 7px 14px;
+  padding: var(--space-1-75) var(--space-3-5);
   border: 1px solid var(--border-subtle);
   border-radius: 999px;
   background: var(--surface-white-faint);
-  margin-bottom: 28px;
+  margin-bottom: var(--space-7);
 }
 
 .hero__readout-key { color: var(--text-primary); }
@@ -570,7 +566,7 @@ h2[id],
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 18px;
+  padding: var(--space-3) var(--space-4-5);
   border-bottom: 1px solid var(--border-subtle);
   background: var(--surface-white-faint);
 }
@@ -591,8 +587,8 @@ h2[id],
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 14px 18px;
+  gap: var(--space-4);
+  padding: var(--space-3-5) var(--space-4-5);
 }
 
 .hero__telemetry-row + .hero__telemetry-row {
@@ -618,7 +614,7 @@ h2[id],
 
 .hero__tracking {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   flex-wrap: wrap;
   justify-content: flex-end;
 }
@@ -626,10 +622,10 @@ h2[id],
 .tag {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-1-25);
   font-size: 0.8125rem;
   font-weight: 500;
-  padding: 3px 10px;
+  padding: var(--space-0-75) var(--space-2-5);
   border-radius: 6px;
 }
 
@@ -650,7 +646,7 @@ h2[id],
 @media (max-width: 860px) {
   .hero__inner {
     grid-template-columns: 1fr;
-    gap: 36px;
+    gap: var(--space-9);
   }
 
   .hero__panel { max-width: 440px; }
@@ -726,16 +722,16 @@ h2[id],
 
 .event-badges {
   display: flex;
-  gap: 10px;
-  margin-bottom: 28px;
+  gap: var(--space-2-5);
+  margin-bottom: var(--space-7);
   flex-wrap: wrap;
 }
 
 .badge {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 14px;
+  gap: var(--space-1-5);
+  padding: var(--space-1-25) var(--space-3-5);
   border-radius: 999px;
   font-size: 0.8125rem;
   font-weight: 600;
@@ -760,7 +756,7 @@ h2[id],
   font-weight: 700;
   line-height: 1.04;
   letter-spacing: -0.025em;
-  margin-bottom: 24px;
+  margin-bottom: var(--space-6);
   color: var(--text-primary);
 }
 
@@ -773,13 +769,13 @@ h2[id],
   color: var(--text-secondary);
   max-width: 540px;
   line-height: 1.7;
-  margin-bottom: 36px;
+  margin-bottom: var(--space-9);
 }
 
 .hero-cta {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: var(--space-4);
   flex-wrap: wrap;
 }
 
@@ -802,8 +798,8 @@ h2[id],
 .steps {
   display: flex;
   align-items: stretch;
-  gap: 8px;
-  margin-top: 48px;
+  gap: var(--space-2);
+  margin-top: var(--space-12);
   flex-wrap: wrap;
   list-style: none;
 }
@@ -814,7 +810,7 @@ h2[id],
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 20px;
-  padding: 40px 32px;
+  padding: var(--space-10) var(--space-8);
   transition:
     transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
     box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1),
@@ -836,7 +832,7 @@ h2[id],
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 24px;
+  margin-bottom: var(--space-6);
 }
 
 .step-index {
@@ -866,7 +862,7 @@ h2[id],
 .step h3 {
   font-size: 1.25rem;
   font-weight: 700;
-  margin-bottom: 12px;
+  margin-bottom: var(--space-3);
   color: var(--text-primary);
 }
 
@@ -877,7 +873,7 @@ h2[id],
 }
 
 @media (max-width: 768px) {
-  .steps { gap: 12px; }
+  .steps { gap: var(--space-3); }
 }
 
 /* Step accent borders */
@@ -896,15 +892,15 @@ h2[id],
 .audience-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 16px;
-  margin-top: 48px;
+  gap: var(--space-4);
+  margin-top: var(--space-12);
 }
 
 .audience-card {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 14px;
-  padding: 28px;
+  padding: var(--space-7);
   transition:
     transform 0.25s ease,
     box-shadow 0.25s ease,
@@ -921,13 +917,13 @@ h2[id],
 .audience-icon {
   font-size: 1.75rem;
   display: block;
-  margin-bottom: 14px;
+  margin-bottom: var(--space-3-5);
 }
 
 .audience-card h3 {
   font-size: 1rem;
   font-weight: 700;
-  margin-bottom: 6px;
+  margin-bottom: var(--space-1-5);
   color: var(--text-primary);
 }
 
@@ -949,20 +945,20 @@ h2[id],
   background: linear-gradient(135deg, var(--status-card-amber-tint), var(--status-card-cyan-tint));
   border: 1px solid var(--border-accent);
   border-radius: 20px;
-  padding: 48px;
+  padding: var(--space-12);
   max-width: 760px;
 }
 
 .status-header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   font-size: 0.8125rem;
   font-weight: 600;
   color: var(--accent-amber);
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  margin-bottom: 20px;
+  margin-bottom: var(--space-5);
 }
 
 .status-dot {
@@ -982,7 +978,7 @@ h2[id],
 .status-card h2 {
   font-size: clamp(1.5rem, 3vw, 2rem);
   font-weight: 700;
-  margin-bottom: 16px;
+  margin-bottom: var(--space-4);
   line-height: 1.25;
 }
 
@@ -990,14 +986,14 @@ h2[id],
   font-size: 1rem;
   color: var(--text-secondary);
   line-height: 1.75;
-  margin-bottom: 32px;
+  margin-bottom: var(--space-8);
 }
 
 .milestone-list {
   display: flex;
   flex-direction: column;
   gap: 0;
-  margin-bottom: 36px;
+  margin-bottom: var(--space-9);
   position: relative;
 }
 
@@ -1016,7 +1012,7 @@ h2[id],
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 16px 16px 52px;
+  padding: var(--space-4) var(--space-4) var(--space-4) var(--space-13);
   border-radius: 8px;
   font-size: 0.9375rem;
   color: var(--text-muted);
@@ -1053,10 +1049,10 @@ h2[id],
 .milestone-tag {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-1-25);
   font-size: 0.75rem;
   font-weight: 600;
-  padding: 3px 10px;
+  padding: var(--space-0-75) var(--space-2-5);
   border-radius: 999px;
   background: var(--surface-amber-medium);
   color: var(--accent-amber);
@@ -1082,15 +1078,15 @@ h2[id],
 ───────────────────────────────────── */
 .footer {
   border-top: 1px solid var(--border);
-  padding: 40px 0;
-  margin-top: 16px;
+  padding: var(--space-10) 0;
+  margin-top: var(--space-4);
 }
 
 .footer .container {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   text-align: center;
 }
 
@@ -1101,7 +1097,7 @@ h2[id],
 
 .footer a {
   display: inline-block;
-  padding: 4px 0;
+  padding: var(--space-1) 0;
   color: var(--text-secondary);
   text-decoration: underline;
   text-underline-offset: 3px;
@@ -1128,15 +1124,15 @@ h2[id],
    Responsive
 ───────────────────────────────────── */
 @media (max-width: 768px) {
-  :root { --section-py: 64px; }
+  :root { --section-py: var(--space-16); }
 
-  .nav { padding: 14px 16px; }
-  .hero { padding: 80px 0 88px; }
+  .nav { padding: var(--space-3-5) var(--space-4); }
+  .hero { padding: var(--space-20) 0 var(--space-22); }
   .hero .container { max-width: 100%; }
 
-  .status-card { padding: 28px 20px; }
+  .status-card { padding: var(--space-7) var(--space-5); }
 
-  .hero-cta { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .hero-cta { flex-direction: column; align-items: flex-start; gap: var(--space-3); }
 }
 
 @media (max-width: 480px) {
@@ -1145,7 +1141,7 @@ h2[id],
 
   /* Keep the nav on one line: tighten the action group and drop the GitHub
      button's text label (icon + aria-label remain). */
-  .nav-actions { gap: 14px; }
+  .nav-actions { gap: var(--space-3-5); }
   #nav-github-link span { display: none; }
 }
 

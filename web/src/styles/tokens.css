@@ -209,6 +209,68 @@
   --marker-online: var(--emerald-500);
 
   /* ──────────────────────────────────────────────
+     Spacing scale — padding, margin and gap in component
+     CSS reference these; stylelint rejects literals.
+     Step = 0.25rem (4px at the 16px root) and the name is
+     the number of steps, so --space-6 = 6 × 4px = 24px.
+     Half and quarter steps exist only where the UI already
+     used them (chips, badges, pills, compact controls).
+     Owner spec: openspec/changes/chore-design-tokens
+     ────────────────────────────────────────────── */
+  --space-0-5: 0.125rem; /* 2px */
+  --space-0-75: 0.1875rem; /* 3px */
+  --space-1: 0.25rem; /* 4px */
+  --space-1-25: 0.3125rem; /* 5px */
+  --space-1-5: 0.375rem; /* 6px */
+  --space-1-75: 0.4375rem; /* 7px */
+  --space-2: 0.5rem; /* 8px */
+  --space-2-5: 0.625rem; /* 10px */
+  --space-2-75: 0.6875rem; /* 11px */
+  --space-3: 0.75rem; /* 12px */
+  --space-3-5: 0.875rem; /* 14px */
+  --space-4: 1rem; /* 16px */
+  --space-4-5: 1.125rem; /* 18px */
+  --space-5: 1.25rem; /* 20px */
+  --space-5-5: 1.375rem; /* 22px */
+  --space-6: 1.5rem; /* 24px */
+  --space-6-5: 1.625rem; /* 26px */
+  --space-7: 1.75rem; /* 28px */
+  --space-8: 2rem; /* 32px */
+  --space-9: 2.25rem; /* 36px */
+  --space-10: 2.5rem; /* 40px */
+  --space-12: 3rem; /* 48px */
+  --space-13: 3.25rem; /* 52px */
+  --space-14: 3.5rem; /* 56px */
+  --space-16: 4rem; /* 64px */
+  --space-20: 5rem; /* 80px */
+  --space-22: 5.5rem; /* 88px */
+  --space-24: 6rem; /* 96px */
+  --space-32: 8rem; /* 128px */
+
+  /* Off-grid spacing — values that fall between steps. Carried over
+     unchanged so this migration is a zero-visual-diff refactor; each
+     is to be snapped to a neighbour in a visually-reviewed follow-up.
+     The "steps" naming is kept so the distance to the grid is visible
+     in the name: --space-1-8 is 7.2px, next to --space-1-75 = 7px. */
+  --space-0-4: 0.1rem; /* 1.6px — inline <code> chips */
+  --space-0-8: 0.2rem; /* 3.2px — inline <code> chips */
+  --space-1-2: 0.3rem; /* 4.8px — pager button gap */
+  --space-1-6: 0.4rem; /* 6.4px — <code> chips, feedback button gap */
+  --space-1-8: 0.45rem; /* 7.2px — pager and feedback button inset */
+  --space-2-2: 0.55rem; /* 8.8px — retry button inset */
+  --space-3-6: 0.9rem; /* 14.4px — pager button inset */
+  --space-4-4: 1.1rem; /* 17.6px — feedback button inset */
+  --space-5-6: 1.4rem; /* 22.4px — retry button inset */
+
+  /* Semantic spacing — only where one role owns the value. Everything
+     else references the scale directly; naming a step "gap-inline" when
+     three different gaps play that role would be a false abstraction. */
+  --container-max: 1160px;
+  --container-gutter: var(--space-6);
+  --section-py: var(--space-32); /* App.css narrows this at ≤768px */
+  --inset-card: var(--space-6);
+
+  /* ──────────────────────────────────────────────
      Legacy aliases — reconcile orphan references in
      pre-existing CSS (Map.css, EventDetail.css). These
      CSS files reference --color-text-dim, --color-primary,

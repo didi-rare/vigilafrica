@@ -1,5 +1,5 @@
 .event-detail-page {
-  padding-top: 2rem;
+  padding-top: var(--space-8);
   min-height: 100vh;
 }
 
@@ -12,33 +12,33 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 5rem 2rem;
+  padding: var(--space-20) var(--space-8);
   background: var(--bg-card);
   border-radius: var(--radius-xl);
   border: 1px dashed var(--border);
-  margin-top: 1.5rem;
+  margin-top: var(--space-6);
   color: var(--text-secondary);
   text-align: center;
 }
 
 .event-detail-header {
-  margin-top: 1.5rem;
+  margin-top: var(--space-6);
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
   border-bottom: 1px solid var(--color-border);
-  padding-bottom: 2rem;
-  margin-bottom: 2rem;
+  padding-bottom: var(--space-8);
+  margin-bottom: var(--space-8);
 }
 
 .header-main h1 {
-  margin: 0.75rem 0 0;
+  margin: var(--space-3) 0 0;
   font-size: 2.5rem;
   color: var(--white);
 }
 
 .event-detail-disclaimer {
-  margin: 0.75rem 0 0;
+  margin: var(--space-3) 0 0;
   font-size: 0.85rem;
   color: var(--color-text-dim);
   font-style: italic;
@@ -49,14 +49,14 @@
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 /* Cartographic coordinate readout for the event's position (Ground Truth). */
 .detail-coord {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-1-5);
   font-family: var(--font-mono);
   font-size: 0.8125rem;
   letter-spacing: 0.04em;
@@ -66,12 +66,12 @@
 .detail-layout {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 3rem;
+  gap: var(--space-12);
   align-items: start;
 }
 
 .info-group {
-  margin-bottom: 2.5rem;
+  margin-bottom: var(--space-10);
 }
 
 .info-group label {
@@ -80,7 +80,7 @@
   font-size: 0.75rem;
   color: var(--color-primary);
   text-transform: uppercase;
-  margin-bottom: 1rem;
+  margin-bottom: var(--space-4);
 }
 
 .telemetry-log {
@@ -88,7 +88,7 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--space-3);
 }
 
 .telemetry-log li {
@@ -99,7 +99,7 @@
 .telemetry-log code {
   color: var(--white);
   background: var(--surface-white-soft);
-  padding: 0.2rem 0.4rem;
+  padding: var(--space-0-8) var(--space-1-6);
   border-radius: 4px;
 }
 
@@ -113,7 +113,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 2rem;
+  padding: var(--space-8);
   text-align: center;
   color: var(--color-text-dim);
 }
@@ -128,7 +128,7 @@
   .event-detail-header {
     align-items: flex-start;
     flex-direction: column;
-    gap: 1rem;
+    gap: var(--space-4);
   }
 
   .header-main,
