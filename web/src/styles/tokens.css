@@ -339,6 +339,19 @@
   --letter-spacing-20: 0.2em;
 
   /* ──────────────────────────────────────────────
+     Layering — the global z-index layers (§7.10).
+     Values inside a contained stacking context (a
+     marker's badge over its pointer, the signal-dot ring
+     behind its dot) stay as literals in the -1…2 range;
+     stylelint allows exactly that range and nothing else,
+     so a new global layer must be added here.
+     ────────────────────────────────────────────── */
+  --z-map-hud: 10;
+  --z-nav: 100;
+  --z-dropdown: 200;
+  --z-skip-link: 1000;
+
+  /* ──────────────────────────────────────────────
      Legacy aliases — reconcile orphan references in
      pre-existing CSS (Map.css, EventDetail.css). These
      CSS files reference --color-text-dim, --color-primary,

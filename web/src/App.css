@@ -3,19 +3,9 @@
 /* Colour tokens live in styles/tokens.css (loaded first by main.tsx). */
 
 /* ─────────────────────────────────────
-   Non-Colour Design Tokens
-   (colour tokens: see styles/tokens.css)
+   Design tokens — colour, spacing, type and z-index all live in
+   styles/tokens.css (loaded first by main.tsx). Nothing is defined here.
 ───────────────────────────────────── */
-:root {
-  /* Typography — Ground Truth type system lives in tokens.css (ADR-015).
-     --font-sans kept as a body alias for legacy component references. */
-  --font-sans: var(--font-body);
-
-  /* z-index */
-  --z-nav: 100;
-  --z-dropdown: 200;
-  --z-skip-link: 1000;
-}
 
 /* ─────────────────────────────────────
    Reset & Base
