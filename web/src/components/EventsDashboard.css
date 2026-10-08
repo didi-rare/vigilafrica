@@ -19,9 +19,22 @@
   pointer-events: none;
 }
 
-/* `.dashboard-state` and `.spinner` now live in App.css: the Suspense fallback in
-   App.tsx renders them before this chunk's CSS exists (chore-web-audit-leftovers).
-   The rules below are error-state only and stay here. */
+/* Error-state card. The loading card is `.loading-state` (LoadingState.css):
+   the Suspense fallback in App.tsx renders it before this chunk's CSS exists,
+   so it carries its own styles rather than sharing these. */
+.dashboard-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 5rem;
+  background: var(--bg-card);
+  border-radius: var(--radius-xl);
+  border: 1px dashed var(--border);
+  margin-top: 2rem;
+  color: var(--text-secondary);
+  text-align: center;
+}
 
 .dashboard-state-detail {
   font-size: 0.85rem;
@@ -464,5 +477,9 @@
     flex: 1 1 auto;
     height: 60vh;
     min-height: 360px;
+  }
+
+  .dashboard-state {
+    padding: 3rem 1.25rem;
   }
 }

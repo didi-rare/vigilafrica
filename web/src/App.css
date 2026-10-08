@@ -510,9 +510,9 @@ h2[id],
     top of the reservation is the only position that stays on screen.
 
     Block flow does that on its own now that the fallback's only child is the
-    shared `.dashboard-state` loading card (chore-web-audit-leftovers item 5):
-    the card spans the container and sits at the top of the reservation, exactly
-    as it does inside the dashboard sidebar once the chunk mounts.
+    shared `.loading-state` card (chore-web-audit-leftovers item 5): the card
+    spans the container and sits at the top of the reservation, exactly as it
+    does inside the dashboard sidebar once the chunk mounts.
   */
   display: block;
 }
@@ -539,52 +539,6 @@ h2[id],
 }
 
 /*
-  Shared loading / error state card and spinner.
-
-  Moved here from EventsDashboard.css (chore-web-audit-leftovers items 3–5),
-  following the `.back-link` precedent: that stylesheet is bundled into the lazy
-  dashboard chunk's CSS, so anything the Suspense fallback renders BEFORE the
-  chunk arrives has to be styled from the eager bundle. The outer fallback and
-  both inner loading regions now render the same `.dashboard-state` card via
-  `components/LoadingState.tsx`. The error-only rules (`.dashboard-state-detail*`,
-  `.dashboard-retry-button`) stay in EventsDashboard.css — nothing outside the
-  chunk renders them.
-*/
-.dashboard-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 5rem;
-  background: var(--bg-card);
-  border-radius: var(--radius-xl);
-  border: 1px dashed var(--border);
-  margin-top: 2rem;
-  color: var(--text-secondary);
-  text-align: center;
-}
-
-.spinner {
-  width: 32px;
-  height: 32px;
-  border: 2px solid var(--border);
-  border-top-color: var(--accent-amber);
-  border-radius: 50%;
-  animation: spin 0.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-  margin-bottom: 1.5rem;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-@media (max-width: 768px) {
-  .dashboard-state {
-    padding: 3rem 1.25rem;
-  }
-}
-
-/*
   Above-the-fold loading affordance (chore-web-audit-leftovers item 4).
 
   At 375x812 the dashboard fallback starts at y≈1098 — below the fold — and
@@ -592,7 +546,7 @@ h2[id],
   sees the hero and nothing that says anything is loading. This fixed 3px bar
   is rendered by the Suspense fallback for exactly as long as the dashboard
   chunk is pending. It takes no layout space (fixed), so it cannot contribute
-  to CLS at any viewport, and it is `aria-hidden`: the `.dashboard-state`
+  to CLS at any viewport, and it is `aria-hidden`: the `.loading-state`
   live region carries the announcement.
 
   The indeterminate segment moves with `transform` only — compositor-driven, so

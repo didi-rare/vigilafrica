@@ -16,13 +16,13 @@ together below; items 1 and 2 are independent.
 
 | file | change |
 |---|---|
-| `web/src/App.css` | staging-banner glow moves to a `::after` layer animating `opacity`; `.dashboard-state`, `.spinner`, `@keyframes spin` move here from `EventsDashboard.css` so the eagerly-loaded fallback can use them; new `.load-progress` bar; reduced-motion rules follow the animations |
+| `web/src/App.css` | staging-banner glow moves to a `::after` layer animating `opacity`; new `.load-progress` bar; `.dashboard-fallback` becomes block flow; reduced-motion rules follow the animations |
 | `web/src/App.tsx` | Suspense fallback becomes `DashboardFallback`: the progress bar + the shared `LoadingState` |
-| `web/src/components/LoadingState.tsx` | **new** — the one loading treatment: `role="status"` live region, decorative spinner, visible message |
+| `web/src/components/LoadingState.tsx` + `.css` | **new** — the one loading treatment: `role="status"` live region, decorative spinner, visible message; own co-located stylesheet (§1.5/§7.2) with component-prefixed classes (§7.3) |
 | `web/src/components/EventsDashboard.tsx` | both inner loading regions (`eventsLoading`, the map Suspense fallback) render `LoadingState` |
-| `web/src/components/EventsDashboard.css` | `.dashboard-state`, `.spinner`, `@keyframes spin` and the ≤768px `.dashboard-state` override removed (moved, not deleted) |
+| `web/src/components/EventsDashboard.css` | `.spinner` / `@keyframes spin` removed (no longer used); `.dashboard-state` stays for the error card |
 | `web/src/analytics.ts` | comment only — records the item-2 decision at the regex |
-| tests | `LoadingState.test.tsx` (new), `EventsDashboard.test.tsx`, `analytics.test.ts` |
+| tests | `LoadingState.test.tsx` (new), `App.fallback.test.tsx` (new), `EventsDashboard.test.tsx`, `analytics.test.ts` |
 
 ## 1. Staging banner: compositor-driven glow
 
@@ -91,8 +91,8 @@ still recorded, so the accepted behaviour is asserted rather than assumed.
 **Design:** one component, `LoadingState`:
 
 ```tsx
-<div className="dashboard-state loading" role="status" aria-live="polite">
-  <span className="spinner" aria-hidden="true" />
+<div className="loading-state" role="status" aria-live="polite">
+  <span className="loading-state__spinner" aria-hidden="true" />
   <p>{message}</p>
 </div>
 ```
@@ -154,13 +154,15 @@ no viewport-sniffing logic.
 Reuse of `LoadingState` (item 3) in the outer fallback is the whole of item 5.
 Two consequences:
 
-- `.dashboard-state`, `.spinner` and `@keyframes spin` currently live in
-  `EventsDashboard.css`, which Vite bundles **into the lazy chunk's CSS**. The
-  outer fallback renders before that chunk exists, which is why it was plain
-  text in the first place. They move to `App.css` (eager), following the
-  precedent `EventDetail.css` records for `.back-link` ("shared across
-  sub-pages and now lives in App.css"). The error-state-only rules
-  (`.dashboard-state-detail*`, `.dashboard-retry-button`) stay where they are.
+- The spinner and card styles currently live in `EventsDashboard.css`, which
+  Vite bundles **into the lazy chunk's CSS**. The outer fallback renders before
+  that chunk exists, which is why it was plain text in the first place.
+  `LoadingState` therefore carries its own `LoadingState.css` (§1.5/§7.2): the
+  card is restated as `.loading-state` with a `.loading-state__spinner` (§7.3),
+  the same way `.event-detail-state` already restates `.dashboard-state` rather
+  than sharing it across chunks. Because `App.tsx` imports the component, Vite
+  places that stylesheet in the eager bundle. `.dashboard-state` stays in
+  `EventsDashboard.css` for the error card; the now-unused `.spinner` goes.
 - `.dashboard-fallback` changes from a centred flex box to block flow with the
   card as its only child, which top-aligns the card the way the #195 comment
   requires without the flex alignment; the card spans the container width as
@@ -194,8 +196,8 @@ preceded both regressions the CLS harness has caught so far.
    with any of them mounted.
 4. At 375×812 with the dashboard chunk delayed, a screenshot taken before the
    chunk arrives shows the progress bar inside the viewport.
-5. The outer fallback and the inner loading state render the same DOM shape
-   (spinner + message inside `.dashboard-state`).
+5. The outer fallback and the inner loading state render the same component
+   (`LoadingState`: spinner + message inside `.loading-state`).
 6. `npm run lint`, `type-check`, `lint:styles`, `test`, `build` clean.
 7. CLS measured with `scripts/bench-dashboard-cls/measure-cls.mjs` against a
    control build of `origin/development` at 1920×1600, and additionally at

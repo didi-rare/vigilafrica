@@ -42,13 +42,17 @@
       on an ancestor (would defer the announcement — spec §3)
 - [x] 3.2 Used by `DashboardFallback` (App.tsx), the `eventsLoading` state and
       the map Suspense fallback (EventsDashboard.tsx)
-- [x] 3.3 `.dashboard-state`, `.spinner`, `@keyframes spin` and the ≤768px
-      padding override moved from `EventsDashboard.css` (lazy chunk CSS) to
-      `App.css` (eager) — confirmed by `grep` on the built `index-*.css`
-- [x] 3.4 `LoadingState.test.tsx` (3 cases, axe clean) and a new
-      `EventsDashboard.test.tsx` case that holds the fetch open, asserts the
-      status region + text + decorative spinner, runs axe, then resolves and
-      asserts the region is gone. 102/102 tests.
+- [x] 3.3 `LoadingState.css` co-located with the component (§1.5/§7.2),
+      classes prefixed `.loading-state` (§7.3); App.tsx importing the component
+      puts it in the eager bundle — confirmed by `grep` on the built
+      `index-*.css`. `.dashboard-state` stays in `EventsDashboard.css` for the
+      error card; the unused `.spinner` is removed. (First cut moved the rules
+      into `App.css`; `/openspec-review` flagged §7.2 and it was redone.)
+- [x] 3.4 `LoadingState.test.tsx` (3 cases, axe clean), `App.fallback.test.tsx`
+      (never-resolving chunk mock: status region inside the reservation,
+      decorative bar, axe clean) and a new `EventsDashboard.test.tsx` case that
+      holds the fetch open, asserts the status region, runs axe, then resolves
+      and asserts the region is gone. 105/105 tests.
 
 ## 4. Above-the-fold affordance at phone widths
 

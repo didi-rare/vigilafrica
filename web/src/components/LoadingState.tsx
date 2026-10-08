@@ -1,3 +1,5 @@
+import './LoadingState.css'
+
 /**
  * LoadingState is the single loading treatment for the dashboard's three
  * loading regions (chore-web-audit-leftovers items 3 and 5): the lazy-chunk
@@ -13,15 +15,15 @@
  * `aria-label` — labelling both would announce the wait twice. No `aria-busy`
  * is set on an ancestor: it asks assistive technology to defer changes under
  * the busy element, which would suppress exactly this announcement.
- *
- * Styling lives in App.css (`.dashboard-state`, `.spinner`), not in the
- * dashboard's stylesheet: that file is bundled into the lazy chunk's CSS, and
- * the outer fallback renders before the chunk exists.
  */
-export function LoadingState({ message }: { message: string }) {
+type Props = {
+  message: string
+}
+
+export function LoadingState({ message }: Props) {
   return (
-    <div className="dashboard-state loading" role="status" aria-live="polite">
-      <span className="spinner" aria-hidden="true" />
+    <div className="loading-state" role="status" aria-live="polite">
+      <span className="loading-state__spinner" aria-hidden="true" />
       <p>{message}</p>
     </div>
   )

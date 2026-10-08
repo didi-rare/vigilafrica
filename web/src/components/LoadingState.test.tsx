@@ -11,18 +11,20 @@ describe('LoadingState', () => {
     const region = screen.getByRole('status')
     expect(region).toHaveAttribute('aria-live', 'polite')
     expect(region).toHaveTextContent('Loading dashboard telemetry...')
-    // Same card as the inner dashboard states, so the outer Suspense fallback
-    // and the data-fetch state are one treatment (chore-web-audit-leftovers 5).
-    expect(region).toHaveClass('dashboard-state')
   })
 
   it('keeps the spinner decorative so the wait is announced once', () => {
-    const { container } = render(<LoadingState message="Fetching satellite telemetry..." />)
+    render(<LoadingState message="Fetching satellite telemetry..." />)
 
-    const spinner = container.querySelector('.spinner')
-    expect(spinner).not.toBeNull()
-    expect(spinner).toHaveAttribute('aria-hidden', 'true')
-    expect(screen.getByRole('status')).not.toHaveAttribute('aria-label')
+    const region = screen.getByRole('status')
+    // The only thing in the region besides the message is the spinner; it must
+    // be hidden from the accessibility tree and carry no label of its own, so
+    // the accessible content of the region is exactly the message.
+    const hidden = region.querySelectorAll('[aria-hidden="true"]')
+    expect(hidden).toHaveLength(1)
+    expect(hidden[0]).not.toHaveAttribute('aria-label')
+    expect(region).not.toHaveAttribute('aria-label')
+    expect(region).toHaveTextContent(/^Fetching satellite telemetry\.\.\.$/)
   })
 
   it('has no accessibility violations', async () => {

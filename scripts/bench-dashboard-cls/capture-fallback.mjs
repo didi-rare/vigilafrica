@@ -43,8 +43,8 @@ try {
       viewport: { width: window.innerWidth, height: window.innerHeight },
       bar: rect('.load-progress'),
       fallback: rect('.dashboard-fallback'),
-      card: rect('.dashboard-fallback .dashboard-state'),
-      spinner: rect('.dashboard-fallback .spinner'),
+      card: rect('.dashboard-fallback .loading-state'),
+      spinner: rect('.dashboard-fallback .loading-state__spinner'),
       statusText: status?.textContent?.trim() ?? null,
       ariaLive: status?.getAttribute('aria-live') ?? null,
     }

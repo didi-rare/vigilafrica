@@ -103,8 +103,8 @@ was observed to fix a shift — do not cite it as one.
 
 ### Re-measured for `chore-web-audit-leftovers`
 
-That change put the shared `.dashboard-state` loading card (spinner + status
-text) inside the reservation and added a fixed, zero-footprint progress bar.
+That change put the shared `.loading-state` card (spinner + status text)
+inside the reservation and added a fixed, zero-footprint progress bar.
 Measured with `VIEWPORT=<w>x<h>` (new override) at the three audit viewports
 plus the harness default, 8 runs per cell, control = `origin/development` at
 `3040a00`:

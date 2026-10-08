@@ -148,11 +148,12 @@ describe('EventsDashboard', () => {
 
     const { container } = renderWithProviders(<EventsDashboard />)
 
+    // The freshness banner is a named status region that may already be
+    // mounted; the loading region is the one whose accessible name is empty
+    // because its visible text is the live content.
     const loading = await screen.findByRole('status', { name: '' })
     expect(loading).toHaveTextContent('Fetching satellite telemetry...')
     expect(loading).toHaveAttribute('aria-live', 'polite')
-    expect(loading).toHaveClass('dashboard-state')
-    expect(container.querySelector('.spinner')).toHaveAttribute('aria-hidden', 'true')
 
     const results = await axe(container)
     expect(results.violations).toHaveLength(0)

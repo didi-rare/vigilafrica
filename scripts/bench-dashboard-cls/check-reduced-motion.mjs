@@ -18,7 +18,7 @@ const CHECKS = [
   { selector: '.staging-banner', pseudo: '::after',  label: 'staging glow' },
   { selector: '.signal-dot',     pseudo: '::after',  label: 'signal ring' },
   { selector: '.load-progress',  pseudo: '::after',  label: 'load-progress segment' },
-  { selector: '.spinner',        pseudo: null,       label: 'spinner' },
+  { selector: '.loading-state__spinner', pseudo: null, label: 'spinner' },
 ]
 
 const browser = await chromium.launch()
