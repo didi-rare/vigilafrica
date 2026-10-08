@@ -1,8 +1,12 @@
 ---
 id: fix-maplibre-xss-advisory
-status: in-progress
+status: archived
 branch: fix/maplibre-xss-advisory
+merged_pr: https://github.com/didi-rare/vigilafrica/pull/266
+archived_on: 2026-10-08
 ---
+
+> Archived 2026-10-08: shipped in v1.6.1 (#266). Verified on `development`: `web/package.json` pins `maplibre-gl` 6.8.0 and `web/scripts/csp-map-check.py` is committed. ⚠️ The "look at the staging map after deploy" check in *Out of Scope / Not Verified* was **not** performed from the repository (nothing here deploys or reaches staging); it has been in production since 2026-09-11 without a reported regression, which is absence of complaint, not evidence. Worth one look by a person if it has not had one.
 
 # Proposal: Migrate to maplibre-gl 6 to Clear a CVSS 10.0 XSS (fix-maplibre-xss-advisory)
 

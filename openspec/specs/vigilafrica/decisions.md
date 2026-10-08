@@ -302,7 +302,7 @@ Implement an automated governance gate ("The Sentinel") that prevents code chang
    - **Trivial Fixes**: the HEAD commit under review may opt out with `[trivial]` — but only when
      that exact token is the **entire content of one of its lines, unindented**. A mention inside a
      sentence, or an indented/quoted example, does not qualify — see
-     `openspec/proposals/fix-sentinel-trivial-bypass-overmatch.md` for why that distinction exists.
+     `openspec/archive/proposal-fix-sentinel-trivial-bypass-overmatch.md` for why that distinction exists.
      The opt-out is not inherited from an earlier commit on the branch, and it still excuses the
      whole PR diff, not just the commit that carries it — see that proposal's "Known limitation."
    - **Maintenance**: Changes to `api/db/migrations/`, `docs/`, or root configuration files are exempt.
