@@ -1,6 +1,6 @@
 ---
 id: chore-design-tokens
-status: in-progress
+status: implemented — awaiting review
 branch: chore/design-tokens
 ---
 
@@ -62,10 +62,10 @@ Do it in **that order, as separate commits**, and stop at any point. Spacing is 
 
 ## Verification
 
-- [ ] Visual diff is **zero** at 375/768/1280 px, verified by screenshot comparison — the same protocol `chore-css-tokens` used. Green CI is not sufficient evidence for a pure-CSS refactor.
-- [ ] `npm run lint:styles` passes with the extended `declaration-strict-value` rule, i.e. new literals are actually rejected
-- [ ] Every remaining raw literal has a recorded reason (local stacking, allow-listed keyword)
-- [ ] Accessibility stays at 100 and CLS does not regress — typography changes alter line boxes, so re-run `scripts/bench-dashboard-cls/` if the dashboard's mounted height moves
+- [x] Visual diff is **zero** at 375/768/1280 px, verified by screenshot comparison — the same protocol `chore-css-tokens` used. Green CI is not sufficient evidence for a pure-CSS refactor. **Done:** `scripts/bench-design-tokens/screenshot-diff.mjs`, two arms (branch vs a control built from `origin/development`), `/`, `/for-partners`, `/events/:id` × 375/768/1280: perceptual 0, exact 0, identical page heights on all nine cells, after every slice and at the end (`tasks.md` §1.4, 2.4, 3.3, 5.2, 6.2).
+- [x] `npm run lint:styles` passes with the extended `declaration-strict-value` rule, i.e. new literals are actually rejected. **Done:** re-break test rejected 8 of 8 deliberate literals, one per governed family (`tasks.md` §4.3).
+- [x] Every remaining raw literal has a recorded reason (local stacking, allow-listed keyword). **Done:** seven z-index literals audited and covered by the lint's −1…2 range; two `margin: -1px` sites annotated; everything else is in `web/.stylelintrc.suppressions.md`.
+- [x] Accessibility stays at 100 and CLS does not regress — typography changes alter line boxes, so re-run `scripts/bench-dashboard-cls/` if the dashboard's mounted height moves. **Done by construction:** 0 differing pixels and identical page heights mean no line box moved and the mounted dashboard height is unchanged, so the CLS harness was not re-run; the accessibility score cannot change when the rendered DOM and pixels are identical.
 
 ## Out of Scope
 

@@ -351,7 +351,7 @@ navigate({ pathname: "/events", search: params.toString() });
 
 > Cross-ref: ADR-013 (Plain CSS over CSS-in-JS — ACCEPTED 2026-04-18), ADR-015 (type system).
 >
-> **Enforcement:** stylelint is the only CI-enforced style gate in the repo (`npm run lint:styles`, run by the "Run Frontend Style Lint" job). `web/.stylelintrc.json` wires `stylelint-declaration-strict-value` to reject any **colour-ish** literal that isn't a `var(--…)` — `color`, `background`, `background-color`, `fill`, `stroke` and the `border-*-color` family — with `src/styles/tokens.css` exempted via an override. **Spacing, typography, and z-index are NOT machine-checked**; those halves of §7.5/§7.10/§7.11 are review-enforced only.
+> **Enforcement:** stylelint is the only CI-enforced style gate in the repo (`npm run lint:styles`, run by the "Run Frontend Style Lint" job). `web/.stylelintrc.json` wires `stylelint-declaration-strict-value` to reject any literal that isn't a `var(--…)` for colour (`color`, `background`, `background-color`, `fill`, `stroke`, the `border-*-color` family), spacing (`padding`, `margin` and their longhands, `gap`, `row-gap`, `column-gap`), typography (`font-size`, `font-weight`, `line-height`, `letter-spacing`) and `z-index` (literals allowed only in the local-stacking range −1…2), with `src/styles/tokens.css` exempted via an override. Since `chore-design-tokens` (2026-10) all of §7.5, §7.10 and §7.11 are machine-checked; the remaining suppressions and every annotated exception are recorded with their reasons in `web/.stylelintrc.suppressions.md`.
 
 **§7.1 — Plain CSS files co-located with components. No CSS-in-JS, no Tailwind, no CSS Modules.**
 *Why:* Zero runtime cost, no build transformation, readable by anyone.
@@ -375,7 +375,7 @@ navigate({ pathname: "/events", search: params.toString() });
 **§7.5 — Colours, spacing, typography, and z-index are CSS custom properties defined in `src/styles/tokens.css`. Never hardcode values in component CSS.**
 ❌ `color: #1a6b3c;`
 ✅ `color: var(--color-primary);`
-*Enforcement is uneven:* colours are mechanically blocked by stylelint (see the section header). Spacing, type and z-index are not — the migration is partial and new hardcoded values will pass CI. Don't add them anyway.
+*Enforcement:* colours, spacing, type and z-index are all mechanically blocked by stylelint (see the section header); a new literal fails `npm run lint:styles`. Scales: spacing is `--space-<steps>` in 0.25rem steps (`--space-6` = 24px), type sizes are `--font-size-<px>` (`--font-size-14` = 0.875rem) plus the fluid `--font-size-display-*`, weights are `--font-weight-regular|medium|semibold|bold`. A handful of off-grid legacy values (`--space-1-8` = 7.2px, `--font-size-14-4` = 0.9rem) are kept in labelled blocks in `tokens.css` so the migration changed no pixels; snapping them is a visually-reviewed follow-up, so prefer the on-grid neighbour for new work.
 
 **§7.6 — Responsive breakpoints are defined centrally. Components do not hardcode pixel values for breakpoints.**
 
@@ -392,7 +392,7 @@ navigate({ pathname: "/events", search: params.toString() });
 ```css
 :root { --z-modal: 300; --z-nav: 200; --z-map-controls: 100; }
 ```
-⚠️ **Partially migrated — this rule does not yet describe the codebase.** The `--z-*` properties live ad-hoc in `src/App.css` (`--z-nav`, `--z-dropdown`, `--z-skip-link`) and `src/index.css` (`--z-map-hud`) rather than in `tokens.css`, and hardcoded literals survive in `App.css` and `components/Map.css`. Nothing checks this — stylelint's strict-value rule covers colours only. Consolidating the scale into `tokens.css` is an open chore (`chore-z-index-tokens`); until then, reuse an existing `--z-*` rather than inventing a number, and don't add new ad-hoc properties.
+The scale lives in `tokens.css` (`--z-map-hud: 10`, `--z-nav: 100`, `--z-dropdown: 200`, `--z-skip-link: 1000`) and stylelint rejects any other `z-index` literal outside −1…2. That range is for local stacking inside a contained context (a marker's badge over its pointer, a ring behind its dot under `isolation: isolate`), not for layering against the page; a new global layer is a new `--z-*` token.
 
 **§7.11 — Font families come from the type tokens in `tokens.css` — `--font-display` (Space Grotesk), `--font-body` (IBM Plex Sans), `--font-mono` (IBM Plex Mono). Never hardcode a font name in component CSS (ADR-015 "Ground Truth").**
 *Why:* The three-family system is the brand voice; routing through tokens keeps it swappable in one place and prevents a stray `font-family: Inter` regressing the identity. Fonts are self-hosted via `@fontsource` (no runtime CDN call) — see §15.
