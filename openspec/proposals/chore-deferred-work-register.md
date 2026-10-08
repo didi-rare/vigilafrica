@@ -142,7 +142,7 @@ Added in that PR, on independent-review advice, because its spec's "Out of scope
 
 ### F1. `EventDetail` loading region has no live region and its own text-only treatment
 
-`web/src/pages/EventDetail.tsx` renders `<div className="event-detail-state">Loading event telemetry...</div>` — the same two defects #283 fixed for the dashboard (no `role="status"`, a different treatment from the spinner card). It is one `LoadingState` away; `.event-detail-state` restates the dashboard card's styles and could go with it.
+`web/src/pages/EventDetail.tsx` renders `<div className="event-detail-state">Loading event telemetry...</div>` — the same two defects #283 fixed for the dashboard (no `role="status"`, a different treatment from the spinner card). The loading branch is one `LoadingState` away; `.event-detail-state` stays, because it is also the not-found card (`EventDetail.tsx:73`).
 
 ### F2. The hero CTA's `#dashboard` anchor does not exist while the chunk loads
 

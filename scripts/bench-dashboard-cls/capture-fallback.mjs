@@ -17,8 +17,15 @@
 import { chromium } from 'playwright'
 
 const TARGET_URL = process.env.TARGET_URL ?? 'http://localhost:4173/'
-const [VW, VH]   = (process.env.VIEWPORT ?? '375x812').split('x').map(Number)
+const { width: VW, height: VH } = parseViewport(process.env.VIEWPORT ?? '375x812')
 const OUT        = process.env.OUT ?? `fallback-${VW}x${VH}.png`
+
+// Same contract as measure-cls.mjs: exactly two positive integers, or fail now.
+function parseViewport(raw) {
+  const m = /^(\d+)[xX](\d+)$/.exec(raw.trim())
+  if (!m) throw new Error(`VIEWPORT must look like 375x812, got ${JSON.stringify(raw)}`)
+  return { width: Number(m[1]), height: Number(m[2]) }
+}
 
 const browser = await chromium.launch()
 try {

@@ -51,7 +51,7 @@
       `index-*.css`. `.dashboard-state` stays in `EventsDashboard.css` for the
       error card; the unused `.spinner` is removed. (First cut moved the rules
       into `App.css`; `/openspec-review` flagged §7.2 and it was redone.)
-- [x] 3.4 `LoadingState.test.tsx` (3 cases, axe clean), `App.fallback.test.tsx`
+- [x] 3.4 `LoadingState.test.tsx` (4 cases, axe clean), `App.fallback.test.tsx`
       (never-resolving chunk mock: status region inside the reservation,
       decorative bar, axe clean) and a new `EventsDashboard.test.tsx` case that
       holds the fetch open, asserts the status region, runs axe, then resolves
@@ -83,14 +83,14 @@
       under reduced motion (`check-reduced-motion.mjs`: `animation=none …
       width=1350px`, and the script now exits 1 if any must-stop animation
       still runs or an element is missing)
-- [x] 4.3 `.dashboard-fallback` is `flow-root`, not `block`: review measured
-      the card's 2rem top margin collapsing through the fallback and growing
-      the reservation 32px past its cap. After the fix the fallback starts at
-      the hero's bottom edge and is exactly 1530px tall at 1920×1600.
 - [x] 4.2 `capture-fallback.mjs` at 375×812, chunk held back: bar at
       y 0–3 (**in view**), card at y 1064–1244 (below the fold, as before);
       control arm has no bar and a 26px text-only fallback at y 1032.
       Screenshot confirms the amber bar across the top of the hero.
+- [x] 4.3 `.dashboard-fallback` is `flow-root`, not `block`: review measured
+      the card's 2rem top margin collapsing through the fallback and growing
+      the reservation 32px past its cap. After the fix the fallback starts at
+      the hero's bottom edge and is exactly 1530px tall at 1920×1600.
 
 ## Verification
 

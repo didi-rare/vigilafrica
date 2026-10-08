@@ -33,7 +33,7 @@ the cloud session containers), pin the Playwright release that ships that
 build instead of downloading another — `chromium-1194` is Playwright 1.56.x,
 and a newer Playwright will refuse to launch an older build.
 
-Both scripts mock every API response (`/health`, `/v1/context`, `/v1/states`,
+All four scripts mock every API response (`/health`, `/v1/context`, `/v1/states`,
 `/v1/events`), so no API needs to be running. That is not only convenience: the
 production API rejects cross-origin fetches from `localhost`, and mocking lets
 the fixture be pinned at the 3,268-event continental scale rather than today's 43.
@@ -119,7 +119,10 @@ plus the harness default, 8 runs per cell, control = `origin/development` at
 No cell worse than the control. The 1920x1600 residual is still the freshness
 banner (the two zero runs are timing noise in when it lands); the sub-0.001
 residual elsewhere is the nav settling as fonts load, on both arms. The bar is
-`position: fixed`, so it never appears as a shift source.
+`position: fixed`, so it never appears as a shift source. The branch arm lists
+one extra source, `P`: it is the loading card's `<p>` in the same font-swap
+entry as the nav, with identical before/after rects — the control's bare text
+node simply had no element to attribute to. Same value, one more name.
 
 ⚠️ CLS did not catch the margin-collapse defect this change shipped and then
 fixed (the loading card's 2rem top margin collapsing through
