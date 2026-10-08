@@ -78,16 +78,16 @@ Not done, recorded: the `EventDetail` loading region has the same two defects an
 - [x] `npm run lint` / `type-check` / `lint:styles` / `test` (106/106) / `build` clean
 - [x] CLS A/B against the control build, `measure-cls.mjs` with the new `VIEWPORT` override, 8 runs per cell — table below. The proposal's "still 0" was never literally true: the control carries the pre-existing freshness-banner residual at 1920×1600 that #221 recorded. The bar is what this change must not move, and it does not.
 
-| viewport | control (`3040a00`) | branch |
+| viewport | control (`3040a00`) | branch (final, after the `flow-root` fix) |
 |---|---|---|
-| 1920×1600 | 0.0054 (8/8 shifting) | 0.0054 (8/8) |
+| 1920×1600 | 0.0054 (8/8 shifting) | 0.0054 ×6, 0.0000 ×2 (6/8) |
 | 1350×940 | 0.0001 (0/8) | 0.0001 (0/8) |
 | 768×1024 | 0.0002 (0/8) | 0.0002 (0/8) |
-| 375×812 | 0.0003 (0/8) | 0.0003 (0/8) |
+| 375×812 | 0.0003 ×7, 0.0002 ×1 (0/8) | 0.0003 (0/8) |
 
-Identical in every cell to four decimals. The sub-0.001 residual at the three audit viewports is the nav (`nav-station`, `nav-actions`) settling as fonts load, present on the control too; the 1920×1600 residual is the freshness banner. The progress bar never appears as a shift source, as a fixed element cannot.
+No cell is worse than the control; at 1920×1600 two branch runs recorded no shift at all, which is timing noise in when the freshness banner lands relative to the dashboard mount, not a change this PR made. The sub-0.001 residual at the three audit viewports is the nav (`nav-station`, `nav-actions`) settling as fonts load, present on the control too; the 1920×1600 residual is the freshness banner. The progress bar never appears as a shift source, as a fixed element cannot.
 
-⚠️ Table measured before the `flow-root` margin fix (review finding). Re-measure after it: **in progress** — 1920×1600 so far: control 0.0054 (8/8), branch 0.0054 (6/8, two runs at 0.0000). Remaining cells to follow in the next commit.
+An earlier measurement before the `flow-root` margin fix gave 0.0054 (8/8) / 0.0001 / 0.0002 / 0.0003 on the branch — identical to the control in every cell — and is superseded by the table above. The 32px the collapsed margin added to the reservation never produced an on-screen shift at any audit viewport, which is why the earlier table could not have caught it; the capture script's bounding boxes did.
 
 ## Origin
 

@@ -111,14 +111,22 @@ plus the harness default, 8 runs per cell, control = `origin/development` at
 
 | viewport | control CLS | branch CLS |
 |---|---|---|
-| 1920x1600 | 0.0054 (8/8) | 0.0054 (8/8) |
+| 1920x1600 | 0.0054 (8/8) | 0.0054 ×6, 0.0000 ×2 (6/8) |
 | 1350x940 | 0.0001 (0/8) | 0.0001 (0/8) |
 | 768x1024 | 0.0002 (0/8) | 0.0002 (0/8) |
-| 375x812 | 0.0003 (0/8) | 0.0003 (0/8) |
+| 375x812 | 0.0003 ×7, 0.0002 ×1 (0/8) | 0.0003 (0/8) |
 
-Identical in every cell. The 1920x1600 residual is still the freshness banner;
-the sub-0.001 residual elsewhere is the nav settling as fonts load, on both
-arms. The bar is `position: fixed`, so it never appears as a shift source.
+No cell worse than the control. The 1920x1600 residual is still the freshness
+banner (the two zero runs are timing noise in when it lands); the sub-0.001
+residual elsewhere is the nav settling as fonts load, on both arms. The bar is
+`position: fixed`, so it never appears as a shift source.
+
+⚠️ CLS did not catch the margin-collapse defect this change shipped and then
+fixed (the loading card's 2rem top margin collapsing through
+`.dashboard-fallback`, growing the reservation 32px past its cap): the extra
+height sat below the fold at every audit viewport, and an off-screen shift is
+not counted. `capture-fallback.mjs`'s bounding boxes are what showed it —
+measure geometry as well as CLS when the reservation changes.
 
 ## Measuring the fallback affordance
 
