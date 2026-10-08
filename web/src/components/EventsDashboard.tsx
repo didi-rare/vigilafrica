@@ -53,6 +53,19 @@ type FreshnessSnapshot =
 // accurate between refetches (chore-post-v11-quality-sweep F6).
 function selectFreshness(health: HealthResponse): FreshnessSnapshot {
   if (health.status === 'degraded') {
+    // A degraded status no longer always means ingestion failed. When no run
+    // actually failed, the cause is GDACS being unreachable for some flood
+    // polygons: data IS arriving, but specific flood areas are missing. Saying
+    // "ingestion did not complete" would be false, and saying nothing would hide
+    // that floods may be absent from a warning map (fix-gdacs-degraded-run-status).
+    const runs = [health.last_ingestion, ...Object.values(health.last_ingestion_by_country ?? {})]
+    if (!runs.some((r) => r?.status === 'failure')) {
+      return {
+        kind: 'error',
+        message:
+          'Some flood areas could not be verified with the GDACS flood-mapping service on the latest update, so they may be missing or out of date on the map. Verification is retried on every update. Other events are unaffected.',
+      }
+    }
     const message = health.last_ingestion?.status === 'failure'
       ? 'Latest ingestion did not complete successfully. Data may be delayed while operators investigate.'
       : 'One or more country ingestion runs did not complete successfully. Some regional data may be delayed.'

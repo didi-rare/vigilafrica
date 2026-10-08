@@ -56,8 +56,16 @@ const (
 	maxGDACSResponseBytes = 4 << 20 // 4 MiB — flood polygons run to thousands of vertices
 	// maxGDACSEpisodes bounds episode enumeration. GDACS numbers episodes from 1
 	// and the event payload declares how many exist; this is a backstop against a
-	// malformed count turning one event into unbounded requests.
-	maxGDACSEpisodes = 20
+	// malformed count turning one event into unbounded requests. The per-run
+	// request and wall-clock budgets are what actually bound outbound work.
+	//
+	// ⚠️ It was 20, and real events exceed that: GDACS flood 1104053 (Italy)
+	// declared 34 episodes on 2026-10-03. With fix-gdacs-degraded-run-status a
+	// truncated scan counts as incomplete, so a cap below real episode counts
+	// would mark such an event degraded on every run for its whole lifetime
+	// (independent review, PR #280, round 2). A declared count above 100 is
+	// treated as malformed: the scan stops there and is reported incomplete.
+	maxGDACSEpisodes = 100
 )
 
 // gdacsEventTypes is a real allowlist of GDACS hazard codes. A bare `[A-Z]{2}`
@@ -117,36 +125,59 @@ func parseGDACSReference(sourceURL string) (gdacsReference, bool) {
 	return ref, true
 }
 
-func gdacsGetJSON(ctx context.Context, budget *RunBudget, reqURL string, into interface{}) bool {
+// fetchOutcome classifies one GDACS request. The distinction exists for run
+// health (fix-gdacs-degraded-run-status): "GDACS does not know this event" is a
+// data fact, while "GDACS could not answer" is an outage that must not be
+// reported as a healthy run.
+type fetchOutcome int
+
+const (
+	fetchOK       fetchOutcome = iota
+	fetchNotFound              // GDACS answered 404: it does not know this event/episode
+	fetchUpstream              // no usable answer: budget, transport, timeout, 5xx/429/redirect, bad body
+)
+
+func gdacsGetJSON(ctx context.Context, budget *RunBudget, reqURL string, into interface{}) fetchOutcome {
 	// Spend here, not per resolution: one resolution can issue up to
 	// 1 + maxGDACSEpisodes requests, so counting resolutions understated the real
 	// outbound volume by more than an order of magnitude.
 	if !budget.spend() {
-		return false
+		return fetchUpstream
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
-		return false
+		return fetchUpstream
 	}
 	resp, err := gdacsHTTPClient.Do(req)
 	if err != nil {
-		return false
+		return fetchUpstream
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return fetchNotFound
+	}
 	// ErrUseLastResponse surfaces the redirect itself, which is not a usable body.
 	if resp.StatusCode != http.StatusOK {
-		return false
+		return fetchUpstream
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxGDACSResponseBytes))
 	if err != nil {
-		return false
+		return fetchUpstream
 	}
-	return json.Unmarshal(body, into) == nil
+	if json.Unmarshal(body, into) != nil {
+		return fetchUpstream
+	}
+	return fetchOK
 }
 
 type gdacsEventData struct {
-	Properties struct {
-		EpisodeID int `json:"episodeid"`
+	// Pointer on purpose: a 200 whose body lacks "properties" (`{}`, null, a
+	// maintenance envelope) is NOT an answer that the event has no episodes. It
+	// must classify as upstream, not as a refusal (independent review, PR #280).
+	Properties *struct {
+		// Pointer, and Episodes left nil when absent: `{"properties":{}}` must not
+		// read as an explicit "zero episodes" answer (independent review, round 2).
+		EpisodeID *int `json:"episodeid"`
 		Episodes  []struct {
 			Details string `json:"details"`
 		} `json:"episodes"`
@@ -154,6 +185,8 @@ type gdacsEventData struct {
 }
 
 type gdacsFeatureCollection struct {
+	// nil when "features" is absent or null; an explicit [] decodes to an empty
+	// non-nil slice. Only the latter is GDACS saying "no geometry here".
 	Features []struct {
 		Properties struct {
 			Class     string `json:"Class"`
@@ -176,34 +209,88 @@ type gdacsFeatureCollection struct {
 // ⚠️ The caller MUST NOT fall back to the EONET geometry — that is the transposed
 // data this exists to reject.
 func ResolveGDACSPolygon(ctx context.Context, sourceURL string, eonet [][2]float64) (GDACSGeometry, bool) {
-	return resolveGDACSPolygon(ctx, nil, sourceURL, eonet)
+	geom, failure := resolveGDACSPolygon(ctx, nil, sourceURL, eonet)
+	return geom, failure == resolveOK
+}
+
+// resolveFailure says WHY a resolution did not produce a geometry.
+//
+// ⚠️ The two failure kinds must never be conflated (fix-gdacs-degraded-run-status):
+//
+//   - resolveUnverifiable — GDACS answered (or the reference is unusable) and no
+//     single polygon matches. This is the fail-closed refusal working as designed;
+//     counting it as an outage would keep a run degraded forever over one
+//     genuinely unmatchable flood.
+//   - resolveUpstream — GDACS could not give a complete answer. This is the
+//     outage that used to be invisible: the event is skipped exactly as before,
+//     but the run is now reported degraded instead of success.
+type resolveFailure int
+
+const (
+	resolveOK resolveFailure = iota
+	resolveUnverifiable
+	resolveUpstream
+)
+
+func (f resolveFailure) String() string {
+	switch f {
+	case resolveOK:
+		return "ok"
+	case resolveUnverifiable:
+		return "unverifiable"
+	case resolveUpstream:
+		return "upstream"
+	}
+	return "unknown"
+}
+
+// failureFor maps a non-OK fetch outcome onto a resolution failure.
+func failureFor(o fetchOutcome) resolveFailure {
+	if o == fetchNotFound {
+		return resolveUnverifiable
+	}
+	return resolveUpstream
 }
 
 // resolveGDACSPolygon is the budgeted implementation. A nil budget means
 // unbounded, which is only used by tests that exercise resolution directly.
-func resolveGDACSPolygon(ctx context.Context, budget *RunBudget, sourceURL string, eonet [][2]float64) (GDACSGeometry, bool) {
+func resolveGDACSPolygon(ctx context.Context, budget *RunBudget, sourceURL string, eonet [][2]float64) (GDACSGeometry, resolveFailure) {
 	ref, valid := parseGDACSReference(sourceURL)
 	if !valid || len(eonet) == 0 {
-		return GDACSGeometry{}, false
+		return GDACSGeometry{}, resolveUnverifiable
 	}
 	wantVertices := len(eonet)
 
 	var event gdacsEventData
-	if !gdacsGetJSON(ctx, budget, fmt.Sprintf("%s?eventtype=%s&eventid=%s",
-		gdacsEventDataURL, url.QueryEscape(ref.EventType), url.QueryEscape(ref.EventID)), &event) {
-		return GDACSGeometry{}, false
+	if o := gdacsGetJSON(ctx, budget, fmt.Sprintf("%s?eventtype=%s&eventid=%s",
+		gdacsEventDataURL, url.QueryEscape(ref.EventType), url.QueryEscape(ref.EventID)), &event); o != fetchOK {
+		return GDACSGeometry{}, failureFor(o)
+	}
+	if event.Properties == nil || (event.Properties.Episodes == nil && event.Properties.EpisodeID == nil) {
+		// No properties, or properties carrying neither episode field: not an
+		// answer. Only an explicit episodes:[] or episodeid:0 is GDACS saying
+		// "nothing here".
+		return GDACSGeometry{}, resolveUpstream
 	}
 
+	// incomplete records whether the scan saw fewer than all episodes. "No
+	// episode matched" is only a refusal if we actually saw every episode; from a
+	// partial view it is an outage, because the matching ring may be the one we
+	// missed.
+	incomplete := false
+
 	episodes := len(event.Properties.Episodes)
-	if episodes == 0 {
-		episodes = event.Properties.EpisodeID
+	if episodes == 0 && event.Properties.EpisodeID != nil {
+		episodes = *event.Properties.EpisodeID
 	}
-	if episodes <= 0 || episodes > maxGDACSEpisodes {
-		if episodes > maxGDACSEpisodes {
-			episodes = maxGDACSEpisodes
-		} else {
-			return GDACSGeometry{}, false
-		}
+	if episodes <= 0 {
+		return GDACSGeometry{}, resolveUnverifiable
+	}
+	if episodes > maxGDACSEpisodes {
+		// Scanning stops at the cap, so episodes beyond it are never seen. That is
+		// a partial view by construction (independent review, PR #280).
+		episodes = maxGDACSEpisodes
+		incomplete = true
 	}
 
 	// ⚠️ Collect ALL candidates rather than returning the first match. If two
@@ -216,12 +303,23 @@ func resolveGDACSPolygon(ctx context.Context, budget *RunBudget, sourceURL strin
 		// Respect cancellation between episodes: this loop is network-bound and
 		// sits inside a scheduled run with a bounded lease (§3.6).
 		if ctx.Err() != nil {
-			return GDACSGeometry{}, false
+			// The run budget's deadline (or the run itself) ended the scan early.
+			return GDACSGeometry{}, resolveUpstream
 		}
 
 		var fc gdacsFeatureCollection
-		if !gdacsGetJSON(ctx, budget, fmt.Sprintf("%s?eventtype=%s&eventid=%s&episodeid=%d",
+		switch gdacsGetJSON(ctx, budget, fmt.Sprintf("%s?eventtype=%s&eventid=%s&episodeid=%d",
 			gdacsGeometryURL, url.QueryEscape(ref.EventType), url.QueryEscape(ref.EventID), ep), &fc) {
+		case fetchOK:
+			if fc.Features == nil {
+				// A 200 with no "features" key is not an answer for this episode.
+				incomplete = true
+				continue
+			}
+		case fetchNotFound:
+			continue // GDACS answered: this episode has no geometry
+		default:
+			incomplete = true
 			continue
 		}
 
@@ -265,8 +363,13 @@ func resolveGDACSPolygon(ctx context.Context, budget *RunBudget, sourceURL strin
 			distinct[c.GeoJSON] = c
 		}
 	}
+	if len(distinct) == 0 && incomplete {
+		return GDACSGeometry{}, resolveUpstream
+	}
 	if len(distinct) != 1 {
-		return GDACSGeometry{}, false
+		// Zero matches from a complete scan, or two DIFFERENT matching rings:
+		// either way GDACS answered and the geometry cannot be established.
+		return GDACSGeometry{}, resolveUnverifiable
 	}
 	// Prefer the lowest episode id among identical geometries, so the result is
 	// deterministic rather than dependent on map iteration order.
@@ -276,7 +379,7 @@ func resolveGDACSPolygon(ctx context.Context, budget *RunBudget, sourceURL strin
 			best = c
 		}
 	}
-	return best, true
+	return best, resolveOK
 }
 
 // collectPositions flattens nested GeoJSON coordinate arrays into [lon, lat]
@@ -479,8 +582,8 @@ type RunBudget struct {
 }
 
 type gdacsCacheEntry struct {
-	geom GDACSGeometry
-	ok   bool
+	geom    GDACSGeometry
+	failure resolveFailure
 }
 
 // NewRunBudget creates the single budget for one ingestion run.
@@ -512,14 +615,23 @@ func (b *RunBudget) spend() bool {
 // what selects the episode — two events sharing a GDACS id but different
 // footprints must not share a cached answer.
 func (b *RunBudget) resolve(ctx context.Context, sourceURL string, eonet [][2]float64) (GDACSGeometry, bool) {
+	geom, failure := b.resolveTyped(ctx, sourceURL, eonet)
+	return geom, failure == resolveOK
+}
+
+// resolveTyped is resolve with the failure reason kept, so the ingest loop can
+// tell an outage from a refusal (fix-gdacs-degraded-run-status).
+func (b *RunBudget) resolveTyped(ctx context.Context, sourceURL string, eonet [][2]float64) (GDACSGeometry, resolveFailure) {
 	key := fmt.Sprintf("%s#%d", sourceURL, len(eonet))
 	if hit, seen := b.cache[key]; seen {
-		return hit.geom, hit.ok
+		return hit.geom, hit.failure
 	}
 	if b.requestsLeft <= 0 || !time.Now().Before(b.deadline) {
-		// Budget exhausted, by calls or by wall clock. Returning false means the
-		// event is skipped rather than stored unverified — the safe direction.
-		return GDACSGeometry{}, false
+		// Budget exhausted, by calls or by wall clock. The event is skipped rather
+		// than stored unverified — the safe direction — but it is coverage we did
+		// not even try to get, so it counts as upstream, not as a refusal. Not
+		// cached: the next run has a fresh budget.
+		return GDACSGeometry{}, resolveUpstream
 	}
 	// Cap this resolution at whatever remains of the run budget, so the total
 	// cannot drift past it however slow upstream is. The REQUEST COUNT is spent
@@ -527,9 +639,9 @@ func (b *RunBudget) resolve(ctx context.Context, sourceURL string, eonet [][2]fl
 	cctx, cancel := context.WithDeadline(ctx, b.deadline)
 	defer cancel()
 
-	geom, ok := resolveGDACSPolygon(cctx, b, sourceURL, eonet)
-	b.cache[key] = gdacsCacheEntry{geom: geom, ok: ok}
-	return geom, ok
+	geom, failure := resolveGDACSPolygon(cctx, b, sourceURL, eonet)
+	b.cache[key] = gdacsCacheEntry{geom: geom, failure: failure}
+	return geom, failure
 }
 
 // polygonPositionsFromGeoJSON extracts [lon, lat] pairs from a Polygon GeoJSON

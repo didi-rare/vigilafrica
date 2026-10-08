@@ -96,7 +96,18 @@ func (c *Client) SendIngestFailure(ctx context.Context, run *models.IngestionRun
 		errMsg = *run.Error
 	}
 
+	// One template for both outcomes, but they must not read the same: a
+	// degraded run DID ingest data, and calling it "failed" would send whoever
+	// is on call looking for the wrong problem (fix-gdacs-degraded-run-status).
+	headline := "An ingestion run failed."
+	verb := "failed"
+	if run.Status == models.RunStatusDegraded {
+		headline = "An ingestion run completed DEGRADED: some flood polygons could not be verified against GDACS (unreachable, erroring, rate-limited, a malformed response, or this run's request budget ran out). New flood areas among them are missing from the map; existing ones keep their last verified outline and may be out of date. Everything else ingested normally. Verification is retried on every run. You should normally get one of these per degraded streak; a duplicate is possible if delivery could not be recorded."
+		verb = "degraded"
+	}
+
 	data := struct {
+		Headline      string
 		RunID         int64
 		CountryCode   string
 		StartedAt     string
@@ -105,6 +116,7 @@ func (c *Client) SendIngestFailure(ctx context.Context, run *models.IngestionRun
 		EventsStored  int
 		Error         string
 	}{
+		Headline:      headline,
 		RunID:         run.ID,
 		CountryCode:   run.CountryCode,
 		StartedAt:     run.StartedAt.Format(time.RFC3339),
@@ -121,7 +133,7 @@ func (c *Client) SendIngestFailure(ctx context.Context, run *models.IngestionRun
 		return fmt.Errorf("render failure alert: %w", err)
 	}
 
-	subject := fmt.Sprintf("[VigilAfrica:%s] Ingestion failed for %s at %s", c.cfg.Environment, run.CountryCode, data.StartedAt)
+	subject := fmt.Sprintf("[VigilAfrica:%s] Ingestion %s for %s at %s", c.cfg.Environment, verb, run.CountryCode, data.StartedAt)
 	if err := c.sendEmail(ctx, subject, htmlBody, textBody); err != nil {
 		return fmt.Errorf("send failure alert: %w", err)
 	}
@@ -228,7 +240,7 @@ func renderEmail(htmlTmpl, textTmpl string, data any) (string, string, error) {
 	return htmlBody.String(), textBody.String(), nil
 }
 
-const failureHTMLTemplate = `<p>An ingestion run failed.</p>
+const failureHTMLTemplate = `<p>{{.Headline}}</p>
 <ul>
 <li><strong>Run ID:</strong> {{.RunID}}</li>
 <li><strong>Country:</strong> {{.CountryCode}}</li>
@@ -240,7 +252,7 @@ const failureHTMLTemplate = `<p>An ingestion run failed.</p>
 </ul>
 <p>Check the API logs and ingestion_runs table on the VPS.</p>`
 
-const failureTextTemplate = `An ingestion run failed.
+const failureTextTemplate = `{{.Headline}}
 Run ID: {{.RunID}}
 Country: {{.CountryCode}}
 Started: {{.StartedAt}}

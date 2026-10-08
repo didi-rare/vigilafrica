@@ -84,7 +84,9 @@ CORS is enabled and the allowed `Origin` is set via the `CORS_ORIGIN` environmen
 
 ### Description
 
-Returns the health status of the API service. No database dependency — this endpoint must respond even if the database is unavailable.
+Returns the health status of the API service and ingestion telemetry. It must still respond `200` when the database is unavailable — it is the liveness probe the container healthcheck uses — in which case the telemetry fields are omitted.
+
+> **Updated 2026-10-03 (`fix-gdacs-degraded-run-status`).** This section described the v0.1 shape until then; `last_ingestion`, `last_ingestion_by_country` and the `degraded` status have existed since v0.5 (ADR-011). `openspec/specs/vigilafrica/openapi.yaml` holds the full schema.
 
 ### Request
 
@@ -105,8 +107,14 @@ No query parameters. No request body.
 
 | Field     | Type   | Description                                         |
 |-----------|--------|-----------------------------------------------------|
-| `status`  | string | Always `"ok"` when the API is running               |
+| `status`  | string | `"ok"`, or `"degraded"` when any country's last ingestion run was `failure` or `degraded` |
 | `version` | string | Semantic version, injected at build time via ldflags |
+| `last_ingestion` | object\|null | Most recent **completed** run across all countries (in-progress runs are never reported) |
+| `last_ingestion_by_country` | object | Most recent **completed** run per country code |
+
+Run `status` is one of `running`, `success`, `failure`, `degraded`. **`degraded`**: the run completed, but GDACS returned no usable answer for at least one flood polygon (unreachable, erroring, rate-limited, or the per-run request budget ran out); new flood areas among them were not stored and existing ones kept their last verified outline. It counts as a completed run for staleness alerting; `failure` does not.
+
+**`GET /ready`** uses the same body but returns **`503`** when any country's last run is `failure` or the database cannot be queried. A `degraded` run does **not** make `/ready` fail: an upstream data provider being down does not stop this API serving.
 
 ### Performance Contract
 

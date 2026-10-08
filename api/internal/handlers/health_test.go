@@ -47,6 +47,10 @@ func (r *healthTestRepo) GetFirstIngestionRun(context.Context) (*models.Ingestio
 func (r *healthTestRepo) GetLastIngestionRunAllCountries(context.Context) (map[string]*models.IngestionRun, error) {
 	return r.byCountry, nil
 }
+func (r *healthTestRepo) GetPreviousCompletedIngestionRun(context.Context, string, int64) (*models.IngestionRun, error) {
+	return nil, nil
+}
+func (r *healthTestRepo) MarkIngestionRunAlerted(context.Context, int64, time.Time) error { return nil }
 func (r *healthTestRepo) GetEnrichmentStats(context.Context) ([]database.EnrichmentStat, error) {
 	return nil, nil
 }

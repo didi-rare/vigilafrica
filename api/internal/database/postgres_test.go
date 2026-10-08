@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"vigilafrica/api/internal/database"
 	"vigilafrica/api/internal/models"
 )
@@ -301,16 +302,26 @@ func TestCreateAndCompleteIngestionRun(t *testing.T) {
 		t.Fatalf("expected positive run ID, got %d", runID)
 	}
 
-	// Verify status is "running" immediately after creation.
-	latest, err := testRepo.GetLastIngestionRun(ctx)
+	// Verify status is "running" immediately after creation — read back by ID.
+	// GetLastIngestionRun deliberately ignores in-progress runs since
+	// fix-gdacs-degraded-run-status (it backs /health, which must report the
+	// latest COMPLETED run), so it is no longer the way to observe this row.
+	conn, err := pgx.Connect(ctx, testDSN)
 	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer conn.Close(ctx)
+	var status string
+	if err := conn.QueryRow(ctx, `SELECT status FROM ingestion_runs WHERE id = $1`, runID).Scan(&status); err != nil {
+		t.Fatalf("read back run %d: %v", runID, err)
+	}
+	if status != string(models.RunStatusRunning) {
+		t.Errorf("expected status %q after create, got %q", models.RunStatusRunning, status)
+	}
+	if latest, err := testRepo.GetLastIngestionRun(ctx); err != nil {
 		t.Fatalf("GetLastIngestionRun failed: %v", err)
-	}
-	if latest == nil {
-		t.Fatal("expected a run record, got nil")
-	}
-	if latest.Status != models.RunStatusRunning {
-		t.Errorf("expected status %q after create, got %q", models.RunStatusRunning, latest.Status)
+	} else if latest != nil && latest.ID == runID {
+		t.Errorf("GetLastIngestionRun returned in-progress run %d; it must ignore running rows", runID)
 	}
 
 	// Complete the run with success.

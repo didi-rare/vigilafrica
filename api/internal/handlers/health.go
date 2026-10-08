@@ -70,7 +70,13 @@ func runToResponse(run *models.IngestionRun, includeErrors bool) *lastIngestionR
 }
 
 // ServeHTTP implements http.Handler for GET /health.
-// Returns status "degraded" if the last ingestion run failed.
+// Returns status "degraded" if any country's last ingestion run failed OR was
+// degraded (GDACS unreachable for some polygon events).
+//
+// ⚠️ The two are reported the same way on /health but NOT on /ready: readiness
+// answers "can this API serve requests?", and an upstream data provider being
+// down does not make it unable to. /ready returns 503 for a real failure only
+// (fix-gdacs-degraded-run-status).
 func (h *HealthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -78,37 +84,50 @@ func (h *HealthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Status:  "ok",
 		Version: h.Version,
 	}
+	anyFailure := false
+	// queryFailed: the ingestion-run lookups themselves errored, i.e. the database
+	// is unreachable. /health stays 200 (it is the liveness probe the container
+	// healthcheck uses, and must not restart the API over a DB blip), but /ready
+	// must not claim readiness it cannot verify (independent review, PR #280;
+	// pre-existing — errors here were only ever logged).
+	queryFailed := false
+	note := func(s models.IngestionRunStatus) {
+		switch s {
+		case models.RunStatusFailure:
+			anyFailure = true
+			resp.Status = "degraded"
+		case models.RunStatusDegraded:
+			resp.Status = "degraded"
+		}
+	}
 
 	if h.repo != nil {
 		// Global last run (backward compat)
 		run, err := h.repo.GetLastIngestionRun(r.Context())
 		if err != nil {
+			queryFailed = true
 			slog.Error("health: failed to query last ingestion run", "err", err)
 		} else if run != nil {
 			resp.LastIngestion = runToResponse(run, h.includeErrors)
-			if run.Status == models.RunStatusFailure {
-				resp.Status = "degraded"
-			}
+			note(run.Status)
 		}
 
 		// Per-country map
 		byCountry, err := h.repo.GetLastIngestionRunAllCountries(r.Context())
 		if err != nil {
+			queryFailed = true
 			slog.Error("health: failed to query per-country runs", "err", err)
 		} else if len(byCountry) > 0 {
 			resp.LastIngestionByCountry = make(map[string]*lastIngestionResponse, len(byCountry))
 			for code, cr := range byCountry {
 				resp.LastIngestionByCountry[code] = runToResponse(cr, h.includeErrors)
-				// Upgrade to degraded if any country's last run failed
-				if cr.Status == models.RunStatusFailure && resp.Status != "degraded" {
-					resp.Status = "degraded"
-				}
+				note(cr.Status)
 			}
 		}
 	}
 
 	statusCode := http.StatusOK
-	if h.readiness && resp.Status == "degraded" {
+	if h.readiness && (anyFailure || queryFailed) {
 		statusCode = http.StatusServiceUnavailable
 	}
 	w.WriteHeader(statusCode)

@@ -42,6 +42,30 @@ paths:
               schema:
                 $ref: '#/components/schemas/HealthResponse'
 
+  /ready:
+    get:
+      tags: [Observability]
+      summary: Readiness check
+      description: |
+        Same body as `/health`. Returns `503` when any country's last ingestion run is `failure`,
+        or when the ingestion telemetry cannot be read from the database. A `degraded` run does
+        NOT fail readiness: an upstream data provider being unavailable does not stop this API
+        serving. `/health` always returns `200` (it is the container liveness probe).
+      operationId: getReady
+      responses:
+        '200':
+          description: Ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          description: Not ready — a country's last run failed, or the database could not be queried.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
   /v1/events:
     get:
       tags: [Events]
@@ -267,14 +291,20 @@ components:
 
     LastIngestion:
       type: object
-      description: Telemetry record for the most recent ingestion run, either globally or per country.
+      description: Telemetry record for the most recent COMPLETED ingestion run, either globally or per country. In-progress runs are never reported here, so `status` is not `running` in practice; it stays in the enum for compatibility.
       properties:
         country_code:
           type: string
         status:
           type: string
           nullable: true
-          enum: [success, failure, running]
+          description: |
+            `degraded` means the run completed and stored what it could, but GDACS returned no
+            usable answer for at least one flood polygon (unreachable, erroring, rate-limited, or the
+            per-run request budget ran out). New flood areas among them were not stored; existing
+            ones kept their last verified outline. It counts as a completed run for staleness
+            purposes; `failure` does not.
+          enum: [success, failure, running, degraded]
         started_at:
           type: string
           format: date-time
@@ -295,7 +325,7 @@ components:
 
     HealthResponse:
       type: object
-      description: Service health status including version and ingestion telemetry. `status` is `degraded` when the last ingestion run failed.
+      description: Service health status including version and ingestion telemetry. `status` is `degraded` when any country's last ingestion run failed or was degraded (GDACS returned no usable answer for some flood polygons). `/ready` returns 503 for a failed run or an unreadable database, never for `degraded`.
       properties:
         status:
           type: string

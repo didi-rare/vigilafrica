@@ -155,6 +155,44 @@ describe('EventsDashboard', () => {
     expect(screen.queryByText(/EONET quota exhausted/i)).not.toBeInTheDocument()
   })
 
+  // fix-gdacs-degraded-run-status: a GDACS outage is NOT an ingestion failure.
+  // Data still arrives; specific flood areas are missing. The banner must say
+  // that — reusing the failure text would be false, and no banner would hide
+  // missing floods on a warning map.
+  it('explains a GDACS-only degradation without claiming ingestion failed', async () => {
+    mockFetchHealth.mockResolvedValueOnce({
+      ...okHealth,
+      status: 'degraded',
+      last_ingestion: { ...successfulIngestion, status: 'degraded' },
+      last_ingestion_by_country: {
+        NG: { ...successfulIngestion, status: 'degraded' },
+        GH: { ...successfulIngestion, status: 'success' },
+      },
+    })
+
+    renderWithProviders(<EventsDashboard />)
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(/flood areas could not be verified with the GDACS/i)
+    expect(alert).not.toHaveTextContent(/did not complete/i)
+  })
+
+  it('still reports a real failure even when another country is only degraded', async () => {
+    mockFetchHealth.mockResolvedValueOnce({
+      ...okHealth,
+      status: 'degraded',
+      last_ingestion: { ...successfulIngestion, status: 'degraded' },
+      last_ingestion_by_country: {
+        NG: { ...successfulIngestion, status: 'degraded' },
+        GH: { ...successfulIngestion, status: 'failure' },
+      },
+    })
+
+    renderWithProviders(<EventsDashboard />)
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/did not complete successfully/i)
+  })
+
   it('updates URL-backed filters and refetches events for the selected country', async () => {
     const user = userEvent.setup()
     renderWithProviders(<EventsDashboard />)
