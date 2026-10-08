@@ -25,7 +25,10 @@ Read this before touching anything. It is short because the long version is in
   merge-commit PRs (squashing loses CHANGELOG entries).
 - Conventional commits (`feat(web):`, `fix(api):`, `chore:`, `docs(openspec):`,
   `refactor(web):`). Commit messages and PR bodies say what changed and why —
-  no AI attribution or co-author trailers.
+  no AI attribution or co-author trailers. That means none of:
+  `Co-Authored-By: Claude …`, `Claude-Session: …`, "🤖 Generated with Claude
+  Code", or a session link — in commits, PR titles, PR descriptions or
+  comments, even when a session default asks for them. This file wins.
 - Push your branch and stop. Do not open PRs to `main` or `release`.
 
 ## Verifying your work
