@@ -5,6 +5,7 @@ package database_test
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -75,9 +76,17 @@ func advLabels(t *testing.T, ctx context.Context, conn *pgx.Conn, sourceID strin
 }
 
 // advUpsertPoint drives an event through the real repository path at (lon, lat).
+//
+// Coordinates are formatted at full precision, not with %f. The first CI run
+// of the shared-border group failed 6 of 12 pairs because %f rounds to six
+// decimals: a vertex shared by two rings moved by up to half a microdegree
+// lands INSIDE one of them, so the trigger saw a one-candidate point while the
+// oracle evaluated the exact vertex — and the two disagreed exactly when the
+// rounding fell into the larger polygon. The test was wrong, not the trigger.
 func advUpsertPoint(t *testing.T, ctx context.Context, sourceID, title string, lon, lat float64) {
 	t.Helper()
-	geoJSON := fmt.Sprintf(`{"type":"Point","coordinates":[%f,%f]}`, lon, lat)
+	geoJSON := fmt.Sprintf(`{"type":"Point","coordinates":[%s,%s]}`,
+		strconv.FormatFloat(lon, 'f', -1, 64), strconv.FormatFloat(lat, 'f', -1, 64))
 	ev := models.Event{
 		SourceID:  sourceID,
 		Source:    "eonet",
@@ -189,6 +198,23 @@ func TestEnrichment_SharedBorderPicksSmallerState(t *testing.T) {
 			}
 
 			advUpsertPoint(t, ctx, sourceID, "shared-border probe", tt.lon, tt.lat)
+
+			// The contest must still be real at the point the trigger actually saw:
+			// the STORED geometry, after the GeoJSON round trip. If it intersects
+			// only one state, the probe drifted off the border and the comparison
+			// below is meaningless — fail here, naming the cause, rather than
+			// reporting a "wrong" label.
+			var storedCandidates int
+			if err := conn.QueryRow(ctx, `
+				SELECT count(*) FROM admin_boundaries b, events e
+				WHERE e.source_id = $1 AND b.adm_level = 1 AND ST_Intersects(e.geom, b.geom)`,
+				sourceID).Scan(&storedCandidates); err != nil {
+				t.Fatalf("stored-candidate precondition: %v", err)
+			}
+			if storedCandidates < 2 {
+				t.Fatalf("stored event point intersects %d ADM1 polygon(s), discovery saw %d: the coordinates lost precision on the way in", storedCandidates, tt.candidates)
+			}
+
 			state, country := advLabels(t, ctx, conn, sourceID)
 			assertOptString(t, "state_name", state, want)
 			assertOptString(t, "country_name", country, tt.country)

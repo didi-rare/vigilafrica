@@ -38,7 +38,20 @@ by reading, not by running, and says so.
       reads. Tripoints are logged, not special-cased: the oracle names the real
       smallest candidate.
 - [x] 2.4 Stability: re-upsert at the same point, same label.
-- [ ] 2.5 CI: subtests listed in the `-v` log — **pending the PR run**
+- [x] 2.6 **First CI run (`baaa48b`) failed 6 of 12 pairs, and it was the
+      test's defect, not the trigger's.** Discovery found 119 adjacent pairs,
+      all 119 real two-candidate contests. The failures all had the trigger
+      naming the *larger* state. Cause: `advUpsertPoint` built the GeoJSON
+      with `%f`, which rounds to six decimals; a vertex shared by two rings,
+      moved by up to half a microdegree, lands inside one polygon's interior,
+      so the trigger evaluated a one-candidate point while the oracle used
+      the exact vertex — and they disagreed precisely when the rounding fell
+      into the larger polygon. Fixed with `strconv.FormatFloat(v, 'f', -1,
+      64)` (proven to round-trip bit-exact where `%f` does not), and a new
+      precondition asserts the **stored** event geometry still intersects ≥2
+      ADM1 polygons, so a precision loss fails with its cause named instead
+      of as a "wrong" label.
+- [ ] 2.5 CI: all twelve subtests pass — **pending the re-run**
 
 ## 3. Group 2 — exact-area tie-break (`TestEnrichment_EqualAreaTieBreaksOnLowestID`)
 
@@ -46,7 +59,9 @@ by reading, not by running, and says so.
       (−30, −30); precondition asserts `count(DISTINCT area_m2) = 1`.
 - [x] 3.2 Two subtests with opposite insertion order; each expects the
       first-inserted (lowest `id`) name. Reset between subtests.
-- [ ] 3.3 CI: both subtests pass — **pending the PR run**
+- [x] 3.3 CI (`baaa48b`): both subtests pass — `alpha inserted first wins`
+      and `beta inserted first wins` both green, so the `id` terminator is
+      what decides the tie.
 
 ## 4. Group 3 — geometry update (`TestEnrichment_GeometryUpdateRelabelsAndClears`)
 
@@ -56,7 +71,8 @@ by reading, not by running, and says so.
 - [x] 4.2 The Cameroon step asserts `state_name` is NULL (stale "Kano" cleared).
 - [x] 4.3 `UpdateEventMetadata` with a changed title asserts labels untouched
       (`UPDATE OF geom` does not fire on a title change).
-- [ ] 4.4 CI: all six steps pass — **pending the PR run**
+- [x] 4.4 CI (`baaa48b`): all six steps pass, including the Cameroon step's
+      NULL `state_name` and the metadata-only update leaving labels alone.
 
 ## 5. Group 4 — exterior ring (`TestEnrichment_NigeriaExteriorRingAlwaysLabelled`)
 
@@ -67,7 +83,9 @@ by reading, not by running, and says so.
       every NOT NULL column supplied (`source_id`, `source`, `title`,
       `category`, `status`); assert zero rows with NULL `country_name`, with up
       to five offending coordinates in the failure message.
-- [ ] 5.3 CI: passes — **pending the PR run**
+- [x] 5.3 CI (`baaa48b`): passes — the ring has **6,253** vertices (the
+      reviewer's 37 was a far simpler boundary), 196 probed at step 32, zero
+      with a NULL country.
 
 ## 6. Cleanup
 
@@ -75,7 +93,9 @@ by reading, not by running, and says so.
       `ZZ` boundaries.
 - [x] 6.2 `TestEnrichment_ZZCleanupLeftNothing` runs last in the file and asserts
       both counts are 0.
-- [ ] 6.3 CI: passes — **pending the PR run**
+- [x] 6.3 CI (`baaa48b`): passes — zero `ADV_` events and zero `ZZ`
+      boundaries left after the four groups, including after group 1's
+      failures, which is the case per-function cleanup exists for.
 
 ## 7. Mutation check (reasoned against the SQL — Docker absent)
 
@@ -118,8 +138,11 @@ trigger with `psql -f` against the test container and run
       clean, `go test -race ./...` green across all packages, `go mod tidy`
       leaves go.mod/go.sum unchanged (CI's tidy-diff step will agree);
       `scripts/check-image-pins.js` passes on the new digest.
-- [ ] 7a.4 govulncheck itself could not be re-run here (vulnerability DB host
-      blocked); CI's step on the next push is the proof — **pending**
+- [x] 7a.4 govulncheck could not be re-run here (vulnerability DB host
+      blocked); CI's step on `baaa48b` is the proof: **"No vulnerabilities
+      found."** The unit suite, tidy-diff, image-pin and deploy-wiring steps
+      all passed on the new toolchain, and the integration step ran for the
+      first time on this PR.
 
 ## 8. Records
 
