@@ -1,6 +1,6 @@
 ---
 id: chore-enrichment-regression-tests
-status: proposed
+status: in-progress
 proposal: ../proposals/chore-enrichment-regression-tests.md
 branch: claude/chore-web-audit-leftovers-xt5v6i
 ---
@@ -61,39 +61,45 @@ Three facts the tests must pin, each with the mutation that would break it:
 
 ## Group 1 — shared-border vertices (`TestEnrichment_SharedBorderPicksSmallerState`)
 
-Discovery query (run once, result is the table):
+Discovery query (run once, result is the table). Pairs are same-country ADM1 polygons that
+`ST_Intersects`, and the probe point is the first point of the intersection of their boundaries:
 
 ```sql
-SELECT a.adm_name, b.adm_name, a.country_name,
-       ST_X(p) AS lon, ST_Y(p) AS lat
-FROM admin_boundaries a
-JOIN admin_boundaries b
-  ON a.adm_level = 1 AND b.adm_level = 1
- AND a.country_code = b.country_code AND a.id < b.id
- AND ST_Touches(a.geom, b.geom)
-CROSS JOIN LATERAL (
-  SELECT ST_PointN(ST_GeometryN(ST_Multi(ST_Intersection(ST_Boundary(a.geom), ST_Boundary(b.geom))), 1), 1) AS p
-) v
-WHERE p IS NOT NULL
-ORDER BY a.id, b.id
-LIMIT 12;
+WITH pairs AS (
+  SELECT a.id AS aid, b.id AS bid, a.adm_name AS a_name, b.adm_name AS b_name, a.country_name,
+         (ST_DumpPoints(ST_Intersection(ST_Boundary(a.geom), ST_Boundary(b.geom)))).geom AS p
+  FROM admin_boundaries a JOIN admin_boundaries b
+    ON a.adm_level = 1 AND b.adm_level = 1 AND a.country_code = b.country_code AND a.id < b.id
+   AND ST_Intersects(a.geom, b.geom)
+), first_point AS (
+  SELECT DISTINCT ON (aid, bid) aid, bid, a_name, b_name, country_name, p FROM pairs ORDER BY aid, bid
+)
+SELECT a_name, b_name, country_name, ST_X(p), ST_Y(p),
+       (SELECT count(*) FROM admin_boundaries c WHERE c.adm_level = 1 AND ST_Intersects(p, c.geom)) AS candidates
+FROM first_point ORDER BY aid, bid;
 ```
 
-A vertex of the shared boundary line is a point on both rings by construction, which is what makes
-`ST_Intersects` true for both. For each row:
+⚠️ Changed from the first draft, which used `ST_Touches`: real HDX polygons may overlap or gap by
+floating-point amounts, and `ST_Touches` is false the moment two interiors meet, so a fixture
+that is topologically "adjacent" to a human could yield zero pairs. `ST_Intersects` catches
+touching and overlapping alike; a point where the two boundaries meet lies on both rings either
+way. `ST_DumpPoints` rather than `ST_PointN` because the intersection may be a point, a line or a
+collection depending on the pair.
 
-1. Precondition, asserted not assumed: `SELECT count(*) FROM admin_boundaries WHERE adm_level = 1
-   AND ST_Intersects(ST_SetSRID(ST_Point(lon, lat), 4326), geom)` is **≥ 2**. If it is not, the
-   test **fails** with the pair named — a one-candidate "border" point tests nothing, and a
-   silent skip would hide a topology change in the fixture data.
-2. Oracle: the `adm_name` with the smallest `ST_Area(geom::geography)` among those candidates, with
-   `id` as a secondary key.
-3. Insert an event at the point through `UpsertEvent`; assert `state_name` equals the oracle and
+The two-candidate precondition is computed **in the query** (`candidates`), and pairs whose point
+PostGIS does not consider inside at least two ADM1 polygons are excluded rather than asserted on.
+What is asserted is that **≥ 8** real contests exist; fewer means the fixture or the query changed,
+and the test fails rather than skips. The first 12 contests run, deterministically ordered. For
+each:
+
+1. Oracle: the `adm_name` with the smallest `ST_Area(geom::geography)` among the intersecting
+   ADM1 polygons, with `id` as a secondary key. Tripoints (a third, smaller state also touching
+   the point) are logged, not special-cased: the oracle names the real smallest candidate.
+2. Insert an event at the point through `UpsertEvent`; assert `state_name` equals the oracle and
    `country_name` equals the pair's country.
-4. Upsert the same event again unchanged; assert the label is unchanged (stability).
+3. Upsert the same event again unchanged; assert the label is unchanged (stability).
 
-`LIMIT 12` keeps the group under a second; the pairs are deterministic (`ORDER BY a.id, b.id`) so
-the same twelve run every time. The test name includes both state names.
+The test name includes both state names.
 
 ## Group 2 — exact-area tie-break (`TestEnrichment_EqualAreaTieBreaksOnLowestID`)
 
@@ -147,9 +153,11 @@ FROM (SELECT ST_DumpPoints(ST_ExteriorRing(ST_GeometryN(geom, 1))) AS dp
       FROM admin_boundaries WHERE country_code = 'NG' AND adm_level = 0) q;
 ```
 
-For every vertex (the reviewer counted 37; the test takes whatever the fixture holds and asserts the
-count is ≥ 30 so a silently empty ring cannot pass), insert an event and assert `country_name` is
-**non-NULL**. `state_name` is not asserted: ADM1 coverage at the national border is allowed to have
+The NG ADM0 row is `ST_Multi(ST_Union(geom))` of the states (migration `000010`), so its exterior
+ring has far more than the 37 vertices the reviewer's hand-built suite walked; the test takes the
+largest polygon of the multipolygon, samples its ring evenly to at most 200 probes, and asserts the
+ring holds ≥ 30 vertices so a silently empty or degenerate ring cannot pass. For every probe, insert
+an event and assert `country_name` is **non-NULL**. `state_name` is not asserted: ADM1 coverage at the national border is allowed to have
 gaps, and that is precisely what the ADM0 fallback exists for. Events are inserted in one loop with
 `source_id` `ADV_NGRING_<n>` and deleted together.
 
@@ -182,8 +190,8 @@ up after itself; §9.10 prefers `t.Cleanup` for exactly this.
    additionally proves it compiles).
 2. CI's "Run Database Integration Tests" step is green on the PR head and its `-v` log lists all
    four new test functions with their subtests.
-3. Group 1 runs on ≥ 8 adjacent pairs (fewer means the discovery query or fixture changed — fail,
-   do not skip).
+3. Group 1 finds ≥ 8 adjacent pairs whose boundary point intersects ≥ 2 states (fewer means the
+   discovery query or fixture changed — fail, do not skip), and runs the first 12.
 4. Group 2's two subtests resolve to different winners.
 5. Group 3 asserts all six rows, including the NULL `state_name` in Cameroon.
 6. Group 4 covers ≥ 30 vertices with no NULL country.

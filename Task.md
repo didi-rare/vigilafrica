@@ -1,112 +1,98 @@
-# chore-web-audit-leftovers
+# chore-enrichment-regression-tests
 
-**Branch:** `claude/chore-web-audit-leftovers-xt5v6i` — **merged in #283, archived 2026-10-08**
-**Proposal:** [openspec/archive/proposal-chore-web-audit-leftovers.md](openspec/archive/proposal-chore-web-audit-leftovers.md)
-**Spec:** [openspec/archive/spec-chore-web-audit-leftovers.md](openspec/archive/spec-chore-web-audit-leftovers.md)
-**Origin:** five findings accepted-not-fixed in the 2026-07-26 web-audit batch
-(#189–#191, #193, #195, #197, #198), registered in #205
+**Branch:** `claude/chore-web-audit-leftovers-xt5v6i`
+**Proposal:** [openspec/proposals/chore-enrichment-regression-tests.md](openspec/proposals/chore-enrichment-regression-tests.md)
+**Spec:** [openspec/specs/chore-enrichment-regression-tests.md](openspec/specs/chore-enrichment-regression-tests.md)
+**Origin:** deferred-work register item B2, carrying task 3.8 of
+`2026-08-07-perf-boundary-area-precompute` (#211)
 
-## 1. Staging banner glow off the main thread
+⚠️ **Docker is not available in the authoring session.** The integration
+suite cannot run here; CI's "Run Database Integration Tests" step on the PR is
+the execution. Everything below marked *reasoned* was checked against the SQL
+by reading, not by running, and says so.
 
-- [x] 1.1 Stripe stays on `::before`; glow moves to `::after` with a static
-      `box-shadow` and an `opacity` animation (`web/src/App.css`)
-- [x] 1.2 `prefers-reduced-motion` rule moves to `::after` with it (the #191
-      near-miss) and the resting `opacity: 0` is declared, not inherited from
-      the first keyframe
-- [x] 1.3 Lighthouse 13.5.0, `non-composited-animations`, local staging builds
-      (`VITE_ENV=staging`, placeholder env), mobile **and** desktop presets:
-      control (`origin/development` @ `3040a00`) → **1 animated element,
-      `::before`, "Unsupported CSS Property: box-shadow"**; branch →
-      **notApplicable (0 elements)**. The control run is what proves the audit
-      sees the defect; a 0 alone would not.
-- [x] 1.4 `check-reduced-motion.mjs` on the staging build: under `reduce` the
-      glow reads `animation=none … opacity=0`; under `no-preference` it reads
-      `staging-banner-stripe-pulse ×infinite 2.5s`. Peak-frame crops of both
-      arms (animations paused at t=1250ms) show the same glow extent.
+## 1. The file
 
-## 2. Synthetic user-agent regex
+- [x] 1.1 `api/internal/database/enrichment_adversarial_test.go`, `//go:build
+      integration`, `package database_test`, reusing `testRepo`, `testDSN`,
+      `assertOptString`, `ptrStr`, `ptrF64`. Raw `pgx` connection for
+      discovery, synthetic rows and oracles (the `migration_transposition_test`
+      pattern).
+- [x] 1.2 `go vet ./...` clean; `go vet -tags=integration ./internal/database/`
+      clean (proves the tagged file compiles); `go test -race ./...` green.
+      `gofmt -l` reports only the pre-existing `enrichment_test.go`, untouched.
 
-- [x] 2.1 **Accept and document** — regex unchanged. Recorded in the spec §2
-      and at the regex in `analytics.ts`: anchoring does not address the
-      described failure (an appended proxy token is a whole token either
-      way), a log-only path would be a seventh event the module deliberately
-      refuses, and the rate cannot be measured from this repo (Umami stores a
-      parsed browser name, not the raw UA).
-- [x] 2.2 `analytics.test.ts`: a token embedded inside a larger word
-      (`FooPageSpeedBar/1.0`) is suppressed — the one input on which
-      "unanchored, accepted" is observable, so anchoring later fails the test.
-      (The first cut asserted an appended proxy token is still recorded, which
-      passes under any regex and pinned nothing — review caught it.)
+## 2. Group 1 — shared-border vertices (`TestEnrichment_SharedBorderPicksSmallerState`)
 
-## 3 + 5. One announced loading treatment
+- [x] 2.1 Pairs discovered from the fixture (`ST_Intersects` on same-country
+      ADM1 pairs, first point of the intersection of their boundaries), not
+      hard-coded. Changed from the spec's `ST_Touches`: real HDX polygons may
+      overlap or gap by floating-point amounts and `ST_Touches` is false the
+      moment interiors meet; `ST_Intersects` plus the ≥2-candidate filter is the
+      robust form of the same idea.
+- [x] 2.2 The ≥2-candidate check is done in the discovery query and pairs that
+      fail it are excluded; what is asserted is that **≥ 8** real contests
+      exist (fail, not skip). Runs the first 12.
+- [x] 2.3 Oracle is `ORDER BY ST_Area(geom::geography) ASC, id ASC` — the
+      pre-000013 expression, independent of the stored `area_m2` the trigger
+      reads. Tripoints are logged, not special-cased: the oracle names the real
+      smallest candidate.
+- [x] 2.4 Stability: re-upsert at the same point, same label.
+- [ ] 2.5 CI: subtests listed in the `-v` log — **pending the PR run**
 
-- [x] 3.1 `components/LoadingState.tsx`: `role="status"`, `aria-live="polite"`,
-      `aria-hidden` spinner, visible message as the live text; no `aria-busy`
-      on an ancestor (would defer the announcement — spec §3)
-- [x] 3.2 Used by `DashboardFallback` (App.tsx), the `eventsLoading` state and
-      the map Suspense fallback (EventsDashboard.tsx)
-- [x] 3.3 `LoadingState.css` co-located with the component (§1.5/§7.2),
-      classes prefixed `.loading-state` (§7.3); App.tsx importing the component
-      puts it in the eager bundle — confirmed by `grep` on the built
-      `index-*.css`. `.dashboard-state` stays in `EventsDashboard.css` for the
-      error card; the unused `.spinner` is removed. (First cut moved the rules
-      into `App.css`; `/openspec-review` flagged §7.2 and it was redone.)
-- [x] 3.4 `LoadingState.test.tsx` (4 cases, axe clean), `App.fallback.test.tsx`
-      (never-resolving chunk mock: status region inside the reservation,
-      decorative bar, axe clean) and a new `EventsDashboard.test.tsx` case that
-      holds the fetch open, asserts the status region, runs axe, then resolves
-      and asserts the region is gone. The map fallback renders with
-      `announce={false}` (one wait, one announcement — review finding) and
-      `LoadingState.test.tsx` pins that path too. 106/106 tests.
-- [x] 3.5 `developers-react.md` §9.8 amended: it prescribed `aria-busy` on the
-      container plus an `aria-label`led spinner, the exact shape this component
-      argues against; the rule and its reference implementation now agree.
-      Decision-log row 22 records it (second review: a standards change inside
-      a feature PR needs its own entry).
-- [x] 3.6 Second review: the region now carries `aria-label="Loading status"`,
-      the convention the dashboard file states for its other status regions,
-      so tests address it by name rather than by an empty name; the spinner's
-      stylesheet carries its own reduced-motion rule instead of leaning on the
-      App.css catch-all.
-- [x] 3.7 The three deferrals (EventDetail region, `#dashboard` anchor, UA
-      rate) are registered in `chore-deferred-work-register.md` §F, not only
-      in the spec's "Out of scope", which archiving deletes. CLAUDE.md's claim
-      that stylelint enforces spacing/typography/z-index tokens was false
-      (colour only) and pointed at a `bench-design-tokens` script that does
-      not exist; corrected.
+## 3. Group 2 — exact-area tie-break (`TestEnrichment_EqualAreaTieBreaksOnLowestID`)
 
-## 4. Above-the-fold affordance at phone widths
+- [x] 3.1 Two `ZZ`/`Testland` ADM1 rows, identical `ST_MakeEnvelope` geometry at
+      (−30, −30); precondition asserts `count(DISTINCT area_m2) = 1`.
+- [x] 3.2 Two subtests with opposite insertion order; each expects the
+      first-inserted (lowest `id`) name. Reset between subtests.
+- [ ] 3.3 CI: both subtests pass — **pending the PR run**
 
-- [x] 4.1 `.dashboard-fallback__progress` (§7.3): fixed 3px bar, z-index
-      `var(--z-dropdown)` (§7.10 says reuse, not invent — the first cut added
-      `--z-load-progress: 300`), `transform`-only segment, static full-width
-      under reduced motion (`check-reduced-motion.mjs`: `animation=none …
-      width=1350px`, and the script now exits 1 if any must-stop animation
-      still runs or an element is missing)
-- [x] 4.2 `capture-fallback.mjs` at 375×812, chunk held back: bar at
-      y 0–3 (**in view**), card at y 1064–1244 (below the fold, as before);
-      control arm has no bar and a 26px text-only fallback at y 1032.
-      Screenshot confirms the amber bar across the top of the hero.
-- [x] 4.3 `.dashboard-fallback` is `flow-root`, not `block`: review measured
-      the card's 2rem top margin collapsing through the fallback and growing
-      the reservation 32px past its cap. After the fix the fallback starts at
-      the hero's bottom edge and is exactly 1530px tall at 1920×1600.
+## 4. Group 3 — geometry update (`TestEnrichment_GeometryUpdateRelabelsAndClears`)
 
-## Verification
+- [x] 4.1 Lagos → Kano → Cameroon → ocean → Lagos through `UpsertEvent`; Kano
+      constant (8.5167, 12.0022) checked against the Kano ADM1 polygon as a
+      precondition.
+- [x] 4.2 The Cameroon step asserts `state_name` is NULL (stale "Kano" cleared).
+- [x] 4.3 `UpdateEventMetadata` with a changed title asserts labels untouched
+      (`UPDATE OF geom` does not fire on a title change).
+- [ ] 4.4 CI: all six steps pass — **pending the PR run**
 
-- [x] V1 `npm run lint` / `type-check` / `lint:styles` / `test` / `build` —
-      all clean, 106/106
-- [x] V2 CLS A/B against the control build (`measure-cls.mjs`, new `VIEWPORT`
-      override, 8 runs/cell): control = branch to four decimals in every cell —
-      1920×1600 0.0054/0.0054, 1350×940 0.0001/0.0001, 768×1024 0.0002/0.0002,
-      375×812 0.0003/0.0003. Table in the proposal's Verification section.
-- [x] V3 Proposal updated with the Resolution and verification results;
-      status `in-progress` — ready for `/openspec-review`
+## 5. Group 4 — exterior ring (`TestEnrichment_NigeriaExteriorRingAlwaysLabelled`)
 
-## Deliberately not done (recorded in spec "Out of scope")
+- [x] 5.1 Largest polygon of the NG ADM0 multipolygon (it is `ST_Union` of the
+      states, so the ring has many vertices), `ST_DumpPoints` of its exterior
+      ring, even sampling to ≤ 200 probes, assert ≥ 30 vertices exist.
+- [x] 5.2 Raw inserts (the trigger is what is under test; path is irrelevant),
+      every NOT NULL column supplied (`source_id`, `source`, `title`,
+      `category`, `status`); assert zero rows with NULL `country_name`, with up
+      to five offending coordinates in the failure message.
+- [ ] 5.3 CI: passes — **pending the PR run**
 
-- `EventDetail.tsx` loading region — same defect class, not in the proposal
-- `#dashboard` anchor missing while the chunk loads — backlog candidate
-- Lighthouse on the **deployed** staging URL — nothing in this repo deploys;
-  the local staging build is the proxy, with the control run as the positive
-  control
+## 6. Cleanup
+
+- [x] 6.1 `advCleanup` registered per test function: deletes `ADV\_%` events and
+      `ZZ` boundaries.
+- [x] 6.2 `TestEnrichment_ZZCleanupLeftNothing` runs last in the file and asserts
+      both counts are 0.
+- [ ] 6.3 CI: passes — **pending the PR run**
+
+## 7. Mutation check (reasoned against the SQL — Docker absent)
+
+| mutation of `trg_enrich_event_location()` | group that fails | why |
+|---|---|---|
+| `ORDER BY area_m2 ASC` → `DESC` | 1 | the oracle still names the smallest; the trigger now returns the largest; any contest where the two differ fails, and all twelve do unless the candidates tie exactly, which real states never do |
+| drop `, id ASC` | 2 | with equal `area_m2` the plan returns whichever row it visits first — the same row in both subtests, so one of the two opposite-order expectations fails; it cannot satisfy both |
+| `BEFORE INSERT OR UPDATE OF geom` → `BEFORE INSERT` | 3 | the move to Kano leaves "Lagos" on the row; step 2 fails |
+| assign `state_name` only when the ADM1 query matches | 3 | the move to Cameroon leaves "Kano"; step 3's NULL assertion fails |
+| remove the ADM0 fallback block | 3 and 4 | Cameroon step gets NULL country; every border vertex outside ADM1 coverage gets NULL country |
+
+Executed version of this table: anyone with Docker can replay a mutated
+trigger with `psql -f` against the test container and run
+`go test -tags=integration -run TestEnrichment_ ./internal/database/`.
+
+## 8. Records
+
+- [x] 8.1 Register B2 marked closed with a pointer to the file
+- [ ] 8.2 Proposal verification boxes ticked from the CI log, status
+      `in-progress` → ready for `/openspec-review`

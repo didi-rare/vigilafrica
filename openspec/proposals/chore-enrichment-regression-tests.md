@@ -1,6 +1,6 @@
 ---
 id: chore-enrichment-regression-tests
-status: proposed
+status: in-progress
 branch: claude/chore-web-audit-leftovers-xt5v6i
 spec: ../specs/chore-enrichment-regression-tests.md
 ---
