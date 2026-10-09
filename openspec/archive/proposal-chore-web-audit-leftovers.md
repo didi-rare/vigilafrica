@@ -1,8 +1,10 @@
 ---
 id: chore-web-audit-leftovers
-status: in-progress
+status: archived
 branch: claude/chore-web-audit-leftovers-xt5v6i
-spec: ../specs/chore-web-audit-leftovers.md
+spec: spec-chore-web-audit-leftovers.md
+merged_pr: https://github.com/didi-rare/vigilafrica/pull/283
+archived_on: 2026-10-08
 ---
 
 # Proposal: Close the Accepted Leftovers From the Web-Audit Batch (chore-web-audit-leftovers)
@@ -55,7 +57,7 @@ The Suspense boundary shows plain text; the inner data-fetch state shows a spinn
 
 ## Resolution (branch `claude/chore-web-audit-leftovers-xt5v6i`)
 
-Technical design in [`openspec/specs/chore-web-audit-leftovers.md`](../specs/chore-web-audit-leftovers.md); task-level evidence in the root `Task.md`.
+Technical design in [`spec-chore-web-audit-leftovers.md`](spec-chore-web-audit-leftovers.md) (archived alongside); task-level evidence in the root `Task.md`.
 
 | # | outcome |
 |---|---|

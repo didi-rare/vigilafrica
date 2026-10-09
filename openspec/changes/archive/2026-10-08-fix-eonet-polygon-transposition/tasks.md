@@ -157,6 +157,11 @@ origin rather than a second opinion.
       category=floods` must show no Kwara flood; the two corrected events must
       carry Polygon geometry AND coordinates; `events_geom_resolved` should be
       non-zero on a run that ingests a polygon.
+      ⚠️ **Deployed (v1.6.1, 2026-09-11) but the verification half was not
+      performed from the repository** when this record was archived on
+      2026-10-08: the production API is not reachable from the archiving
+      session. Left unticked on purpose; carried to the deferred-work register
+      as G3 so it is not lost with the archive.
 
 ## 5. Security
 

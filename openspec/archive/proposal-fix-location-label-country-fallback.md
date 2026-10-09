@@ -1,8 +1,12 @@
 ---
 id: fix-location-label-country-fallback
-status: in-progress
+status: archived
 branch: fix/location-label-country-fallback
+merged_pr: https://github.com/didi-rare/vigilafrica/pull/269
+archived_on: 2026-10-08
 ---
+
+> Archived 2026-10-08: shipped in v1.6.1 (#269). Verified on `development`: `web/src/formatLocation.ts` and its test exist and are consumed by `EventsDashboard.tsx` and `EventDetail.tsx`. ⚠️ The "look at the card and the detail page on staging" check in *Verification* was **not** performed from the repository; same caveat as `proposal-fix-maplibre-xss-advisory.md`.
 
 # Proposal: Show the Country When We Have No State, Instead of Raw Coordinates (fix-location-label-country-fallback)
 
