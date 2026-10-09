@@ -91,6 +91,36 @@ Executed version of this table: anyone with Docker can replay a mutated
 trigger with `psql -f` against the test container and run
 `go test -tags=integration -run TestEnrichment_ ./internal/database/`.
 
+## 7a. CI was red before the tests could run — fix ported into this PR
+
+- [x] 7a.1 First CI run on the PR (`b3db8cf`) failed in **Run Go Vulnerability
+      Check**, before the integration step: govulncheck under the pinned Go
+      1.26.6 reports 11 stdlib advisories reachable from our code
+      (GO-2026-6599…6611, published 2026-10-08). `build-and-test` is red on
+      `development`'s own head (`8e88161`) with the same failure — **not this
+      PR's**, and the integration tests this PR exists to run never executed.
+- [x] 7a.2 Same shape as the 2026-08 batch, fixed the same way as `00a673c`:
+      every one of the 11 is "Fixed in 1.26.9" (read from the `x/vulndb` OSV
+      records via the Go proxy, since vuln.go.dev is blocked from this
+      session). Bumped the three pins together: `ci-cd.yml` and
+      `openspec-verify.yml` `go-version` 1.26.6 → 1.26.9, `api/Dockerfile`
+      `GO_IMAGE` digest → `c95332c2…`, the `golang:1.26-alpine` index as of
+      2026-10-08 18:04 UTC. Verified by content via the Docker Hub tags API:
+      that index and the `1.26.9-alpine` index (`cdfd4fe2…`) reference the
+      **same** amd64 image manifest, `397ecc64…`, and the same arm64 one, so
+      the pinned bytes are the 1.26.9 build whichever tag names them.
+      ⚠️ The previous bump additionally read `GOLANG_VERSION` from the image
+      config blob; that read was attempted four times here and rate-limited
+      (HTTP 429, anonymous registry pulls) every time. Not completed — the
+      shared-manifest evidence above is what this pin rests on.
+- [x] 7a.3 Local, under `GOTOOLCHAIN=go1.26.9` (go1.26.9 linux/amd64):
+      `go vet ./...` clean, `go vet -tags=integration ./internal/database/`
+      clean, `go test -race ./...` green across all packages, `go mod tidy`
+      leaves go.mod/go.sum unchanged (CI's tidy-diff step will agree);
+      `scripts/check-image-pins.js` passes on the new digest.
+- [ ] 7a.4 govulncheck itself could not be re-run here (vulnerability DB host
+      blocked); CI's step on the next push is the proof — **pending**
+
 ## 8. Records
 
 - [x] 8.1 Register B2 marked closed with a pointer to the file
