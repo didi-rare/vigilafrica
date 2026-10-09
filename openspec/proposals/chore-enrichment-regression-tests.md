@@ -90,15 +90,32 @@ any machine with Docker) is named for anyone who wants to run them by hand.
 
 ## Verification
 
-- [ ] `go vet ./...` and `go test -race ./...` clean (unit suite, runs here)
-- [ ] `go test -tags=integration ./internal/database/` green in CI on the PR head, with all four
-      new groups listed in the `-v` output
-- [ ] Mutation check, recorded in `Task.md`: with the `, id ASC` tie-breaker removed from the trigger
-      in a scratch migration replay, the tie-break group fails; with `ASC` flipped to `DESC`, the
-      shared-border group fails; with the `UPDATE OF geom` clause narrowed to `INSERT`, the
-      geometry-update group fails. (Done by reasoning against the SQL where Docker is absent, and by
-      execution where it is present — the record says which.)
-- [ ] Register item B2 closed with a pointer to the test file
+- [x] `go vet ./...` and `go test -race ./...` clean (unit suite, run here under both go1.26.0 and
+      go1.26.9); `go vet -tags=integration ./internal/database/` clean
+- [x] `go test -tags=integration ./internal/database/` green in CI on the PR head (`eac10d9`),
+      with all four new groups and the cleanup proof listed in the `-v` output: 12/12 shared-border
+      pairs (119 contests discovered), both tie-break orders, all six geometry-update steps, 196 of
+      the ring's 6,253 vertices with zero NULL countries, zero leaked fixtures
+- [x] Mutation check, recorded in `Task.md` §7 — **reasoned against the SQL, not executed**: Docker
+      is absent from the authoring session and the record says so
+- [x] Register item B2 closed with a pointer to the test file
+
+## What the first real run taught
+
+The first CI run that reached the integration step (`baaa48b`) failed 6 of the 12 shared-border
+pairs, and the trigger was right every time: the test built the event's GeoJSON with `%f`, which
+rounds to six decimals, so a vertex shared by two rings moved by up to half a microdegree into one
+polygon's interior. The trigger then evaluated a one-candidate point while the oracle used the
+exact vertex, and they disagreed exactly when the rounding fell into the larger polygon. Fixed with
+full-precision formatting, plus a precondition that the **stored** geometry still intersects two
+states, so the same class of fault would now fail with its cause named. Recorded because the
+reviewer's original hand-built suite, run through an interactive SQL session, could never have hit
+this: it is a defect of the *Go-to-GeoJSON* path, and only exists once the probe goes through the
+real repository.
+
+Before any of that could run, CI was red on `development` itself: Go 1.26.9 shipped 11 standard-library
+advisories reachable from our code and govulncheck under the pinned 1.26.6 failed every branch. The
+pin bump (`baaa48b`) is carried in this PR, the same way `00a673c` carried the previous one.
 
 ## Origin
 

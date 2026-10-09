@@ -51,7 +51,10 @@ by reading, not by running, and says so.
       precondition asserts the **stored** event geometry still intersects ≥2
       ADM1 polygons, so a precision loss fails with its cause named instead
       of as a "wrong" label.
-- [ ] 2.5 CI: all twelve subtests pass — **pending the re-run**
+- [x] 2.5 CI (`eac10d9`): all twelve subtests pass — Abia×7 neighbours,
+      Adamawa×3, Akwa Ibom×2 — against the independent area oracle, with the
+      stored-geometry precondition holding on every one. 119 contests found,
+      first 12 run.
 
 ## 3. Group 2 — exact-area tie-break (`TestEnrichment_EqualAreaTieBreaksOnLowestID`)
 
@@ -147,5 +150,6 @@ trigger with `psql -f` against the test container and run
 ## 8. Records
 
 - [x] 8.1 Register B2 marked closed with a pointer to the file
-- [ ] 8.2 Proposal verification boxes ticked from the CI log, status
-      `in-progress` → ready for `/openspec-review`
+- [x] 8.2 Proposal verification boxes ticked from the CI log (`eac10d9`:
+      `build-and-test`, `validate`, `openspec-verify` all green); status
+      stays `in-progress` until `/openspec-review` and `/openspec-archive`.
