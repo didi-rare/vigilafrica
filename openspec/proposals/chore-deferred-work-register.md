@@ -78,11 +78,11 @@ Migration `000013` rewrote `admin_boundaries` under `ACCESS EXCLUSIVE` — sub-m
 
 This is a **standing constraint on future work**, not a task to complete. It belongs in the record because the migration comment is the only place it currently lives.
 
-### B2. Codify the adversarial enrichment cases as regression tests — ⚠️ pre-existing CI gap
+### B2. Codify the adversarial enrichment cases as regression tests — ✅ CLOSED by `chore-enrichment-regression-tests`
 
-The tie-break, shared-border and geometry-update cases that the `000013` review exercised by hand are **not covered by CI**. A future change to the boundary-matching logic would not be caught. Explicitly flagged as pre-existing rather than introduced by #211.
+The tie-break, shared-border and geometry-update cases that the `000013` review exercised by hand were **not covered by CI**. A future change to the boundary-matching logic would not have been caught. Explicitly flagged as pre-existing rather than introduced by #211.
 
-Highest-value item in section B: it protects the enrichment correctness that the whole product's location labelling rests on.
+Closed 2026-10-09: `api/internal/database/enrichment_adversarial_test.go` (integration-tagged, runs in the existing CI step) pins all four — shared-border vertices discovered from the fixture, an exact-area tie that only the `id` terminator can decide, a geometry update that must clear a stale state, and every vertex of Nigeria's exterior ring getting a country — each with an oracle independent of the trigger, plus a final test that proves the fixtures were cleaned up. Record: [`chore-enrichment-regression-tests`](chore-enrichment-regression-tests.md).
 
 ### B3. Geometry simplification at `0.001°`
 
