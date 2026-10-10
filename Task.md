@@ -38,7 +38,7 @@ by reading, not by running, and says so.
       reads. Tripoints are logged, not special-cased: the oracle names the real
       smallest candidate.
 - [x] 2.4 Stability: re-upsert at the same point, same label.
-- [x] 2.6 **First CI run (`baaa48b`) failed 6 of 12 pairs, and it was the
+- [x] 2.5 **First CI run (`baaa48b`) failed 6 of 12 pairs, and it was the
       test's defect, not the trigger's.** Discovery found 119 adjacent pairs,
       all 119 real two-candidate contests. The failures all had the trigger
       naming the *larger* state. Cause: `advUpsertPoint` built the GeoJSON
@@ -51,7 +51,7 @@ by reading, not by running, and says so.
       precondition asserts the **stored** event geometry still intersects ≥2
       ADM1 polygons, so a precision loss fails with its cause named instead
       of as a "wrong" label.
-- [x] 2.5 CI (`eac10d9`): all twelve subtests pass — Abia×7 neighbours,
+- [x] 2.6 CI (`eac10d9`): all twelve subtests pass — Abia×7 neighbours,
       Adamawa×3, Akwa Ibom×2 — against the independent area oracle, with the
       stored-geometry precondition holding on every one. 119 contests found,
       first 12 run.
@@ -72,8 +72,11 @@ by reading, not by running, and says so.
       constant (8.5167, 12.0022) checked against the Kano ADM1 polygon as a
       precondition.
 - [x] 4.2 The Cameroon step asserts `state_name` is NULL (stale "Kano" cleared).
-- [x] 4.3 `UpdateEventMetadata` with a changed title asserts labels untouched
-      (`UPDATE OF geom` does not fire on a title change).
+- [x] 4.3 A sentinel `state_name` is planted through a non-geom `UPDATE`, then
+      `UpdateEventMetadata` with a changed title must leave it in place
+      (`UPDATE OF geom` does not fire on either). Review finding: without the
+      sentinel the step asserted "still Lagos", which a trigger widened to every
+      UPDATE also satisfies by re-enriching Lagos to Lagos.
 - [x] 4.4 CI (`baaa48b`): all six steps pass, including the Cameroon step's
       NULL `state_name` and the metadata-only update leaving labels alone.
 
@@ -105,10 +108,11 @@ by reading, not by running, and says so.
 | mutation of `trg_enrich_event_location()` | group that fails | why |
 |---|---|---|
 | `ORDER BY area_m2 ASC` → `DESC` | 1 | the oracle still names the smallest; the trigger now returns the largest; any contest where the two differ fails, and all twelve do unless the candidates tie exactly, which real states never do |
-| drop `, id ASC` | 2 | with equal `area_m2` the plan returns whichever row it visits first — the same row in both subtests, so one of the two opposite-order expectations fails; it cannot satisfy both |
+| drop `, id ASC` | 2 | with equal `area_m2` the plan returns the first row the scan visits — the first inserted. The synthetic rows are inserted with the first-inserted row carrying the **higher** id, so the mutant names the first-inserted (higher-id) row while the real trigger names the lower-id (second-inserted) row, in both orderings. ⚠️ The first version of this row claimed the mutant would fail "because it returns the same row in both subtests"; review showed that with `SERIAL` ids first-visited and lowest-id are the same row, so the mutant passed both. The id inversion is what makes this row true |
 | `BEFORE INSERT OR UPDATE OF geom` → `BEFORE INSERT` | 3 | the move to Kano leaves "Lagos" on the row; step 2 fails |
 | assign `state_name` only when the ADM1 query matches | 3 | the move to Cameroon leaves "Kano"; step 3's NULL assertion fails |
-| remove the ADM0 fallback block | 3 and 4 | Cameroon step gets NULL country; every border vertex outside ADM1 coverage gets NULL country |
+| remove the ADM0 fallback block | 3 (and the existing six-point test) | Cameroon step gets NULL country. Group 4 catches it only if a sampled ring vertex falls outside ADM1 coverage, which for a union-derived ADM0 ring is not guaranteed (review finding); it logs how many probes the fallback labelled |
+| `UPDATE OF geom` → `UPDATE` (every column) | 3 | the sentinel planted by a non-geom `UPDATE` is re-enriched away to "Lagos" before the metadata-only assertion, which expects the sentinel (review finding: without the sentinel this step passed under the mutant) |
 
 Executed version of this table: anyone with Docker can replay a mutated
 trigger with `psql -f` against the test container and run
@@ -153,3 +157,42 @@ trigger with `psql -f` against the test container and run
 - [x] 8.2 Proposal verification boxes ticked from the CI log (`eac10d9`:
       `build-and-test`, `validate`, `openspec-verify` all green); status
       stays `in-progress` until `/openspec-review` and `/openspec-archive`.
+
+## 9. `/openspec-review` round (2026-10-10) — BLOCK, then fixed
+
+Independent adversarial read against `45bc8b9`, Docker-free, with the CI log
+pulled directly. One P1, eight P2s, all taken:
+
+- [x] 9.1 **P1 — the tie-break group could not catch its own mutation.** With
+      `SERIAL` ids, id order = insertion order = heap order, and a two-row sort
+      on an equal key returns the first tuple scanned, so a trigger with
+      `, id ASC` removed returned the first-inserted row — exactly what both
+      subtests expected. Fixed: explicit ids, first-inserted row gets the
+      higher id, expectation flips to the second-inserted (lower-id) name; a
+      precondition asserts the inversion is in place. §7 row corrected.
+- [x] 9.2 Metadata-only step made discriminating with a sentinel (4.3).
+- [x] 9.3 Exterior-ring group's scope stated honestly in its doc, the spec and
+      §7; it now logs the count of probes the fallback actually labelled.
+- [x] 9.4 Border discovery's "first point" ordered by dump path, so it is
+      defined rather than plan-dependent.
+- [x] 9.5 Border oracle evaluates the **stored** geometry, the same point the
+      trigger judged; the precondition stays as the loud failure mode.
+- [x] 9.6 Ignored errors in cleanup and the example lister now logged (§4.7);
+      `exRows.Err()` checked (§5.4).
+- [x] 9.7 Cleanup-proof ordering documented with the `-shuffle` caveat and a
+      note that "ZZ" is not a sorting mechanism.
+- [x] 9.8 `developers-go.md` §10.11 example pin updated to 1.26.9 (it still
+      said 1.26.5, pre-existing debt from the previous bump).
+- [x] 9.9 Records corrected: proposal said `ST_Touches` (code uses
+      `ST_Intersects`); proposal implied `00a673c` was carried inside a feature
+      PR (it was its own PR, #232 — noted, with the cherry-pick option);
+      spec's group 4 SQL, Kano coordinate and reused-helper list matched the
+      code again; this list was out of order (2.5/2.6 swapped).
+- [ ] 9.10 CI on the revised file: all groups green again — **pending**
+- [ ] 9.11 Not done, recorded: executing the mutants against a real PostGIS.
+      The reviewer's P1 was reasoned from PostgreSQL's sort and heap
+      behaviour, with stated high-but-not-absolute confidence; running the
+      three mutants once with Docker (`scripts/test-api.ps1 -Integration`, or
+      `go test -tags=integration` on any Docker host, after replaying a mutated
+      `trg_enrich_event_location`) would turn §7 from reasoning into evidence.
+      Not possible from this session.

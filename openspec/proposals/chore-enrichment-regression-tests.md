@@ -41,15 +41,18 @@ existing `database_test` package under the existing `//go:build integration` tag
 existing testcontainers PostGIS harness. Four groups:
 
 1. **Shared-border vertices.** For a sample of adjacent ADM1 pairs — found by the test itself with
-   `ST_Touches`, not hard-coded — take a vertex that both rings share, insert an event there, and
-   assert: both states intersect the point (so the case is a real contest, not a near-miss), the
-   assigned state is the **smaller** one by `ST_Area(geom::geography)` computed independently of the
-   trigger's stored column, and the assignment is stable across repeated inserts.
+   `ST_Intersects`, not hard-coded — take a point where both boundaries meet, insert an event there,
+   and assert: both states intersect the stored point (so the case is a real contest, not a
+   near-miss), the assigned state is the **smaller** one by `ST_Area(geom::geography)` computed
+   independently of the trigger's stored column, and the assignment is stable across repeated
+   inserts.
 2. **Exact-area tie-break.** Two synthetic ADM1 polygons with byte-identical geometry (so
-   `area_m2` is equal to the last bit) in a synthetic country placed in open ocean, inserted in a
-   known order. The event at their shared interior must resolve to the **lower `id`**. Inserting
-   them in the opposite order must flip the winner. This is the only way to prove the `id`
-   terminator is load-bearing; real boundaries never tie.
+   `area_m2` is equal to the last bit) in a synthetic country placed in open ocean, with
+   **explicit ids such that the row inserted first carries the higher id**. The event at their
+   shared interior must resolve to the **lower `id`**, i.e. the second-inserted row, in both
+   insertion orders. The inversion matters: with sequential ids, "lowest id" and "first row the
+   scan visits" are the same row, and a trigger with the `id` terminator removed would pass. Real
+   boundaries never tie, so this is the only way to prove the terminator is load-bearing.
 3. **Geometry update.** One event upserted through the real `UpsertEvent` path at Lagos, then moved
    to Kano, then to a Cameroon interior, then to open ocean. Each move must re-label exactly:
    Kano/Nigeria; NULL/Cameroon (the stale "Kano" must be cleared, not retained); NULL/NULL. Then a
@@ -115,7 +118,32 @@ real repository.
 
 Before any of that could run, CI was red on `development` itself: Go 1.26.9 shipped 11 standard-library
 advisories reachable from our code and govulncheck under the pinned 1.26.6 failed every branch. The
-pin bump (`baaa48b`) is carried in this PR, the same way `00a673c` carried the previous one.
+pin bump (`baaa48b`) is carried in this PR because the session that wrote it was confined to this
+branch; the previous bump, `00a673c`, landed as its own PR (#232), which is the cleaner shape, and a
+maintainer who prefers it can cherry-pick that one commit onto a branch of its own.
+
+## Review round (2026-10-10)
+
+`/openspec-review` with an independent adversarial read against `45bc8b9` returned **BLOCK** on one
+finding and eight nits, all taken:
+
+- **P1 — the tie-break group could not catch its own mutation.** With sequential ids, id order
+  equals insertion order equals heap order, so a trigger with `, id ASC` removed still returns the
+  first-inserted row — exactly what both subtests expected. Fixed by inserting with explicit ids so
+  the first-inserted row carries the *higher* id; the real trigger and the mutant now name
+  different rows in both orderings. Task.md's mutation table had asserted the opposite and is
+  corrected.
+- The metadata-only step was non-discriminating (a trigger widened to every UPDATE would re-enrich
+  Lagos to "Lagos" and pass); a sentinel `state_name` planted through a non-geom UPDATE now has to
+  survive.
+- The exterior-ring group is near-tautological for a union-derived ADM0 ring and does not pin the
+  fallback; its doc and the mutation table now say so, and it logs how many probes the fallback
+  actually labelled.
+- The border group's "first point" is now ordered by dump path (was plan-dependent), and its oracle
+  evaluates the stored geometry, the same point the trigger judged.
+- Ignored errors in cleanup and the example lister are logged; the source-order dependency of the
+  cleanup proof is documented with its `-shuffle` caveat; §10.11's example pin updated to 1.26.9;
+  five spec/record statements that no longer matched the code corrected.
 
 ## Origin
 

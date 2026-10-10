@@ -41,7 +41,8 @@ Three facts the tests must pin, each with the mutation that would break it:
 | smallest intersecting ADM1 wins | `ASC` → `DESC`, or `area_m2` → anything not area-ordered | 1 (shared border) |
 | `id` makes the order total | drop `, id ASC` | 2 (exact tie) |
 | a move re-labels, and clears what no longer fits | `UPDATE OF geom` → `INSERT` only; or `SELECT … INTO` replaced by a conditional assignment that skips NULLs | 3 (geometry update) |
-| ADM0 fallback catches every border point | drop the fallback block | 4 (exterior ring) and the existing six-point test |
+| ADM0 fallback catches a point outside every ADM1 | drop the fallback block | 3 (Cameroon step) and the existing six-point test; group 4 only if a sampled ring vertex falls outside ADM1 coverage |
+| a non-geom update does not re-enrich | `UPDATE OF geom` → `UPDATE` | 3 (sentinel step) |
 
 ## Harness
 
@@ -52,8 +53,9 @@ Three facts the tests must pin, each with the mutation that would break it:
   independent oracle (`ST_Area(geom::geography)`, which is deliberately *not* the stored `area_m2`
   column the trigger reads — if the generated column ever drifted, this cross-check would show it).
   Same pattern as `migration_transposition_test.go`.
-- Helpers reused from `enrichment_test.go`: `findEventBySourceID`, `assertOptString`, `ptrStr`,
-  `ptrF64`. New helpers stay unexported in the new file.
+- Helpers reused from the existing files: `assertOptString`, `ptrStr`, `ptrF64`. Labels are read
+  back by raw SQL (`advLabels`) rather than through `ListEvents`, whose page limit the ring group
+  would exceed. New helpers stay unexported in the new file.
 - Isolation: the suite shares one database and never truncates. Every event this file inserts
   carries a `source_id` prefixed `ADV_`, every synthetic boundary carries `country_code = 'ZZ'`,
   and `t.Cleanup` deletes both by those keys. Synthetic geometry sits at lon −30, lat −30 (South
@@ -103,23 +105,30 @@ The test name includes both state names.
 
 ## Group 2 — exact-area tie-break (`TestEnrichment_EqualAreaTieBreaksOnLowestID`)
 
-Two runs, as subtests, each inserting two synthetic ADM1 rows with **identical** geometry:
+Two runs, as subtests, each inserting two synthetic ADM1 rows with **identical** geometry and
+**explicit, inverted ids**:
 
 ```sql
-INSERT INTO admin_boundaries (country_code, country_name, adm_level, adm_name, geom)
-VALUES ('ZZ', 'Testland', 1, $1, ST_Multi(ST_SetSRID(ST_MakeEnvelope(-30.5, -30.5, -29.5, -29.5), 4326)))
-RETURNING id;
+INSERT INTO admin_boundaries (id, country_code, country_name, adm_level, adm_name, geom)
+VALUES ($1, 'ZZ', 'Testland', 1, $2, ST_Multi(ST_SetSRID(ST_MakeEnvelope(-30.5, -30.5, -29.5, -29.5), 4326)));
+-- first insert: id 2000000002; second insert: id 2000000001
 ```
 
-- Subtest "alpha inserted first": insert `Tie Alpha` then `Tie Beta`; event at (−30, −30) must
-  resolve to `Tie Alpha` / `Testland`.
-- Subtest "beta inserted first": clean up, insert `Tie Beta` then `Tie Alpha`; the same point must
-  now resolve to `Tie Beta`.
+- Subtest "alpha inserted first": insert `Tie Alpha` as id 2000000002, then `Tie Beta` as
+  2000000001; the event at (−30, −30) must resolve to `Tie Beta` / `Testland` — the lower id.
+- Subtest "beta inserted first": clean up, insert `Tie Beta` as the higher id, then `Tie Alpha` as
+  the lower; the same point must now resolve to `Tie Alpha`.
 
 Identical geometry gives identical `area_m2` to the bit, so `area_m2 ASC` is a genuine tie and only
-`id ASC` decides. The two subtests together prove the decider is `id` and not insertion luck,
-name order, or plan order. Each subtest asserts `area_m2` of the two rows is exactly equal before
-inserting the event, so the tie precondition is checked, not assumed.
+`id ASC` decides. **The inversion is load-bearing** (review finding on the first version): with
+`SERIAL` ids, id order equals insertion order equals heap order, and PostgreSQL's two-row sort on an
+equal key returns the first tuple the scan visits — the first inserted — so a trigger with
+`, id ASC` *removed* would have returned exactly the row the original subtests expected, in both
+orderings. Giving the first-inserted row the higher id makes the mutant (first visited) and the
+real trigger (lowest id) name different rows. Each subtest asserts, before inserting the event,
+that `area_m2` of the two rows is exactly equal and that the lower id carries the second-inserted
+name, so both preconditions are checked, not assumed. The explicit ids sit far above the `SERIAL`
+range so they can never collide with the sequence; cleanup deletes by `country_code`.
 
 An ADM0 row for `ZZ` is **not** inserted: the point matches ADM1 directly, and keeping the synthetic
 footprint to two rows limits what cleanup can miss.
@@ -131,27 +140,43 @@ One event, `ADV_MOVER`, driven through the real repository:
 | step | via | geom | expect `state_name` | expect `country_name` |
 |---|---|---|---|---|
 | insert | `UpsertEvent` | Lagos (3.3941795, 6.4550575) | Lagos | Nigeria |
-| move | `UpsertEvent` | Kano interior (8.5167, 12.0) | Kano | Nigeria |
+| move | `UpsertEvent` | Kano interior (8.5167, 12.0022) | Kano | Nigeria |
 | move | `UpsertEvent` | Cameroon interior (11.601622, 5.707452) | **NULL** | Cameroon |
 | move | `UpsertEvent` | open ocean (0, 0) | NULL | NULL |
 | move back | `UpsertEvent` | Lagos | Lagos | Nigeria |
-| title only | `UpdateEventMetadata` | unchanged | Lagos | Nigeria |
+| sentinel | raw `UPDATE … SET state_name = 'SENTINEL'` (no `geom`) | unchanged | SENTINEL | Nigeria |
+| title only | `UpdateEventMetadata` | unchanged | **SENTINEL** survives | Nigeria |
 
 The Cameroon row is the one that matters: the trigger's `SELECT … INTO` must set `state_name` to
 NULL when the ADM1 query returns no row (plpgsql semantics), and a rewrite that assigned only on
-match would leave "Kano" on an event in Cameroon. The last row pins that a metadata-only update does
-not re-run enrichment (the trigger is `UPDATE OF geom`); it uses the exported
-`UpdateEventMetadata` with a changed title and asserts the labels are untouched. The Kano
+match would leave "Kano" on an event in Cameroon. The last two rows pin that a metadata-only update
+does not re-run enrichment (the trigger is `UPDATE OF geom`). A sentinel is what makes that
+discriminating (review finding): asserting "still Lagos" after a title change would also pass
+under a trigger widened to every UPDATE, because re-enriching Lagos yields Lagos. So a value the
+trigger could never produce is planted through a non-geom UPDATE first; if the trigger fires on
+non-geom updates, the sentinel is overwritten and the assertion fails. The Kano
 coordinate is checked against the fixture by a precondition query (`ST_Intersects` with the Kano
 ADM1 row) so a wrong constant fails loudly rather than mislabelling the expectation.
 
 ## Group 4 — exterior-ring safety net (`TestEnrichment_NigeriaExteriorRingAlwaysLabelled`)
 
 ```sql
-SELECT (dp).path[2] AS n, ST_X((dp).geom), ST_Y((dp).geom)
-FROM (SELECT ST_DumpPoints(ST_ExteriorRing(ST_GeometryN(geom, 1))) AS dp
-      FROM admin_boundaries WHERE country_code = 'NG' AND adm_level = 0) q;
+WITH parts AS (
+  SELECT (ST_Dump(geom)).geom AS g
+  FROM admin_boundaries WHERE country_code = 'NG' AND adm_level = 0
+),
+mainland AS (SELECT g FROM parts ORDER BY ST_Area(g) DESC LIMIT 1)
+SELECT ST_X((dp).geom), ST_Y((dp).geom)
+FROM (SELECT ST_DumpPoints(ST_ExteriorRing(g)) AS dp FROM mainland) q
+ORDER BY (dp).path[1];
 ```
+
+⚠️ **Scope, stated honestly (review finding):** the NG ADM0 row is `ST_Union` of the states, so
+nearly every vertex of its exterior ring is also a vertex of some ADM1 polygon and is labelled by
+the ADM1 branch without reaching the fallback. This group is a border-coverage safety net; it does
+**not** prove the fallback block exists — the Cameroon step of group 3 and the existing six-point
+test do. The test logs how many probes the fallback actually labelled (state NULL, country set)
+without asserting on it, because zero is a legitimate outcome for a union-derived ring.
 
 The NG ADM0 row is `ST_Multi(ST_Union(geom))` of the states (migration `000010`), so its exterior
 ring has far more than the 37 vertices the reviewer's hand-built suite walked; the test takes the
