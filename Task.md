@@ -188,7 +188,14 @@ pulled directly. One P1, eight P2s, all taken:
       PR (it was its own PR, #232 — noted, with the cherry-pick option);
       spec's group 4 SQL, Kano coordinate and reused-helper list matched the
       code again; this list was out of order (2.5/2.6 swapped).
-- [ ] 9.10 CI on the revised file: all groups green again — **pending**
+- [x] 9.10 CI on the revised file (`24f1c46`): all four checks green. Tie-break
+      passes in both orderings with the inverted ids ("alpha inserted first,
+      beta has the lower id and wins" and the reverse); the sentinel survives
+      the metadata-only update; 12/12 border pairs against the stored-geometry
+      oracle; the ring group logs **0 of 196** probes labelled by the fallback,
+      which is exactly the near-tautology the review described and is why that
+      group no longer claims to pin the fallback; cleanup proof passes;
+      govulncheck "No vulnerabilities found."
 - [ ] 9.11 Not done, recorded: executing the mutants against a real PostGIS.
       The reviewer's P1 was reasoned from PostgreSQL's sort and heap
       behaviour, with stated high-but-not-absolute confidence; running the
