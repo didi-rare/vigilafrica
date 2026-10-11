@@ -1,6 +1,7 @@
 package ingestor
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -192,10 +193,11 @@ type gdacsFeatureCollection struct {
 			Class     string `json:"Class"`
 			EpisodeID int    `json:"episodeid"`
 		} `json:"properties"`
-		Geometry struct {
-			Type        string          `json:"type"`
-			Coordinates json.RawMessage `json:"coordinates"`
-		} `json:"geometry"`
+		// Raw, not a struct: a Feature's geometry MAY be JSON null (RFC 7946
+		// §3.2), which decodes into a zero struct indistinguishable from a
+		// missing or malformed one. The three are classified differently below
+		// (independent review, PR #280, round 7).
+		Geometry json.RawMessage `json:"geometry"`
 	} `json:"features"`
 }
 
@@ -330,15 +332,39 @@ func resolveGDACSPolygon(ctx context.Context, budget *RunBudget, sourceURL strin
 			// Round 4 required both to be missing, which let {"Class":"Poly_Affected"}
 			// without a geometry type pass as a valid non-match (independent review,
 			// PR #280, round 5).
-			if f.Properties.Class == "" || f.Geometry.Type == "" {
+			geomRaw := bytes.TrimSpace(f.Geometry)
+			if len(geomRaw) == 0 {
+				// "geometry" is a required Feature member (RFC 7946 §3.2); absent
+				// means this is not a Feature we can classify.
 				incomplete = true
 				continue
 			}
-			if f.Properties.Class != "Poly_Affected" || f.Geometry.Type != "Polygon" {
+			if string(geomRaw) == "null" {
+				// Explicit null geometry is a VALID Feature with no geometry: a
+				// complete answer that cannot match (RFC 7946 §3.2). Round 6 read it
+				// as a zero struct and called it an outage, which would have kept
+				// every run degraded for one unlocated feature (round 7).
+				continue
+			}
+			var geom struct {
+				Type        string          `json:"type"`
+				Coordinates json.RawMessage `json:"coordinates"`
+			}
+			if json.Unmarshal(geomRaw, &geom) != nil {
+				// A geometry that is neither null nor an object (a string, a
+				// number, an array): malformed, not seen.
+				incomplete = true
+				continue
+			}
+			if f.Properties.Class == "" || geom.Type == "" {
+				incomplete = true
+				continue
+			}
+			if f.Properties.Class != "Poly_Affected" || geom.Type != "Polygon" {
 				continue // a real feature of another class or shape: a valid non-match
 			}
 			var coords []interface{}
-			if json.Unmarshal(f.Geometry.Coordinates, &coords) != nil || coords == nil {
+			if json.Unmarshal(geom.Coordinates, &coords) != nil || coords == nil {
 				// The affected polygon is present but unreadable — or its
 				// coordinates are JSON null / absent, which json.Unmarshal leaves
 				// as a nil slice and which is NOT a GeoJSON coordinates array (an
@@ -371,7 +397,7 @@ func resolveGDACSPolygon(ctx context.Context, budget *RunBudget, sourceURL strin
 			}
 			lon, lat := representativePoint(positions)
 			candidates = append(candidates, GDACSGeometry{
-				GeoJSON:    fmt.Sprintf(`{"type":"Polygon","coordinates":%s}`, string(f.Geometry.Coordinates)),
+				GeoJSON:    fmt.Sprintf(`{"type":"Polygon","coordinates":%s}`, string(geom.Coordinates)),
 				Lon:        lon,
 				Lat:        lat,
 				EpisodeID:  ep,

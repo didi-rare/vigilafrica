@@ -126,7 +126,7 @@ No query parameters. No request body.
 }
 ```
 
-Every key of a run record is always present. On the public API `started_at`, `events_fetched`,
+Every key of a run record except `country_code` (omitted when empty) is always present. On the public API `started_at`, `events_fetched`,
 `events_stored` and `error` are **redacted to `null`** (`runToResponse` in
 `api/internal/handlers/health.go`; nothing in the server enables the unredacted form today), so
 only `status`, `completed_at` and `country_code` carry values. `status` is never `null`.

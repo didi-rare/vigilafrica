@@ -214,6 +214,19 @@ found three more.
 | P1 | A failed `CreateIngestionRun` was logged and the run went on to return **success** with no row — `/health` stale, no alert, and a degraded streak's recovery invisible. The round-2 design had accepted this ("a database hiccup cannot suppress the degraded alert") but only covered the degraded case. | Ingestion still proceeds (events are worth storing), but the creation error is joined into the outcome, so the run is a **failure** that the scheduler alerts on, rebuilt from the in-memory result. End-to-end test: run row fails, events store, one failure alert naming the unrecorded run. |
 | P2 | The TypeScript `LastIngestion` omitted `country_code` and allowed `null` per-country values; the contract prose still said fields are never omitted. | `country_code?: string` added; map values typed non-null (the handler never emits one); the Null Handling rule now names both omissions. |
 
+## Round 7 — fourth independent pass (`gpt-5.6-sol`, 2026-10-11) verdict BLOCK; all three findings fixed
+
+The fourth pass confirmed the round-6 fixes (null coordinates, unrecorded run, TypeScript) and
+found three more. ⚠️ Its own sandbox could not start processes, so its test and merge-tree
+results are unverified on its side; CI on the same head (`24ffe97`) ran the full suites green,
+which is the independent verification it asked for.
+
+| # | Finding | Fix |
+|---|---|---|
+| P1 | A Feature with **explicit `geometry: null`** — valid GeoJSON (RFC 7946 §3.2) — decoded into a zero-valued struct and was classified as an outage by the round-5 presence rule, so one unlocated feature could keep every run degraded. | The feature's geometry is kept raw. Absent member → not a classifiable Feature → outage; explicit `null` → complete answer, no match; non-object (string, number, array) → malformed → outage; object → the existing type/coordinates rules. Three new table rows. |
+| P2 | `runOutcome` returned the fetch error alone, so a run that lost a write from its first EONET response and then failed its second fetch recorded and alerted only the fetch failure; a run-record error masked the same way. | Precedence is unchanged (fetch/record error > lost writes > GDACS outage), but the message now carries every applicable cause in that order. Test pins all three in one message. |
+| P3 | `api-contract.md` and both OpenAPI descriptions said "every key is always present" while `country_code` is optional. | Reworded to "every key except `country_code`" in both; OpenAPI copies re-synced. |
+
 ## Verification
 
 - Unit tests for the classifier (each table row), the run-status decision, `/health` +

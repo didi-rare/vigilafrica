@@ -152,19 +152,35 @@ type IngestResult struct {
 // NOT degrade a run: that is the fail-closed check working, and counting it
 // would leave the system degraded forever over one unmatchable flood.
 func runOutcome(result *IngestResult, ingestErr error) (models.IngestionRunStatus, *string) {
+	// Precedence: a fetch/record error, then lost writes, then a GDACS outage.
+	// But the MESSAGE carries every cause that applies, in that order: a run
+	// that failed to fetch its second response may also have lost a write from
+	// the first and hit a GDACS outage, and the operator needs all three
+	// (independent review, PR #280, round 7; earlier rounds kept only the first).
+	var causes []string
+	if result != nil {
+		if result.StorageErrors > 0 {
+			causes = append(causes, fmt.Sprintf("%d event(s) could not be written to the database", result.StorageErrors))
+		}
+		if result.EventsGeomUpstreamFailed > 0 {
+			causes = append(causes, fmt.Sprintf("GDACS returned no usable answer for %d polygon event(s)", result.EventsGeomUpstreamFailed))
+		}
+	}
+	join := func(first string, rest []string) *string {
+		msg := first
+		for _, c := range rest {
+			msg += "; additionally " + c
+		}
+		return &msg
+	}
 	if ingestErr != nil {
-		msg := ingestErr.Error()
-		return models.RunStatusFailure, &msg
+		return models.RunStatusFailure, join(ingestErr.Error(), causes)
 	}
 	if result != nil && result.StorageErrors > 0 {
 		// Takes precedence over degraded: a lost write is a failure of THIS
 		// system, not of an upstream, and must not be reported as the milder
 		// condition (round 4).
-		msg := fmt.Sprintf("failure: %d event(s) could not be written to the database", result.StorageErrors)
-		if result.EventsGeomUpstreamFailed > 0 {
-			msg += fmt.Sprintf("; additionally GDACS returned no usable answer for %d polygon event(s)", result.EventsGeomUpstreamFailed)
-		}
-		return models.RunStatusFailure, &msg
+		return models.RunStatusFailure, join("failure: "+causes[0], causes[1:])
 	}
 	if result != nil && result.EventsGeomUpstreamFailed > 0 {
 		msg := fmt.Sprintf("degraded: GDACS returned no usable answer for %d polygon event(s) "+

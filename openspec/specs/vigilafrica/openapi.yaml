@@ -296,10 +296,10 @@ components:
         country. In-progress runs are never reported here, so `status` is not `running` in
         practice; it stays in the enum for compatibility.
 
-        Every key below is always present. On the public API the run's `started_at`,
-        `events_fetched`, `events_stored` and `error` are redacted to `null`; only
-        `status`, `completed_at` and `country_code` carry values. `country_code` is
-        omitted when empty.
+        Every key below except `country_code` is always present; `country_code` is
+        omitted when empty. On the public API the run's `started_at`, `events_fetched`,
+        `events_stored` and `error` are redacted to `null`; only `status`,
+        `completed_at` and `country_code` carry values.
       required: [status, started_at, completed_at, events_fetched, events_stored, error]
       properties:
         country_code:

@@ -179,6 +179,24 @@ func TestResolveFailureClassification(t *testing.T) {
 			twoEpisodes, body(`{"features":[{"properties":{"Class":"Poly_Affected","episodeid":1},"geometry":{"type":"Polygon","coordinates":[["a","b"]]}}]}`),
 			testSourceURL, resolveUpstream,
 		},
+		// Round 7: explicit null geometry is a valid Feature (RFC 7946 §3.2) —
+		// a complete answer with nothing to match. Absent or non-object geometry
+		// is not.
+		{
+			"a feature with explicit null geometry is a complete answer with no match",
+			twoEpisodes, body(`{"features":[{"properties":{"Class":"Poly_Affected","episodeid":1},"geometry":null}]}`),
+			testSourceURL, resolveUnverifiable,
+		},
+		{
+			"a feature with no geometry member is an outage",
+			twoEpisodes, body(`{"features":[{"properties":{"Class":"Poly_Affected","episodeid":1}}]}`),
+			testSourceURL, resolveUpstream,
+		},
+		{
+			"a feature whose geometry is a string is an outage",
+			twoEpisodes, body(`{"features":[{"properties":{"Class":"Poly_Affected","episodeid":1},"geometry":"garbage"}]}`),
+			testSourceURL, resolveUpstream,
+		},
 		// Round 6: the four adversarial shapes the third review asked to pin.
 		{
 			"an affected polygon with null coordinates is an outage, not an empty array",
@@ -306,6 +324,12 @@ func TestRunOutcome(t *testing.T) {
 		{
 			"a storage error outranks a GDACS outage",
 			&IngestResult{StorageErrors: 1, EventsGeomUpstreamFailed: 2}, nil, models.RunStatusFailure, "additionally GDACS returned no usable answer for 2",
+		},
+		// Round 7: a fetch error no longer hides the other causes.
+		{
+			"a fetch error still reports lost writes and the GDACS outage",
+			&IngestResult{StorageErrors: 3, EventsGeomUpstreamFailed: 1}, errors.New("eonet: 502"), models.RunStatusFailure,
+			"eonet: 502; additionally 3 event(s) could not be written to the database; additionally GDACS returned no usable answer for 1 polygon event(s)",
 		},
 		{"nil result without error is a success", nil, nil, models.RunStatusSuccess, ""},
 	}
