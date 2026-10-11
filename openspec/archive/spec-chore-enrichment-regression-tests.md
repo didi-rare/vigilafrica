@@ -1,13 +1,15 @@
 ---
 id: chore-enrichment-regression-tests
-status: in-progress
-proposal: ../proposals/chore-enrichment-regression-tests.md
+status: archived
+proposal: proposal-chore-enrichment-regression-tests.md
 branch: claude/chore-web-audit-leftovers-xt5v6i
+merged_pr: https://github.com/didi-rare/vigilafrica/pull/285
+archived_on: 2026-10-11
 ---
 
 # Spec: Adversarial Enrichment Regression Tests
 
-Technical spec for [`chore-enrichment-regression-tests`](../proposals/chore-enrichment-regression-tests.md).
+Technical spec for [`chore-enrichment-regression-tests`](proposal-chore-enrichment-regression-tests.md).
 Tests only; no production code changes.
 
 ## Components touched
