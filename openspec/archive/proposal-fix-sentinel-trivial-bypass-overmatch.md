@@ -1,8 +1,12 @@
 ---
 id: fix-sentinel-trivial-bypass-overmatch
-status: in-progress
+status: archived
 branch: fix/sentinel-trivial-bypass-overmatch
+merged_pr: https://github.com/didi-rare/vigilafrica/pull/273
+archived_on: 2026-10-08
 ---
+
+> Archived 2026-10-08: shipped in v1.6.1 (#273). Verified on `development`: `api/cmd/sentinel/main_test.go` carries `TestTrivialLineRe` and `TestParseAuditCommitRef`, `main.go` carries `resolveAuditCommit`, and every box in the Verification section below was ticked with evidence before merge.
 
 # Proposal: The Sentinel's Bypass Token Matches Anywhere, So Discussing It Disables the Gate (fix-sentinel-trivial-bypass-overmatch)
 
