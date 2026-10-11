@@ -291,13 +291,21 @@ components:
 
     LastIngestion:
       type: object
-      description: Telemetry record for the most recent COMPLETED ingestion run, either globally or per country. In-progress runs are never reported here, so `status` is not `running` in practice; it stays in the enum for compatibility.
+      description: |
+        Telemetry record for the most recent COMPLETED ingestion run, either globally or per
+        country. In-progress runs are never reported here, so `status` is not `running` in
+        practice; it stays in the enum for compatibility.
+
+        Every key below is always present. On the public API the run's `started_at`,
+        `events_fetched`, `events_stored` and `error` are redacted to `null`; only
+        `status`, `completed_at` and `country_code` carry values. `country_code` is
+        omitted when empty.
+      required: [status, started_at, completed_at, events_fetched, events_stored, error]
       properties:
         country_code:
           type: string
         status:
           type: string
-          nullable: true
           description: |
             `degraded` means the run completed and stored what it could, but GDACS returned no
             usable answer for at least one flood polygon (unreachable, erroring, rate-limited, or the

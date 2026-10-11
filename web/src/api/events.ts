@@ -112,7 +112,7 @@ export async function fetchContext(): Promise<ContextResponse> {
 export interface LastIngestion {
   // 'degraded': the run completed, but GDACS returned no usable answer for some flood
   // polygons; new ones are missing, existing ones may be out of date (fix-gdacs-degraded-run-status).
-  status: 'success' | 'failure' | 'running' | 'degraded' | null
+  status: 'success' | 'failure' | 'running' | 'degraded'
   started_at: string | null
   completed_at: string | null
   events_fetched: number | null

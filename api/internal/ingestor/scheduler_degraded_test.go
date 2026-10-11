@@ -361,12 +361,10 @@ func TestDegradedRunWithAlertingDisabledWarns(t *testing.T) {
 	_ = client // alerting is deliberately NOT configured below
 	ledger := &runLedger{mockRepo: &mockRepo{}}
 
+	// The warning goes through the alert client's own logger (§8.6), so it is
+	// captured here without touching the process-wide default (§9.5).
 	var buf strings.Builder
-	prev := slog.Default()
-	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelWarn})))
-	t.Cleanup(func() { slog.SetDefault(prev) })
-
-	disabled := alert.NewClient(alert.Config{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	disabled := alert.NewClient(alert.Config{}, slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelWarn})))
 	runScheduledIngest(context.Background(), ledger, disabled, testCountry, NewRunBudget())
 
 	if got := ledger.status(1); got != models.RunStatusDegraded {
@@ -374,5 +372,72 @@ func TestDegradedRunWithAlertingDisabledWarns(t *testing.T) {
 	}
 	if !strings.Contains(buf.String(), "alerting is disabled") {
 		t.Errorf("expected a Warn-level log that the degraded run could not be alerted (§8.3), got:\n%s", buf.String())
+	}
+}
+
+// ── Round 5 ──────────────────────────────────────────────────────────────────
+
+// failingMetadataLedger is a runLedger whose metadata-only updates fail — the
+// write path taken for an existing polygon event whose geometry could not be
+// verified. Round 4's end-to-end test covered only the upsert path, so removing
+// the StorageErrors increment from the metadata path left every test green.
+type failingMetadataLedger struct{ *runLedger }
+
+func (l *failingMetadataLedger) UpdateEventMetadata(context.Context, models.Event) (bool, error) {
+	return false, errors.New("events: connection reset")
+}
+
+func TestScheduledIngestMetadataUpdateErrorIsAFailureEvenWhenDegraded(t *testing.T) {
+	client, resend := degradedWorld(t) // one polygon flood, GDACS 500 → metadata-only path
+	ledger := &failingMetadataLedger{&runLedger{mockRepo: &mockRepo{}}}
+
+	runScheduledIngest(context.Background(), ledger, client, testCountry, NewRunBudget())
+
+	if got := ledger.status(1); got != models.RunStatusFailure {
+		t.Fatalf("run status = %q, want failure — a lost metadata write hid behind the degraded status", got)
+	}
+	run := ledger.runs[0]
+	if run.Error == nil || !strings.Contains(*run.Error, "could not be written") || !strings.Contains(*run.Error, "additionally GDACS") {
+		t.Errorf("run error = %v, want both the storage error and the GDACS outage recorded", run.Error)
+	}
+	if resend.count() != 1 || !strings.Contains(resend.subjects[0], "could not be written") {
+		t.Errorf("want exactly one failure alert carrying the storage error, got %d: %v", resend.count(), resend.subjects)
+	}
+}
+
+// failingUpsertAndCompleteLedger fails both the event write and the final run
+// update, so the run's own error and its unrecorded completion both apply.
+type failingUpsertAndCompleteLedger struct{ *runLedger }
+
+func (l *failingUpsertAndCompleteLedger) UpsertEvent(context.Context, models.Event, string) error {
+	return errors.New("events: connection reset")
+}
+
+func (l *failingUpsertAndCompleteLedger) CompleteIngestionRun(context.Context, int64, models.IngestionRunStatus, int, int, *string) error {
+	return errors.New("ingestion_runs: connection reset")
+}
+
+func TestScheduledIngestReportsBothIngestionAndCompletionErrors(t *testing.T) {
+	client, resend := healthyPointWorld(t)
+	ledger := &failingUpsertAndCompleteLedger{&runLedger{mockRepo: &mockRepo{}}}
+
+	_, err := IngestWithBudget(context.Background(), ledger, testCountry, NewRunBudget())
+	if err == nil {
+		t.Fatal("want an error")
+	}
+	for _, want := range []string{"could not be written", "could not be updated"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not mention %q — one failure hid the other", err, want)
+		}
+	}
+
+	runScheduledIngest(context.Background(), ledger, client, testCountry, NewRunBudget())
+	if resend.count() != 1 {
+		t.Fatalf("%d alert(s), want 1", resend.count())
+	}
+	for _, want := range []string{"could not be written", "could not be updated"} {
+		if !strings.Contains(resend.subjects[0], want) {
+			t.Errorf("alert payload does not mention %q", want)
+		}
 	}
 }

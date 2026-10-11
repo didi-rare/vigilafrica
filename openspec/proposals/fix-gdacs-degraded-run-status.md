@@ -185,6 +185,24 @@ Also tightened the web test for a country failure alongside a degraded run: it n
 regional-failure copy and asserts the GDACS banner is absent, rather than matching a substring both
 banners could satisfy.
 
+## Round 5 — second independent pass on the round-4 fixes (`gpt-5.6-sol`, 2026-10-11) verdict BLOCK; all seven findings fixed
+
+The second pass confirmed six of the eight round-4 fixes and found one **over-correction** and six
+new issues. ⚠️ The over-correction is the instructive one: round 4 classified an affected polygon
+with *explicitly empty* coordinates as an outage, which would have degraded every run for as long
+as GDACS kept answering "no polygon" — a permanent false outage introduced while closing a
+fail-open path.
+
+| # | Finding | Fix |
+|---|---|---|
+| P1 (over-correction) | Round 4's malformed-feature guard required **both** class and geometry type to be missing, so `{"Class":"Poly_Affected"}` with no geometry type, or a Polygon with no class, still passed as a valid non-match. | A feature missing **either** discriminator marks the scan incomplete. Two new table rows, plus one for unreadable nested coordinates. |
+| P1 | Explicit empty coordinates (`[]`) were classified upstream. RFC 7946 §3.1 defines an empty coordinates array as null geometry: GDACS saying "no polygon" is a complete answer. | Empty coordinates are a non-match (refusal); only unreadable coordinates mark the scan incomplete. The round-4 row is flipped with the RFC citation. |
+| P2 | `resolveTyped` cached `resolveUpstream` alongside real answers. The budget is shared across countries in a run, so one transient 500 for an event in both NG and GH queries was replayed as a fact for the second country, and a malformed episode poisoned every later lookup. | Answers are cached; outages never are. Test: first lookup 500 → upstream and uncached; second lookup → resolved. **Trade-off, stated:** a dead upstream is now asked again on every lookup instead of once per run; the shared run budget bounds what that costs and an exhausted budget still fails closed (the pre-existing budget test is split into a cached refusal and a retried-but-bounded outage). |
+| P2 | When ingestion failed **and** the run record could not be updated, only the first error survived into the returned error, the in-memory run and the alert. | Both errors are joined (`%w; additionally … %w`). Test asserts the alert carries both. |
+| P2 | The round-4 contract example showed populated `started_at` / `events_fetched` / `events_stored`, but the handler redacts them to `null` on the public API (nothing enables the unredacted form today), OpenAPI left every run-record member optional, `status` was nullable in Go, OpenAPI and TypeScript although it is never null. | Example shows the real (redacted) public shape and says so; OpenAPI `LastIngestion` lists its six always-present keys as `required` and `status` is not nullable; Go `Status` is a plain string; the TypeScript union drops `null`. Both OpenAPI copies re-synced and re-parsed. |
+| P3 | The disabled-alerting warning test swapped `slog.Default()` process-wide (§9.5). | The warning is emitted through the alert client's injected logger (`Client.Logger()`, §8.6); the test captures that logger directly. |
+| P3 | The storage-error end-to-end test covered only the upsert path; removing the `StorageErrors` increment from the metadata-only path left every test green. | New end-to-end test: existing polygon event, GDACS 500, metadata update fails → `failure` row whose error names both the lost write and the GDACS outage, and one failure alert. |
+
 ## Verification
 
 - Unit tests for the classifier (each table row), the run-status decision, `/health` +

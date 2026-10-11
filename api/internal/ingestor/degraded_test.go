@@ -163,9 +163,29 @@ func TestResolveFailureClassification(t *testing.T) {
 			testSourceURL, resolveUpstream,
 		},
 		{
-			"an affected polygon with empty coordinates is an outage",
-			twoEpisodes, body(`{"features":[{"properties":{"Class":"Poly_Affected","episodeid":1},"geometry":{"type":"Polygon","coordinates":[]}}]}`),
+			// Round 5: an affected feature missing one discriminator is as
+			// unclassifiable as one missing both.
+			"an affected feature with no geometry type is an outage",
+			twoEpisodes, body(`{"features":[{"properties":{"Class":"Poly_Affected","episodeid":1},"geometry":{"coordinates":` + fourVertexRing + `}}]}`),
 			testSourceURL, resolveUpstream,
+		},
+		{
+			"a polygon feature with no class is an outage",
+			twoEpisodes, body(`{"features":[{"properties":{"episodeid":1},"geometry":{"type":"Polygon","coordinates":` + fourVertexRing + `}}]}`),
+			testSourceURL, resolveUpstream,
+		},
+		{
+			"an affected polygon with unreadable nested coordinates is an outage",
+			twoEpisodes, body(`{"features":[{"properties":{"Class":"Poly_Affected","episodeid":1},"geometry":{"type":"Polygon","coordinates":[["a","b"]]}}]}`),
+			testSourceURL, resolveUpstream,
+		},
+		{
+			// Round 5 (reverting a round-4 over-correction): explicit empty
+			// coordinates are GeoJSON null geometry — GDACS answered "no polygon",
+			// which is a complete answer and a non-match, not an outage.
+			"an affected polygon with explicitly empty coordinates is a complete answer with no match",
+			twoEpisodes, body(`{"features":[{"properties":{"Class":"Poly_Affected","episodeid":1},"geometry":{"type":"Polygon","coordinates":[]}}]}`),
+			testSourceURL, resolveUnverifiable,
 		},
 		// ...but a well-formed feature that simply is not the target stays a refusal.
 		{
@@ -337,5 +357,39 @@ func TestLongEventResolvesWithinProductionBudget(t *testing.T) {
 	})
 	if _, got := NewRunBudget().resolveTyped(context.Background(), testSourceURL, ring4); got != resolveOK {
 		t.Errorf("34-episode event under the production budget: %v, want ok", got)
+	}
+}
+
+// TestUpstreamFailuresAreNotCached (independent review, PR #280, round 5): the
+// run budget's cache must hold answers, never outages. One transient 500 on the
+// first lookup must not be replayed as a fact for every later event sharing the
+// key — including the same event seen from a second country in the same run.
+func TestUpstreamFailuresAreNotCached(t *testing.T) {
+	var calls int
+	gdacsStub(t, twoEpisodes, func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if calls == 1 {
+			w.WriteHeader(http.StatusInternalServerError) // transient: first geometry request only
+			return
+		}
+		if r.URL.Query().Get("episodeid") == "2" {
+			_, _ = w.Write([]byte(`{"features":[{"properties":{"Class":"Poly_Affected","episodeid":2},"geometry":{"type":"Polygon","coordinates":` + fourVertexRing + `}}]}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"features":[]}`))
+	})
+
+	b := NewRunBudget()
+	if _, got := b.resolveTyped(context.Background(), testSourceURL, ring4); got != resolveUpstream {
+		t.Fatalf("first lookup: %v, want upstream (the stub errored)", got)
+	}
+	if _, cached := b.cache[testSourceURL+"#4"]; cached {
+		t.Fatal("an upstream failure was cached")
+	}
+	if _, got := b.resolveTyped(context.Background(), testSourceURL, ring4); got != resolveOK {
+		t.Fatalf("second lookup: %v, want ok — the outage was replayed from the cache instead of retried", got)
+	}
+	if _, cached := b.cache[testSourceURL+"#4"]; !cached {
+		t.Error("a resolved answer should be cached")
 	}
 }

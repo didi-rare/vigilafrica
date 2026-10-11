@@ -226,6 +226,10 @@ func IngestWithBudget(ctx context.Context, repo database.Repository, country Cou
 			slog.Error("ingestion: failed to complete run record", "run_id", runID, "status", status, "err", completeErr)
 			if ingestErr == nil {
 				ingestErr = fmt.Errorf("run %d finished as %s but its record could not be updated: %w", runID, status, completeErr)
+			} else {
+				// Both failed: the run's own error AND the fact that it was never
+				// recorded. Neither may hide the other in the alert (round 5).
+				ingestErr = fmt.Errorf("%w; additionally the run record could not be updated: %w", ingestErr, completeErr)
 			}
 			status, errMsg = runOutcome(result, ingestErr)
 		}

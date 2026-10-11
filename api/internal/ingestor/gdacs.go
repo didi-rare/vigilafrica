@@ -324,12 +324,13 @@ func resolveGDACSPolygon(ctx context.Context, budget *RunBudget, sourceURL strin
 		}
 
 		for _, f := range fc.Features {
-			// A feature carrying neither a class nor a geometry type is not a GDACS
-			// feature at all — an error envelope or a broken proxy inside an
-			// otherwise well-formed collection. It is not an answer for this
-			// episode, so the scan is incomplete (independent review, PR #280,
-			// round 4: before, it was skipped as if it were a valid non-match).
-			if f.Properties.Class == "" && f.Geometry.Type == "" {
+			// A feature missing EITHER discriminator is not a GDACS feature we can
+			// classify — an error envelope, a broken proxy, or a schema change —
+			// and so is not an answer for this episode: the scan is incomplete.
+			// Round 4 required both to be missing, which let {"Class":"Poly_Affected"}
+			// without a geometry type pass as a valid non-match (independent review,
+			// PR #280, round 5).
+			if f.Properties.Class == "" || f.Geometry.Type == "" {
 				incomplete = true
 				continue
 			}
@@ -343,8 +344,17 @@ func resolveGDACSPolygon(ctx context.Context, budget *RunBudget, sourceURL strin
 				incomplete = true
 				continue
 			}
+			if len(coords) == 0 {
+				// An explicit empty coordinates array is GeoJSON's null geometry
+				// (RFC 7946 §3.1): GDACS answered "no polygon" for this episode.
+				// That is a complete answer and a non-match, not an outage — round 4
+				// classified it upstream, which would have degraded every run for
+				// as long as the answer stayed empty (round 5).
+				continue
+			}
 			positions := collectPositions(coords)
 			if len(positions) == 0 {
+				// Non-empty but not positions at all: unreadable, so not seen.
 				incomplete = true
 				continue
 			}
@@ -664,7 +674,14 @@ func (b *RunBudget) resolveTyped(ctx context.Context, sourceURL string, eonet []
 	defer cancel()
 
 	geom, failure := resolveGDACSPolygon(cctx, b, sourceURL, eonet)
-	b.cache[key] = gdacsCacheEntry{geom: geom, failure: failure}
+	if failure != resolveUpstream {
+		// Cache answers, never outages. The budget is shared across every
+		// country in a run, so a cached upstream failure for an event that
+		// appears in two countries' queries would poison the second without a
+		// retry, and a single transient 500 would be replayed as a fact
+		// (independent review, PR #280, round 5).
+		b.cache[key] = gdacsCacheEntry{geom: geom, failure: failure}
+	}
 	return geom, failure
 }
 

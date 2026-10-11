@@ -198,7 +198,9 @@ func notifyIfDegraded(ctx context.Context, repo database.Repository, alertClient
 		// the degraded path returns before reaching it, so it warns here
 		// (independent review, PR #280, round 4).
 		if status, _ := runOutcome(result, nil); status == models.RunStatusDegraded {
-			slog.Warn("scheduler: run is degraded but alerting is disabled (RESEND_API_KEY or recipients unset); no email was sent",
+			// Through the client's own logger (§8.6) so a test can capture it
+			// without swapping the process-wide default (§9.5).
+			alertClient.Logger().Warn("scheduler: run is degraded but alerting is disabled (RESEND_API_KEY or recipients unset); no email was sent",
 				"country", country.Code)
 		}
 		return

@@ -13,7 +13,7 @@ import (
 // lastIngestionResponse is the nested block in the health response (ADR-011).
 type lastIngestionResponse struct {
 	CountryCode   string     `json:"country_code,omitempty"`
-	Status        *string    `json:"status"`
+	Status        string     `json:"status"`
 	StartedAt     *time.Time `json:"started_at"`
 	CompletedAt   *time.Time `json:"completed_at"`
 	EventsFetched *int       `json:"events_fetched"`
@@ -54,10 +54,9 @@ func runToResponse(run *models.IngestionRun, includeErrors bool) *lastIngestionR
 	if run == nil {
 		return nil
 	}
-	statusStr := string(run.Status)
 	resp := &lastIngestionResponse{
 		CountryCode: run.CountryCode,
-		Status:      &statusStr,
+		Status:      string(run.Status),
 		CompletedAt: run.CompletedAt,
 	}
 	if includeErrors {

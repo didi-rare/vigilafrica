@@ -62,6 +62,15 @@ func (c *Client) Enabled() bool {
 	return c != nil && c.cfg.ResendAPIKey != "" && len(c.cfg.ToEmails) > 0
 }
 
+// Logger exposes the client's injected logger so callers that decide NOT to
+// alert can still record why, through the same sink the alerts use (§8.6).
+func (c *Client) Logger() *slog.Logger {
+	if c == nil || c.log == nil {
+		return slog.Default()
+	}
+	return c.log
+}
+
 func ParseRecipients(value string) []string {
 	if value == "" {
 		return nil
