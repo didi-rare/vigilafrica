@@ -280,9 +280,15 @@ func (r *pgRepo) CompleteIngestionRun(ctx context.Context, id int64, status mode
 			error          = $5
 		WHERE id = $1
 	`
-	_, err := r.pool.Exec(ctx, query, id, status, fetched, stored, errMsg)
+	tag, err := r.pool.Exec(ctx, query, id, status, fetched, stored, errMsg)
 	if err != nil {
 		return fmt.Errorf("failed to complete ingestion run %d: %w", id, err)
+	}
+	// An UPDATE that matches no row is not a completion. Without this check a
+	// run whose row was never created, or was deleted underneath it, would be
+	// reported as recorded (independent review, PR #280, round 4).
+	if n := tag.RowsAffected(); n != 1 {
+		return fmt.Errorf("failed to complete ingestion run %d: expected to update 1 row, updated %d", id, n)
 	}
 	return nil
 }

@@ -271,3 +271,108 @@ func TestScheduledIngestStreaksAreIsolatedPerCountry(t *testing.T) {
 		t.Errorf("degraded in two countries: %d alert(s), want 2 — one country's streak suppressed the other's", resend.count())
 	}
 }
+
+// ── Round 4 (independent review, PR #280): database-write and run-finalisation
+// failures must surface as FAILURE, not vanish into a log line. ──────────────
+
+// failingUpsertLedger is a runLedger whose event writes fail, as they would
+// when the events table is unavailable while ingestion_runs is not.
+type failingUpsertLedger struct{ *runLedger }
+
+func (l *failingUpsertLedger) UpsertEvent(context.Context, models.Event, string) error {
+	return errors.New("events: connection reset")
+}
+
+// failingCompleteLedger is a runLedger whose final status update fails.
+type failingCompleteLedger struct{ *runLedger }
+
+func (l *failingCompleteLedger) CompleteIngestionRun(context.Context, int64, models.IngestionRunStatus, int, int, *string) error {
+	return errors.New("ingestion_runs: connection reset")
+}
+
+// healthyPointWorld serves one point flood from EONET (no GDACS involved) and a
+// fake Resend, so the only thing that can go wrong is the database.
+func healthyPointWorld(t *testing.T) (*alert.Client, *fakeResend) {
+	t.Helper()
+	eonet := httptest.NewServer(closedQueryStub(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = fmt.Fprint(w, okBody)
+	}))
+	t.Cleanup(eonet.Close)
+	t.Cleanup(installTestServer(t, eonet))
+
+	resend := &fakeResend{}
+	srv := httptest.NewServer(http.HandlerFunc(resend.handler))
+	t.Cleanup(srv.Close)
+	client := alert.NewClient(alert.Config{
+		ResendAPIKey: "test-key", FromEmail: "alerts@example.test", ToEmails: []string{"ops@example.test"},
+		Endpoint: srv.URL, Environment: "test",
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	return client, resend
+}
+
+func TestScheduledIngestStorageErrorIsAFailureNotASuccess(t *testing.T) {
+	client, resend := healthyPointWorld(t)
+	ledger := &failingUpsertLedger{&runLedger{mockRepo: &mockRepo{}}}
+
+	runScheduledIngest(context.Background(), ledger, client, testCountry, NewRunBudget())
+
+	if got := ledger.status(1); got != models.RunStatusFailure {
+		t.Fatalf("run status = %q, want failure — a lost write was recorded as a completed run", got)
+	}
+	run := ledger.runs[0]
+	if run.Error == nil || !strings.Contains(*run.Error, "could not be written") {
+		t.Errorf("run error = %v, want the storage-error message", run.Error)
+	}
+	if run.EventsStored != 0 {
+		t.Errorf("events_stored = %d, want 0 — nothing was written", run.EventsStored)
+	}
+	if resend.count() != 1 {
+		t.Errorf("%d alert(s) sent, want 1 failure alert", resend.count())
+	}
+}
+
+func TestScheduledIngestUnrecordedCompletionIsAFailure(t *testing.T) {
+	client, resend := healthyPointWorld(t)
+	ledger := &failingCompleteLedger{&runLedger{mockRepo: &mockRepo{}}}
+
+	result, err := IngestWithBudget(context.Background(), ledger, testCountry, NewRunBudget())
+	if err == nil || !strings.Contains(err.Error(), "could not be updated") {
+		t.Fatalf("IngestWithBudget error = %v, want the unrecorded-completion error", err)
+	}
+	if result == nil || result.Run == nil || result.Run.Status != models.RunStatusFailure {
+		t.Fatalf("in-memory run = %+v, want status failure — it must not claim a success that was never recorded", result)
+	}
+	if got := ledger.status(1); got != models.RunStatusRunning {
+		t.Errorf("ledger status = %q, want running — the fake refused the update, so the row must be untouched", got)
+	}
+
+	// And through the scheduler it alerts as a failure.
+	runScheduledIngest(context.Background(), ledger, client, testCountry, NewRunBudget())
+	if resend.count() != 1 {
+		t.Errorf("%d alert(s) sent, want 1 failure alert", resend.count())
+	}
+	if !strings.Contains(resend.subjects[0], "could not be updated") {
+		t.Errorf("alert payload should carry the unrecorded-completion reason, got %s", resend.subjects[0])
+	}
+}
+
+func TestDegradedRunWithAlertingDisabledWarns(t *testing.T) {
+	client, _ := degradedWorld(t)
+	_ = client // alerting is deliberately NOT configured below
+	ledger := &runLedger{mockRepo: &mockRepo{}}
+
+	var buf strings.Builder
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelWarn})))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	disabled := alert.NewClient(alert.Config{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	runScheduledIngest(context.Background(), ledger, disabled, testCountry, NewRunBudget())
+
+	if got := ledger.status(1); got != models.RunStatusDegraded {
+		t.Fatalf("run status = %q, want degraded", got)
+	}
+	if !strings.Contains(buf.String(), "alerting is disabled") {
+		t.Errorf("expected a Warn-level log that the degraded run could not be alerted (§8.3), got:\n%s", buf.String())
+	}
+}

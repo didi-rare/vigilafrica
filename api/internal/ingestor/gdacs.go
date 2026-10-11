@@ -324,14 +324,30 @@ func resolveGDACSPolygon(ctx context.Context, budget *RunBudget, sourceURL strin
 		}
 
 		for _, f := range fc.Features {
-			if f.Properties.Class != "Poly_Affected" || f.Geometry.Type != "Polygon" {
+			// A feature carrying neither a class nor a geometry type is not a GDACS
+			// feature at all — an error envelope or a broken proxy inside an
+			// otherwise well-formed collection. It is not an answer for this
+			// episode, so the scan is incomplete (independent review, PR #280,
+			// round 4: before, it was skipped as if it were a valid non-match).
+			if f.Properties.Class == "" && f.Geometry.Type == "" {
+				incomplete = true
 				continue
+			}
+			if f.Properties.Class != "Poly_Affected" || f.Geometry.Type != "Polygon" {
+				continue // a real feature of another class or shape: a valid non-match
 			}
 			var coords []interface{}
 			if json.Unmarshal(f.Geometry.Coordinates, &coords) != nil {
+				// The affected polygon is present but unreadable: we cannot say
+				// whether it matched, so this episode was not actually seen.
+				incomplete = true
 				continue
 			}
 			positions := collectPositions(coords)
+			if len(positions) == 0 {
+				incomplete = true
+				continue
+			}
 			if len(positions) != wantVertices || !positionsWithinWGS84(positions) {
 				continue
 			}
@@ -363,7 +379,15 @@ func resolveGDACSPolygon(ctx context.Context, budget *RunBudget, sourceURL strin
 			distinct[c.GeoJSON] = c
 		}
 	}
-	if len(distinct) == 0 && incomplete {
+	if incomplete {
+		// ⚠️ Regardless of how many candidates were found. An unscanned or
+		// unreadable episode may hold a second, DIFFERENT ring, which a complete
+		// scan would have refused as ambiguous below. Resolving from a partial
+		// view is a guess, and a guess here relocates a disaster — the
+		// fail-closed property this resolver exists to keep. Until round 4 a
+		// partial scan with exactly one candidate resolved; the proposal had
+		// recorded that as an accepted gap and the independent review showed it
+		// was not acceptable (independent review, PR #280, round 4).
 		return GDACSGeometry{}, resolveUpstream
 	}
 	if len(distinct) != 1 {

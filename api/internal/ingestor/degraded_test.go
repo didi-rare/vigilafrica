@@ -92,7 +92,9 @@ func TestResolveFailureClassification(t *testing.T) {
 			manyEpisodes(maxGDACSEpisodes + 5), body(`{"features":[]}`), testSourceURL, resolveUpstream,
 		},
 		{
-			"a match within the episode cap still resolves",
+			// Round 4: a capped scan is a partial scan even when it found a match —
+			// an episode beyond the cap may hold a second, different ring.
+			"a match within the episode cap is still a partial scan, not a resolution",
 			manyEpisodes(maxGDACSEpisodes + 5),
 			func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Query().Get("episodeid") == "3" {
@@ -101,7 +103,7 @@ func TestResolveFailureClassification(t *testing.T) {
 				}
 				_, _ = w.Write([]byte(`{"features":[]}`))
 			},
-			testSourceURL, resolveOK,
+			testSourceURL, resolveUpstream,
 		},
 
 		// Round 2: the inner fields must be present too.
@@ -134,13 +136,56 @@ func TestResolveFailureClassification(t *testing.T) {
 		{"event with zero episodes is a refusal", body(`{"properties":{"episodeid":0,"episodes":[]}}`), status(http.StatusOK), testSourceURL, resolveUnverifiable},
 		{"non-GDACS source reference is a refusal, never a fetch", status(http.StatusOK), status(http.StatusOK), "https://evil.example.com/x?eventtype=FL&eventid=1", resolveUnverifiable},
 
-		// ── ok ─────────────────────────────────────────────────────────────────
+		// ── round 4: a partial scan NEVER resolves, however many rings matched ──
+		// Until round 4 this case resolved ("as before"). The failed episode may
+		// hold a second, different ring that a complete scan would refuse as
+		// ambiguous; resolving from a partial view is a guess.
 		{
-			"one episode errors but another matches: resolves, as before",
+			"one episode errors and another matches: still an outage, not a resolution",
 			twoEpisodes,
 			func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Query().Get("episodeid") == "1" {
 					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+				_, _ = w.Write([]byte(`{"features":[{"properties":{"Class":"Poly_Affected","episodeid":2},"geometry":{"type":"Polygon","coordinates":` + fourVertexRing + `}}]}`))
+			},
+			testSourceURL, resolveUpstream,
+		},
+
+		// ── round 4: malformed feature entries are not answers ─────────────────
+		// A schema-broken GDACS body used to be skipped as if it were a valid
+		// non-match, which re-created the silent outage this change removes.
+		{"a feature with no class and no geometry is an outage", twoEpisodes, body(`{"features":[{}]}`), testSourceURL, resolveUpstream},
+		{
+			"an affected polygon with unreadable coordinates is an outage",
+			twoEpisodes, body(`{"features":[{"properties":{"Class":"Poly_Affected","episodeid":1},"geometry":{"type":"Polygon","coordinates":"garbage"}}]}`),
+			testSourceURL, resolveUpstream,
+		},
+		{
+			"an affected polygon with empty coordinates is an outage",
+			twoEpisodes, body(`{"features":[{"properties":{"Class":"Poly_Affected","episodeid":1},"geometry":{"type":"Polygon","coordinates":[]}}]}`),
+			testSourceURL, resolveUpstream,
+		},
+		// ...but a well-formed feature that simply is not the target stays a refusal.
+		{
+			"only a Poly_Global feature is a complete answer with no match",
+			twoEpisodes, body(`{"features":[{"properties":{"Class":"Poly_Global","episodeid":1},"geometry":{"type":"Polygon","coordinates":` + fourVertexRing + `}}]}`),
+			testSourceURL, resolveUnverifiable,
+		},
+		{
+			"an affected polygon with a different vertex count is a complete answer with no match",
+			twoEpisodes, body(`{"features":[{"properties":{"Class":"Poly_Affected","episodeid":1},"geometry":{"type":"Polygon","coordinates":[[[1.0,2.0],[1.1,2.0],[1.1,2.1],[1.05,2.15],[1.0,2.0]]]}}]}`),
+			testSourceURL, resolveUnverifiable,
+		},
+
+		// ── ok ─────────────────────────────────────────────────────────────────
+		{
+			"a complete two-episode scan with one matching ring resolves",
+			twoEpisodes,
+			func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Query().Get("episodeid") == "1" {
+					_, _ = w.Write([]byte(`{"features":[]}`))
 					return
 				}
 				_, _ = w.Write([]byte(`{"features":[{"properties":{"Class":"Poly_Affected","episodeid":2},"geometry":{"type":"Polygon","coordinates":` + fourVertexRing + `}}]}`))
@@ -210,6 +255,12 @@ func TestRunOutcome(t *testing.T) {
 			&IngestResult{EventsGeomUnresolved: 5, EventsGeomUpstreamFailed: 0}, nil, models.RunStatusSuccess, "",
 		},
 		{"clean run is a success", &IngestResult{}, nil, models.RunStatusSuccess, ""},
+		// Round 4: a lost database write is a failure of THIS system.
+		{"a storage error fails the run", &IngestResult{EventsFetched: 3, EventsStored: 2, StorageErrors: 1}, nil, models.RunStatusFailure, "1 event(s) could not be written"},
+		{
+			"a storage error outranks a GDACS outage",
+			&IngestResult{StorageErrors: 1, EventsGeomUpstreamFailed: 2}, nil, models.RunStatusFailure, "additionally GDACS returned no usable answer for 2",
+		},
 		{"nil result without error is a success", nil, nil, models.RunStatusSuccess, ""},
 	}
 	for _, c := range cases {

@@ -1,5 +1,7 @@
 -- Migration: 000016_add_degraded_ingestion_status
 -- Purpose: allow ingestion_runs.status = 'degraded' (fix-gdacs-degraded-run-status).
+-- Milestone: fix-gdacs-degraded-run-status (closes §8.1 of fix-eonet-polygon-transposition).
+-- Data quality: production-quality. Schema only; existing rows are not rewritten.
 --
 -- A run is degraded when it completed and stored what it could, but GDACS could
 -- not be reached for at least one polygon event, so those flood areas are

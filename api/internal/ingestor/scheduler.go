@@ -193,6 +193,14 @@ func notifyIfDegraded(ctx context.Context, repo database.Repository, alertClient
 	// nil without sending when unconfigured, and recording that as delivered
 	// would silence the streak once alerting is configured mid-outage.
 	if !alertClient.Enabled() {
+		// §8.3: a recoverable anomaly a human should know about is logged at Warn,
+		// not dropped. The failure path gets this warning from SendIngestFailure;
+		// the degraded path returns before reaching it, so it warns here
+		// (independent review, PR #280, round 4).
+		if status, _ := runOutcome(result, nil); status == models.RunStatusDegraded {
+			slog.Warn("scheduler: run is degraded but alerting is disabled (RESEND_API_KEY or recipients unset); no email was sent",
+				"country", country.Code)
+		}
 		return
 	}
 

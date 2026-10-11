@@ -1,6 +1,9 @@
--- Reverts 000016. Rows recorded as 'degraded' DID complete ingestion, so they
--- map back to 'success' — the value they would have carried before 000016.
--- (Lossy by necessity: the old constraint cannot represent 'degraded'.)
+-- Migration: 000016_add_degraded_ingestion_status (down)
+-- Purpose: revert 000016 — drop alert_sent_at and restore the three-value status CHECK.
+-- Milestone: fix-gdacs-degraded-run-status.
+-- Data quality: production-quality. Lossy: rows recorded as 'degraded' DID complete
+--   ingestion, so they map back to 'success' — the value they would have carried
+--   before 000016; the old constraint cannot represent 'degraded'.
 
 ALTER TABLE ingestion_runs DROP COLUMN IF EXISTS alert_sent_at;
 

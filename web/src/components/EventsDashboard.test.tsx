@@ -190,7 +190,12 @@ describe('EventsDashboard', () => {
 
     renderWithProviders(<EventsDashboard />)
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(/did not complete successfully/i)
+    // The country-level failure wins over the GDACS wording: pin the exact
+    // regional-failure copy and prove the GDACS banner is NOT shown.
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'One or more country ingestion runs did not complete successfully. Some regional data may be delayed.',
+    )
+    expect(screen.queryByText(/GDACS/i)).not.toBeInTheDocument()
   })
 
   it('updates URL-backed filters and refetches events for the selected country', async () => {

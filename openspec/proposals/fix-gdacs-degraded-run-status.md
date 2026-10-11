@@ -160,9 +160,30 @@ inner-schema check removed, disabled-alerting check removed, migration made non-
 ## Out of Scope
 
 - Changing per-run alert behaviour for `failure` (no dedupe exists there today; separate concern).
-- A single-episode-fetch failure when exactly one candidate still matched: resolution proceeds as
-  today. A missing episode could in principle hide a second matching ring (ambiguity). Recorded,
-  not changed.
+- ~~A single-episode-fetch failure when exactly one candidate still matched: resolution proceeds as
+  today.~~ **Withdrawn in round 4** (see below): accepting geometry from a partial scan was a
+  fail-open path, not an accepted gap.
+
+## Round 4 — independent review (`gpt-5.6-sol`, 2026-10-11) verdict BLOCK; all eight findings fixed
+
+⚠️ Two of the findings were *introduced by this change* and two were pre-existing behaviour this
+change had explicitly accepted. The reviewer was right on all four; the earlier rounds had reviewed
+the degraded plumbing and not the properties it rests on.
+
+| # | Finding | Fix |
+|---|---|---|
+| P0 | A partial GDACS episode scan (one episode errored, or the scan hit the episode cap) with **exactly one** matching ring resolved as OK. The episode never seen may hold a second, different ring, which a complete scan refuses as ambiguous — so this was a fail-open path in the fail-closed resolver. A test pinned it ("resolves, as before"). | `resolveGDACSPolygon`: any incomplete scan is `resolveUpstream`, regardless of candidates. Both pinned tests flipped. Consequence: an event with more than `maxGDACSEpisodes` episodes now always degrades the run (none has exceeded 34 in a year). |
+| P1 | Malformed feature entries (`{"features":[{}]}`, an affected polygon with unreadable or empty coordinates) were skipped as if they were valid non-matches, so a schema-broken GDACS body ended as a refusal and the run stayed `success` — the exact silent outage this change removes. | A feature with neither class nor geometry type, or an affected polygon whose coordinates do not parse or are empty, marks the scan incomplete → upstream. A well-formed feature of another class, or a ring with a different vertex count, stays a valid non-match. Five new table rows. |
+| P1 | Per-event database write failures (upsert, metadata-only update) were logged and dropped, so a run could record `success` — or merely `degraded` — over lost rows. Pre-existing; this change made it more misleading by adding a milder status it could hide behind. | `IngestResult.StorageErrors`; any non-zero value is `failure`, outranks `degraded`, and propagates out of `IngestWithBudget` as an error so the scheduler's failure alert fires. End-to-end test: failing upserts → `failure` row + one failure alert. |
+| P1 | A failed `CompleteIngestionRun` was logged while `IngestWithBudget` returned success and built an in-memory run as if persisted; the row stayed `running`, `/health` kept the previous run, nothing alerted. Pre-existing. | The completion error becomes the run's error (failure) and surfaces through the scheduler's failure alert; `CompleteIngestionRun` now fails unless exactly one row was updated (integration test on a non-existent id). |
+| P1 | Both deploy smoke tests run `jq -e '.status == "ok" …'` on `/health`, so any legitimate degraded streak would fail every production and staging deploy — the opposite of this change's own claim that degraded is not unreadiness. **Introduced here.** | Smoke tests now gate on `GET /ready` (503 only for a real failure) and accept `ok` or `degraded` from `/health` alongside the version check. |
+| P2 | `api-contract.md` said nullable fields are never omitted, then that telemetry is omitted on database failure, and its 200 example omitted the required `last_ingestion`. | One policy: `last_ingestion` always present (null when unknown), `last_ingestion_by_country` omitted when empty — written down as the single documented exception; example now matches the handler and OpenAPI. |
+| P2 | Degraded alerting returned silently when `RESEND_API_KEY`/recipients were unset; the failure path warns, the degraded path did not (§8.3). | Warn log on the degraded path; a test asserts it. |
+| P3 | Migration 000016 lacked the §11.12 milestone / data-quality header; the down file had no header. | Headers added. |
+
+Also tightened the web test for a country failure alongside a degraded run: it now pins the exact
+regional-failure copy and asserts the GDACS banner is absent, rather than matching a substring both
+banners could satisfy.
 
 ## Verification
 

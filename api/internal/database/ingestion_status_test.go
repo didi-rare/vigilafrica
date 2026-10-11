@@ -236,3 +236,15 @@ func TestHealthQueriesIgnoreInProgressRuns(t *testing.T) {
 		t.Errorf("global health read an in-progress run: %+v", last)
 	}
 }
+
+// TestCompleteIngestionRunRequiresAnExistingRow (independent review, PR #280,
+// round 4): an UPDATE that matches no row is not a completion. Before this the
+// query reported success for any id, so a run whose row was never created, or
+// was deleted underneath it, would be recorded as completed.
+func TestCompleteIngestionRunRequiresAnExistingRow(t *testing.T) {
+	ctx := context.Background()
+	msg := "x"
+	if err := testRepo.CompleteIngestionRun(ctx, 1<<40, models.RunStatusSuccess, 1, 1, &msg); err == nil {
+		t.Fatal("completing a non-existent run returned nil, want an error")
+	}
+}
