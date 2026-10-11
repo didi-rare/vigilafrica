@@ -179,6 +179,32 @@ func TestResolveFailureClassification(t *testing.T) {
 			twoEpisodes, body(`{"features":[{"properties":{"Class":"Poly_Affected","episodeid":1},"geometry":{"type":"Polygon","coordinates":[["a","b"]]}}]}`),
 			testSourceURL, resolveUpstream,
 		},
+		// Round 6: the four adversarial shapes the third review asked to pin.
+		{
+			"an affected polygon with null coordinates is an outage, not an empty array",
+			twoEpisodes, body(`{"features":[{"properties":{"Class":"Poly_Affected","episodeid":1},"geometry":{"type":"Polygon","coordinates":null}}]}`),
+			testSourceURL, resolveUpstream,
+		},
+		{
+			"an affected polygon with no coordinates key is an outage",
+			twoEpisodes, body(`{"features":[{"properties":{"Class":"Poly_Affected","episodeid":1},"geometry":{"type":"Polygon"}}]}`),
+			testSourceURL, resolveUpstream,
+		},
+		{
+			"an affected polygon with an empty ring is unreadable, so an outage",
+			twoEpisodes, body(`{"features":[{"properties":{"Class":"Poly_Affected","episodeid":1},"geometry":{"type":"Polygon","coordinates":[[]]}}]}`),
+			testSourceURL, resolveUpstream,
+		},
+		{
+			"an affected MultiPolygon is a well-formed feature of another shape: a complete non-match",
+			twoEpisodes, body(`{"features":[{"properties":{"Class":"Poly_Affected","episodeid":1},"geometry":{"type":"MultiPolygon","coordinates":[` + fourVertexRing + `]}}]}`),
+			testSourceURL, resolveUnverifiable,
+		},
+		{
+			"an affected Point is a well-formed feature of another shape: a complete non-match",
+			twoEpisodes, body(`{"features":[{"properties":{"Class":"Poly_Affected","episodeid":1},"geometry":{"type":"Point","coordinates":[1.0,2.0]}}]}`),
+			testSourceURL, resolveUnverifiable,
+		},
 		{
 			// Round 5 (reverting a round-4 over-correction): explicit empty
 			// coordinates are GeoJSON null geometry — GDACS answered "no polygon",

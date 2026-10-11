@@ -338,9 +338,13 @@ func resolveGDACSPolygon(ctx context.Context, budget *RunBudget, sourceURL strin
 				continue // a real feature of another class or shape: a valid non-match
 			}
 			var coords []interface{}
-			if json.Unmarshal(f.Geometry.Coordinates, &coords) != nil {
-				// The affected polygon is present but unreadable: we cannot say
-				// whether it matched, so this episode was not actually seen.
+			if json.Unmarshal(f.Geometry.Coordinates, &coords) != nil || coords == nil {
+				// The affected polygon is present but unreadable — or its
+				// coordinates are JSON null / absent, which json.Unmarshal leaves
+				// as a nil slice and which is NOT a GeoJSON coordinates array (an
+				// explicit [] decodes to a non-nil empty slice and is handled
+				// below). We cannot say whether it matched, so this episode was
+				// not actually seen (independent review, PR #280, round 6).
 				incomplete = true
 				continue
 			}

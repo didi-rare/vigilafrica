@@ -203,6 +203,17 @@ fail-open path.
 | P3 | The disabled-alerting warning test swapped `slog.Default()` process-wide (§9.5). | The warning is emitted through the alert client's injected logger (`Client.Logger()`, §8.6); the test captures that logger directly. |
 | P3 | The storage-error end-to-end test covered only the upsert path; removing the `StorageErrors` increment from the metadata-only path left every test green. | New end-to-end test: existing polygon event, GDACS 500, metadata update fails → `failure` row whose error names both the lost write and the GDACS outage, and one failure alert. |
 
+## Round 6 — third independent pass (`gpt-5.6-sol`, 2026-10-11) verdict BLOCK; all three findings fixed
+
+The third pass confirmed six of the seven round-5 fixes and the merge against `development`, and
+found three more.
+
+| # | Finding | Fix |
+|---|---|---|
+| P1 | JSON `null` (or an absent `coordinates` key) unmarshals into the same zero-length slice the round-5 code checks for an explicit `[]`, so a malformed affected polygon with `coordinates: null` was classified as a complete non-match and left the run healthy. | `null`/absent coordinates (nil slice) are unreadable → incomplete → upstream; an explicit `[]` (non-nil empty slice) stays a non-match. Four more pinned shapes: `null`, missing key, `[[]]` (unreadable), `MultiPolygon` and `Point` under `Poly_Affected` (well-formed non-matches). |
+| P1 | A failed `CreateIngestionRun` was logged and the run went on to return **success** with no row — `/health` stale, no alert, and a degraded streak's recovery invisible. The round-2 design had accepted this ("a database hiccup cannot suppress the degraded alert") but only covered the degraded case. | Ingestion still proceeds (events are worth storing), but the creation error is joined into the outcome, so the run is a **failure** that the scheduler alerts on, rebuilt from the in-memory result. End-to-end test: run row fails, events store, one failure alert naming the unrecorded run. |
+| P2 | The TypeScript `LastIngestion` omitted `country_code` and allowed `null` per-country values; the contract prose still said fields are never omitted. | `country_code?: string` added; map values typed non-null (the handler never emits one); the Null Handling rule now names both omissions. |
+
 ## Verification
 
 - Unit tests for the classifier (each table row), the run-status decision, `/health` +

@@ -441,3 +441,44 @@ func TestScheduledIngestReportsBothIngestionAndCompletionErrors(t *testing.T) {
 		}
 	}
 }
+
+// ── Round 6 ──────────────────────────────────────────────────────────────────
+
+// failingCreateLedger cannot create the run row but stores events fine — a
+// transient or table-specific failure on ingestion_runs only.
+type failingCreateLedger struct {
+	*runLedger
+	stored int
+}
+
+func (l *failingCreateLedger) CreateIngestionRun(context.Context, time.Time, string) (int64, error) {
+	return 0, errors.New("ingestion_runs: connection reset")
+}
+
+func (l *failingCreateLedger) UpsertEvent(context.Context, models.Event, string) error {
+	l.stored++
+	return nil
+}
+
+func TestScheduledIngestUnrecordedRunIsAFailureEvenWhenEventsWereStored(t *testing.T) {
+	client, resend := healthyPointWorld(t)
+	ledger := &failingCreateLedger{runLedger: &runLedger{mockRepo: &mockRepo{}}}
+
+	result, err := IngestWithBudget(context.Background(), ledger, testCountry, NewRunBudget())
+	if err == nil || !strings.Contains(err.Error(), "could not be created") {
+		t.Fatalf("IngestWithBudget error = %v, want the unrecorded-run error", err)
+	}
+	if ledger.stored == 0 || result == nil || result.EventsStored == 0 {
+		t.Fatalf("events must still be stored when only the run row fails (stored=%d, result=%+v)", ledger.stored, result)
+	}
+	if len(ledger.runs) != 0 {
+		t.Fatalf("no run row should exist, got %d", len(ledger.runs))
+	}
+
+	// Through the scheduler it alerts as a failure, rebuilt from the result
+	// because there is no persisted row to send.
+	runScheduledIngest(context.Background(), ledger, client, testCountry, NewRunBudget())
+	if resend.count() != 1 || !strings.Contains(resend.subjects[0], "could not be created") {
+		t.Errorf("want exactly one failure alert naming the unrecorded run, got %d: %v", resend.count(), resend.subjects)
+	}
+}

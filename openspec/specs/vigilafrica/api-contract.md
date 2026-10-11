@@ -73,7 +73,7 @@ CORS is enabled and the allowed `Origin` is set via the `CORS_ORIGIN` environmen
 
 - Fields that may be absent use `null` in the JSON response — fields are **never omitted** from the response shape
 - Array fields are always `[]` (empty array) when empty — never `null`
-- One documented exception: `GET /health` omits `last_ingestion_by_country` when there are no completed runs or the database is unreachable (an empty map carries no information; the OpenAPI schema marks it optional). `last_ingestion` follows the rule and is `null` in those cases.
+- Two documented exceptions, both on `GET /health`: `last_ingestion_by_country` is omitted when there are no completed runs or the database is unreachable (an empty map carries no information), and a run record's `country_code` is omitted when empty. Both are marked optional in the OpenAPI schema and the TypeScript type. `last_ingestion` follows the rule and is `null` in those cases; the six other run-record keys are always present.
 
 ---
 

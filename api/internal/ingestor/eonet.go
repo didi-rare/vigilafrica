@@ -191,9 +191,14 @@ func Ingest(ctx context.Context, repo database.Repository, country CountryConfig
 func IngestWithBudget(ctx context.Context, repo database.Repository, country CountryConfig, budget *RunBudget) (*IngestResult, error) {
 	startedAt := time.Now()
 
-	runID, err := repo.CreateIngestionRun(ctx, startedAt, country.Code)
-	if err != nil {
-		slog.Error("ingestion: failed to create run record", "country", country.Code, "err", err)
+	runID, createErr := repo.CreateIngestionRun(ctx, startedAt, country.Code)
+	if createErr != nil {
+		// Ingestion still proceeds — events are worth storing even when the
+		// run cannot be recorded — but the outcome is a FAILURE: with no run
+		// row, /health keeps reporting the previous run and nothing would
+		// otherwise alert (independent review, PR #280, round 6; before, this
+		// was only logged and the run returned success).
+		slog.Error("ingestion: failed to create run record", "country", country.Code, "err", createErr)
 		runID = 0
 	}
 
@@ -207,6 +212,15 @@ func IngestWithBudget(ctx context.Context, repo database.Repository, country Cou
 
 	completedAt := time.Now()
 	duration := completedAt.Sub(startedAt)
+
+	if createErr != nil {
+		recordErr := fmt.Errorf("run record could not be created, so this run is unrecorded: %w", createErr)
+		if ingestErr == nil {
+			ingestErr = recordErr
+		} else {
+			ingestErr = fmt.Errorf("%w; additionally %w", ingestErr, recordErr)
+		}
+	}
 
 	status, errMsg := runOutcome(result, ingestErr)
 	if ingestErr == nil && status == models.RunStatusFailure {
