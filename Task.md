@@ -1,8 +1,8 @@
 # chore-enrichment-regression-tests
 
-**Branch:** `claude/chore-web-audit-leftovers-xt5v6i`
-**Proposal:** [openspec/proposals/chore-enrichment-regression-tests.md](openspec/proposals/chore-enrichment-regression-tests.md)
-**Spec:** [openspec/specs/chore-enrichment-regression-tests.md](openspec/specs/chore-enrichment-regression-tests.md)
+**Branch:** `claude/chore-web-audit-leftovers-xt5v6i` — **merged in #285, archived 2026-10-11**
+**Proposal:** [openspec/archive/proposal-chore-enrichment-regression-tests.md](openspec/archive/proposal-chore-enrichment-regression-tests.md)
+**Spec:** [openspec/archive/spec-chore-enrichment-regression-tests.md](openspec/archive/spec-chore-enrichment-regression-tests.md)
 **Origin:** deferred-work register item B2, carrying task 3.8 of
 `2026-08-07-perf-boundary-area-precompute` (#211)
 

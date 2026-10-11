@@ -1,8 +1,10 @@
 ---
 id: chore-enrichment-regression-tests
-status: in-progress
+status: archived
 branch: claude/chore-web-audit-leftovers-xt5v6i
-spec: ../specs/chore-enrichment-regression-tests.md
+spec: spec-chore-enrichment-regression-tests.md
+merged_pr: https://github.com/didi-rare/vigilafrica/pull/285
+archived_on: 2026-10-11
 ---
 
 # Proposal: Codify the Adversarial Enrichment Cases as CI Regression Tests (chore-enrichment-regression-tests)

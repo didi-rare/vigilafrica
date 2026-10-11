@@ -82,7 +82,7 @@ This is a **standing constraint on future work**, not a task to complete. It bel
 
 The tie-break, shared-border and geometry-update cases that the `000013` review exercised by hand were **not covered by CI**. A future change to the boundary-matching logic would not have been caught. Explicitly flagged as pre-existing rather than introduced by #211.
 
-Closed 2026-10-09: `api/internal/database/enrichment_adversarial_test.go` (integration-tagged, runs in the existing CI step) pins all four — shared-border vertices discovered from the fixture, an exact-area tie that only the `id` terminator can decide, a geometry update that must clear a stale state, and every vertex of Nigeria's exterior ring getting a country — each with an oracle independent of the trigger, plus a final test that proves the fixtures were cleaned up. Record: [`chore-enrichment-regression-tests`](chore-enrichment-regression-tests.md).
+Closed 2026-10-09: `api/internal/database/enrichment_adversarial_test.go` (integration-tagged, runs in the existing CI step) pins all four — shared-border vertices discovered from the fixture, an exact-area tie that only the `id` terminator can decide, a geometry update that must clear a stale state, and every vertex of Nigeria's exterior ring getting a country — each with an oracle independent of the trigger, plus a final test that proves the fixtures were cleaned up. Record: [`chore-enrichment-regression-tests`](../archive/proposal-chore-enrichment-regression-tests.md) (merged in #285, archived 2026-10-11).
 
 ### B3. Geometry simplification at `0.001°`
 
