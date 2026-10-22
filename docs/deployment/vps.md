@@ -384,6 +384,30 @@ curl -fsS https://api.vigilafrica.org/health
 
 `/health.version` is stamped from `APP_VERSION` during the Docker build. Staging should show the short commit SHA; production should show the SemVer tag.
 
+## Disk Hygiene
+
+Every deploy runs `docker compose up -d --build`, which leaves BuildKit cache behind. Unpruned, it reached 23.8 GB of the 31 GB in use by 2026-10-22, with the journal adding another 3.3 GB. `provision.sh` installs two guards:
+
+- `vigil-docker-builder-prune.timer`: weekly, prunes build cache older than 7 days. Routine deploys keep their recent layer cache.
+- `/etc/systemd/journald.conf.d/90-vigilafrica.conf`: caps the journal at 1 GB. That also bounds how far back the `vigil-deploy` / `vigil-deploy-run` audit lines go, so export them with `journalctl -t vigil-deploy -t vigil-deploy-run` if you need a longer record.
+
+Neither restarts Docker. On a host provisioned before these existed, run the same block from a checkout that has it (staging tracks `main`):
+
+```bash
+sudo bash -c "$(sed -n '/^# --- disk hygiene/,/^systemctl restart systemd-journald/p' /opt/vigilafrica/staging/deploy/provision.sh)"
+```
+
+Verify:
+
+```bash
+systemctl list-timers vigil-docker-builder-prune.timer   # NEXT should be the coming Monday
+systemd-analyze cat-config systemd/journald.conf | grep SystemMaxUse   # SystemMaxUse=1G, nothing later overriding it
+journalctl --disk-usage
+sudo docker system df   # Build Cache should stay small between deploys
+```
+
+To reclaim space immediately, `sudo docker builder prune -a -f` is safe: it removes only build cache, so the next deploy just rebuilds from scratch once. **Never** use `docker system prune --volumes` or `docker volume prune`, which delete the Postgres volumes behind the app and Umami.
+
 ## Backups
 
 Add root cron jobs for both volumes:
