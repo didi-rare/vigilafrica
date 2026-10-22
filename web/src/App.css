@@ -191,6 +191,7 @@ h2[id],
   letter-spacing: 0.01em;
 }
 
+/* The solid 4px stripe. Static — the pulse lives on ::after below. */
 .staging-banner::before {
   content: "";
   position: absolute;
@@ -199,6 +200,33 @@ h2[id],
   bottom: 0;
   width: 4px;
   background: var(--accent-amber);
+}
+
+/*
+  The stripe's glow, on its own layer.
+
+  Previously ::before animated `box-shadow` from nothing to a 12px amber glow —
+  the last non-composited animation on the site after #191 moved `.signal-dot`
+  off the same property (Lighthouse: "Avoid non-composited animations —
+  Unsupported CSS Property: box-shadow"; it only shows on staging because the
+  banner only exists there). The shadow is now painted once, statically, onto a
+  transparent box over the stripe, and only `opacity` animates, which the
+  compositor can fade without repainting. Same 2.5s cycle, same 12px/1px glow
+  at the peak; between peaks it fades rather than shrinks.
+
+  Resting `opacity: 0` is declared, not left to the first keyframe: with the
+  animation removed (reduced motion, below) the layer must stay invisible.
+*/
+.staging-banner::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 4px;
+  pointer-events: none;
+  box-shadow: 0 0 12px 1px var(--accent-amber);
+  opacity: 0;
   animation: staging-banner-stripe-pulse 2.5s ease-in-out infinite;
 }
 
@@ -211,16 +239,20 @@ h2[id],
 @keyframes staging-banner-stripe-pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 0 transparent;
+    opacity: 0;
   }
 
   50% {
-    box-shadow: 0 0 12px 1px var(--accent-amber);
+    opacity: 1;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .staging-banner::before {
+  /* `::after`, not `::before` — the animation moved with the glow, and this
+     rule has to follow it (the regression #191 nearly shipped for .signal-dot).
+     The catch-all *::after block at the end of this file would also neuter it,
+     but relying on that leaves a dead selector and a rule-order dependency. */
+  .staging-banner::after {
     animation: none;
   }
 }
@@ -473,13 +505,22 @@ h2[id],
     Top-aligned, NOT centred. The reserved box starts near the bottom of the
     fold (y≈710 at 1350x940), so centring pushed the loading text to y≈1180 —
     below the fold, leaving the user staring at an empty band where they
-    previously saw "Loading dashboard telemetry...". Keeping the text at the top
-    of the reservation is the only position that stays on screen.
+    previously saw "Loading dashboard telemetry...". Keeping the content at the
+    top of the reservation is the only position that stays on screen.
+
+    The fallback's only child is now the shared `.loading-state` card
+    (chore-web-audit-leftovers item 5), which top-aligns itself in block flow.
+    `flow-root` rather than `block`: `.container` has no vertical padding, so
+    with plain `block` the card's `margin-top: 2rem` collapses THROUGH this box
+    and lands outside the reservation, growing its footprint by 32px beyond the
+    cap documented above (caught in review — the first cut did exactly that).
+    `flow-root` keeps the margin inside, so `min-height` is the footprint again.
+
+    The card spans the container here (it is the only thing in the reservation),
+    which is wider than the 400px sidebar it occupies once the chunk mounts —
+    the treatment is the same, the width is not, and that is fine.
   */
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  color: var(--text-secondary);
+  display: flow-root;
 }
 
 /*
@@ -501,6 +542,55 @@ h2[id],
   .dashboard-fallback {
     min-height: 0;
   }
+}
+
+/*
+  Above-the-fold loading affordance (chore-web-audit-leftovers item 4).
+
+  At 375x812 the dashboard fallback starts at y≈1098 — below the fold — and
+  #198 removed the reservation at ≤480px, so a phone user on a slow connection
+  sees the hero and nothing that says anything is loading. This fixed 3px bar
+  is rendered by the Suspense fallback for exactly as long as the dashboard
+  chunk is pending. It takes no layout space (fixed), so it cannot contribute
+  to CLS at any viewport, and it is `aria-hidden`: the `.loading-state`
+  live region carries the announcement.
+
+  The indeterminate segment moves with `transform` only — compositor-driven, so
+  it does not reintroduce the non-composited-animation defect item 1 removes.
+
+  z-index: `--z-dropdown` (200) is reused rather than a new property — §7.10
+  says reuse an existing `--z-*` until the scale consolidates into tokens.css.
+  The requirement is only "above the sticky nav (100), below the skip link
+  (1000)", which 200 satisfies.
+*/
+.dashboard-fallback__progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  z-index: var(--z-dropdown);
+  overflow: hidden;
+  pointer-events: none;
+  background: var(--surface-amber-medium);
+}
+
+.dashboard-fallback__progress::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 40%;
+  background: var(--accent-amber);
+  transform: translateX(-100%);
+  animation: load-progress-slide 1.4s ease-in-out infinite;
+}
+
+/* translateX is relative to the segment's own 40% width: 250% of that is the
+   full track, so the segment exits on the right before it re-enters. */
+@keyframes load-progress-slide {
+  to { transform: translateX(250%); }
 }
 
 .signal-dot {
@@ -706,6 +796,13 @@ h2[id],
   .hero__lead > *,
   .hero__panel {
     animation: none;
+  }
+
+  /* Still an affordance without the motion: a static full-width bar. */
+  .dashboard-fallback__progress::after {
+    animation: none;
+    transform: none;
+    width: 100%;
   }
 
   .reveal {

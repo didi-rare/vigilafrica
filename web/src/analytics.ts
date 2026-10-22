@@ -42,6 +42,24 @@ declare global {
 // Synthetic/headless agents whose traffic is our own measurement, not a user.
 // Lighthouse sets `Chrome-Lighthouse`; PageSpeed Insights and plain headless
 // Chrome runs are matched for the same reason.
+//
+// This is an unanchored substring match, raised by two reviewers in the
+// 2026-07-26 batch and REVIEWED AGAIN, NOT CHANGED, in chore-web-audit-leftovers:
+//   - The false-positive surface is any real browser whose UA carries one of
+//     the three tokens verbatim. All three are product identifiers rather than
+//     words (`Chrome-Lighthouse` closes Lighthouse/PSI UAs, `HeadlessChrome/`
+//     replaces the `Chrome/` product token, `PageSpeed` has no known occurrence
+//     in a real browser UA), so a hit from a real user needs a proxy or
+//     extension to append the token itself.
+//   - Anchoring with word boundaries would NOT help that case — an appended
+//     diagnostic token is a whole token either way — so it would be a change
+//     without a measured benefit, which the proposal rules out.
+//   - The rate is unmeasured because it cannot be measured from here: Umami
+//     stores a parsed browser name, not the raw UA. A real number needs a
+//     raw-UA sample on the analytics or edge side; until one exists this stays.
+// `analytics.test.ts` pins the decision on the one input where it is
+// observable: a token embedded inside a larger word (`FooPageSpeedBar/1.0`) is
+// suppressed. Anchoring the regex would flip that test, which is the point.
 const SYNTHETIC_USER_AGENT = /Chrome-Lighthouse|HeadlessChrome|PageSpeed/i
 
 // Umami's own documented opt-out key. Set it per browser, per device:

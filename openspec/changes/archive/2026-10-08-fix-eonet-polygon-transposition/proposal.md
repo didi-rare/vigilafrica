@@ -1,8 +1,12 @@
 ---
 id: fix-eonet-polygon-transposition
-status: proposed
+status: implemented — shipped in v1.6.1 (#264), three review rounds absorbed; archived 2026-10-08
 branch: fix/eonet-polygon-transposition
+merged_pr: https://github.com/didi-rare/vigilafrica/pull/264
+archived_on: 2026-10-08
 ---
+
+> Archived 2026-10-08. Verified on `development`: `api/internal/ingestor/gdacs.go` (resolver), the normalizer guards, and migration `000015_correct_transposed_polygon_geometry` are all present. Of the three open boxes in `tasks.md`: **4.2** (production verification of `/v1/events?category=floods`) was **not** performed from the repository — the production API is not reachable from it — and is recorded as such; **8.1** and **8.2** are deliberate deferrals, now registered in `openspec/proposals/chore-deferred-work-register.md` §G so that archiving this record does not lose them. The record also lacked a `specs/` delta, which is why `openspec validate --all` failed on it; archiving takes it out of the validated set.
 
 # Proposal: Stop Ingesting EONET Polygon Geometry With Transposed Coordinates (fix-eonet-polygon-transposition)
 
@@ -39,7 +43,7 @@ Verified against GDACS, the authoritative upstream, for both events. The vertex 
 GDACS is self-consistent: for 1104078 it reports `country: Cameroon`, `iso3: CMR`, and a centroid of
 `[9.414, 4.6027]` — which agrees with its own polygon and disagrees with EONET's.
 
-⚠️ **We are not the ones swapping.** [`normalizer.go`](../../../api/internal/normalizer/normalizer.go)
+⚠️ **We are not the ones swapping.** [`normalizer.go`](../../../../api/internal/normalizer/normalizer.go)
 reads `[lon, lat]` explicitly for `Point` (which is why the Lagos point is right) and passes `Polygon`
 coordinate arrays through **verbatim**. Our code is faithful to a bad feed.
 
@@ -65,7 +69,7 @@ why the error is silent for us rather than absurd.
 
 ## ⚠️ Why nothing caught this, and why bbox validation never could
 
-[`eonet.go:417-422`](../../../api/internal/ingestor/eonet.go) already anticipated this exact hazard:
+[`eonet.go:417-422`](../../../../api/internal/ingestor/eonet.go) already anticipated this exact hazard:
 
 > *Containment is unverifiable: the normalizer resolves lon/lat only for Point geometry and leaves
 > them nil for Polygon. Such events are stored deliberately — we do not drop data we cannot verify —

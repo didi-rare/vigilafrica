@@ -16,9 +16,18 @@ import { chromium } from 'playwright'
 const BASELINE_URL = process.env.BASELINE_URL ?? 'http://localhost:4174/'
 const BRANCH_URL   = process.env.BRANCH_URL   ?? 'http://localhost:4173/'
 const RUNS         = Number(process.env.RUNS ?? 8)
-// Viewport taller than the `.dashboard-fallback` cap, so the cap is what governs
-// the reservation rather than 100vh.
-const VIEWPORT     = { width: 1920, height: 1600 }
+// Default viewport is taller than the `.dashboard-fallback` cap, so the cap is
+// what governs the reservation rather than 100vh. `VIEWPORT=375x812` overrides
+// it — chore-web-audit-leftovers re-measured the three audit viewports this way.
+const VIEWPORT     = parseViewport(process.env.VIEWPORT ?? '1920x1600')
+
+// Exactly two positive integers joined by x/X — anything else is a typo, not a
+// viewport, and must not reach Playwright as NaN or a silently ignored suffix.
+function parseViewport(raw) {
+  const m = /^(\d+)[xX](\d+)$/.exec(raw.trim())
+  if (!m) throw new Error(`VIEWPORT must look like 1350x940, got ${JSON.stringify(raw)}`)
+  return { width: Number(m[1]), height: Number(m[2]) }
+}
 // Without this the chunk arrives too fast to observe the shift it exists to prevent.
 const CHUNK_DELAY_MS = Number(process.env.CHUNK_DELAY_MS ?? 1200)
 const TOTAL = 3268   // continental-scale projection

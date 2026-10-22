@@ -27,6 +27,7 @@ import {
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router'
 import { ErrorBoundary, type FallbackProps } from 'react-error-boundary'
 import { BrandMark } from './components/BrandMark'
+import { LoadingState } from './components/LoadingState'
 import { useReveal } from './hooks/useReveal'
 import './App.css'
 import MILESTONES from './data/milestones.json'
@@ -117,6 +118,32 @@ function StagingBanner() {
       <AlertTriangle className="staging-banner__icon" size={16} aria-hidden="true" />
       <span>Staging environment — pre-release/test data. Do not rely on this for operational decisions.</span>
     </div>
+  )
+}
+
+// DashboardFallback is on screen for exactly as long as the lazy dashboard chunk
+// is pending (chore-web-audit-leftovers items 3–5).
+//
+// `.dashboard-fallback__progress` is a fixed 3px bar across the top of the
+// viewport. It exists because at 375x812 the in-flow fallback starts at y≈1098
+// — below the fold — so without it a phone user on a slow connection sees the
+// hero and nothing that says anything is loading. Fixed positioning means no
+// layout footprint and therefore no CLS contribution at any viewport. It is
+// aria-hidden: the LoadingState live region carries the announcement.
+//
+// `dashboard-fallback` reserves viewport height while the chunk loads. Without
+// it the fallback is ~26px and the mounted dashboard is ~1459px (desktop), so
+// mounting shoves everything below it — `#how-it-works`, visible at the bottom
+// of the viewport — clean off the screen. Measured CLS 0.262 at 1350x940, 0.082
+// at 768x1024. See fix-dashboard-layout-reservation for the trial data.
+function DashboardFallback() {
+  return (
+    <>
+      <div className="dashboard-fallback__progress" aria-hidden="true" />
+      <div className="container section dashboard-fallback">
+        <LoadingState message="Loading dashboard telemetry..." />
+      </div>
+    </>
   )
 }
 
@@ -244,15 +271,7 @@ function App() {
                 </div>
               </section>
 
-              {/*
-                `dashboard-fallback` reserves viewport height while the lazy
-                chunk loads. Without it the fallback is ~26px and the mounted
-                dashboard is ~1459px (desktop), so mounting shoves everything
-                below it — `#how-it-works`, visible at the bottom of the
-                viewport — clean off the screen. Measured CLS 0.262 at
-                1350x940, 0.082 at 768x1024. See the proposal for the trial data.
-              */}
-              <Suspense fallback={<div className="container section dashboard-fallback">Loading dashboard telemetry...</div>}>
+              <Suspense fallback={<DashboardFallback />}>
                 <EventsDashboard />
               </Suspense>
 

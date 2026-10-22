@@ -461,12 +461,16 @@ const results = useMemo(() => search(events, deferred), [events, deferred]);
 **§9.7 — Dynamic content updates are announced via `aria-live` or focus movement.**
 ✅ `<p aria-live="polite">{total} events found</p>`
 
-**§9.8 — Loading states use `aria-busy="true"` and a `role="status"` spinner with `aria-label`.**
+**§9.8 — Loading states are a `role="status"` region whose visible text is the announcement. A spinner with no visible text carries `aria-label` instead; a spinner next to visible text is `aria-hidden`.**
 ```tsx
-<div aria-busy={isPending}>
-  {isPending && <span role="status" aria-label="Loading events" className="spinner" />}
-</div>
+{isPending && (
+  <div role="status" aria-live="polite">
+    <span className="spinner" aria-hidden="true" />
+    <p>Loading events…</p>
+  </div>
+)}
 ```
+*Why not `aria-busy` on the container:* `aria-busy="true"` asks assistive technology to defer exposing changes under that element until it clears. Placed on an ancestor of the status region it can suppress the very announcement the region exists to make. Reserve `aria-busy` for a container whose contents are being replaced *without* a live region inside it. Reference implementation: `components/LoadingState.tsx` (amended in `chore-web-audit-leftovers`; the earlier wording prescribed `aria-busy` plus an `aria-label`led spinner, which the only component built for it contradicted).
 
 **§9.9 — Modals trap focus while open and return focus to the trigger on close.**
 
@@ -816,3 +820,4 @@ ESLint's config extends `@tanstack/eslint-plugin-query`'s `flat/recommended`, wh
 | 19 | 2026-07-22: test files brought under the type checker by dropping `tsconfig.app.json`'s `exclude`, at full strict | A separate `tsconfig.test.json` with a strictness ratchet | Measured first: 8 test files join the program and produce **0** errors, and a canary (a mock with `id: 42` and `category: 'earthquakes'`) is correctly rejected — so the gate bites. The ratchet existed to absorb a mock-drift backlog that turned out not to exist, because tests already followed §2.8 and typed their mocks against the real API types |
 | 20 | Added §13.0 — import vitest helpers explicitly, do not enable `vitest/globals` | Turn on `globals: true` for brevity | All 8 test files already import explicitly, and `globals: true` would let a missing import in *non-test* code resolve against injected globals and compile anyway. Codifying the existing practice costs nothing and keeps the global type surface honest |
 | 21 | 2026-07-23: wired `@tanstack/eslint-plugin-query` (`flat/recommended`) into `eslint.config.js`, making §5.2 and §5.3 machine-checked | Drop the unused dependency instead | It was already installed (depcheck flagged it unused), so the supply-chain cost was paid with no benefit. Zero violations on the current tree — a canary (a `queryFn` reading `country` with `country` absent from the `queryKey`) is correctly rejected, so it's live regression protection, not cleanup. `exhaustive-deps` guards against the cache-collision bug where two filter states silently share one entry. The decision-log row was deliberately deferred from PR #173 to avoid a merge conflict with rows 19–20 (PR #172), then added in the archive batch |
+| 22 | 2026-10-08: §9.8 rewritten — a loading state is a `role="status"` region whose visible text is the announcement; a text-less spinner carries `aria-label`, a spinner beside text is `aria-hidden`; `aria-busy` is not placed on an ancestor of the live region (`chore-web-audit-leftovers`, PR #283) | Keep the old wording (`aria-busy` container + `aria-label`led spinner) and make `LoadingState` conform; or leave the rule and the only component built for it disagreeing | The old example put the status region *inside* the `aria-busy` container, which is the one shape that can defer the announcement the region exists to make — a conservative reading, since busy propagation is implementation-dependent, but the safe default. Visible text as the live content is also announced more reliably than an empty labelled spinner. The region itself still carries `aria-label` so it is addressable by role, matching the two existing status regions in `EventsDashboard.tsx`. Flagged by two independent reviews of #283 as a rule/implementation contradiction; amended rather than left to drift |
