@@ -66,10 +66,11 @@ services:
   # because the port only binds to 127.0.0.1; override in `.env` for any real
   # environment via UMAMI_DB_PASSWORD + UMAMI_APP_SECRET.
   umami:
-    # Pinned to the postgresql-latest multi-arch index digest (CI enforces
-    # immutable refs via scripts/check-image-pins.js). Re-pin by running
-    # `docker buildx imagetools inspect ghcr.io/umami-software/umami:postgresql-latest`.
-    image: ghcr.io/umami-software/umami:postgresql-latest@sha256:e3f80c0625aad7179b49da27d475357cabb1068b8cacd9a792cfd6966888b123
+    # Built from analytics/Dockerfile: the pinned upstream Umami image with a
+    # patched Node.js binary copied over its own. Both base images are pinned
+    # by digest there (CI enforces immutable refs via scripts/check-image-pins.js).
+    build:
+      context: ./analytics
     container_name: vigilafrica-umami
     depends_on:
       postgres:

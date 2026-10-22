@@ -18,7 +18,10 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: '20'
+          # Node 20 reached end-of-life in April 2026, so security releases
+          # (including 2026-10-21's) ship no fix for it. Keep in step with
+          # ci-cd.yml.
+          node-version: '22'
 
       - name: Setup Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
