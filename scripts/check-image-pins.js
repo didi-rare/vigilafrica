@@ -4,6 +4,7 @@ const path = require("path");
 const repoRoot = path.resolve(__dirname, "..");
 const files = [
   "api/Dockerfile",
+  "analytics/Dockerfile",
   "docker-compose.yml",
   "docker-compose.demo.yml",
   "docker-compose.staging.yml",

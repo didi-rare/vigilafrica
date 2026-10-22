@@ -15,7 +15,7 @@ no PII, no fingerprinting, no consent banner required — the tracker is loaded 
 
 | Piece | Where | Notes |
 | --- | --- | --- |
-| Umami container | `prod-umami` / `staging-umami` services in `docker-compose.prod.yml` / `docker-compose.staging.yml` | Image `ghcr.io/umami-software/umami:postgresql-latest`. Binds `127.0.0.1:3000` (prod) / `127.0.0.1:3001` (staging) — never exposed directly. |
+| Umami container | `prod-umami` / `staging-umami` services in `docker-compose.prod.yml` / `docker-compose.staging.yml` | Built from [`analytics/Dockerfile`](../../analytics/Dockerfile): the pinned upstream `ghcr.io/umami-software/umami` image with a patched Node.js binary copied in (see §7). Binds `127.0.0.1:3000` (prod) / `127.0.0.1:3001` (staging) — never exposed directly. |
 | Database | A dedicated `umami` database + `umami` role inside the **existing** Postgres instance (`prod-db` / `staging-db`) | Isolated from the main `vigilafrica` database. One-time setup, see §3. |
 | Public ingress | Caddy blocks `analytics.vigilafrica.org` / `analytics.staging.vigilafrica.org` in `deploy/Caddyfile.example` | TLS + security headers; reverse-proxies to the local Umami port. |
 | Tracker script | `web/index.html`, `src="%VITE_ANALYTICS_URL%/script.js"` | URL + website-id substituted at build time from `VITE_ANALYTICS_URL` / `VITE_ANALYTICS_WEBSITE_ID`. Both are public identifiers. |
@@ -168,11 +168,27 @@ is part of first deploy, not optional.
 
 ## 7. Notes & follow-ups
 
-- The Umami image is pinned to a specific `postgresql-latest` digest in every
-  compose file, and CI (`scripts/check-image-pins.js`) enforces immutable refs.
-  Re-pin by running
-  `docker buildx imagetools inspect ghcr.io/umami-software/umami:postgresql-latest`
-  and updating the `@sha256:…` in each compose file.
+- Every compose file builds Umami from `analytics/Dockerfile`, which pins two
+  base images by digest (CI, via `scripts/check-image-pins.js`, enforces
+  immutable refs): the upstream Umami release, and the official `node` image
+  whose binary replaces Umami's own. Upstream only rebuilds on an Umami
+  release, so a Node.js security release can leave its newest image on a
+  vulnerable runtime; the copy closes that gap. The two images must share an
+  Alpine version (check `/etc/alpine-release` in each) so the binary's musl and
+  libstdc++ match. Once upstream ships an image at or above the patched Node
+  version, delete the Dockerfile and pin the upstream image directly.
+- To re-pin either image, resolve the tag's index digest with
+  `docker buildx imagetools inspect <image>:<tag>` and update the `ARG` line.
+- **Back up the `umami` database before upgrading across Umami releases.**
+  Umami applies its Prisma migrations automatically on boot, and they are
+  forward-only: after 3.1.0 → 3.4.0 (migrations 20–26), the old image is not a
+  clean rollback target. From the environment's directory:
+
+  ```bash
+  sudo docker compose -f docker-compose.prod.yml exec -T prod-db \
+    sh -c 'pg_dump -U "$POSTGRES_USER" -Fc umami' > umami-$(date +%F).dump
+  ```
+
 - Postgres growth from analytics rows is negligible at v1.3 scale; revisit
   retention only if VPS disk pressure becomes a real signal.
 - Restricting the `analytics.` subdomain to a known IP range is a reasonable
