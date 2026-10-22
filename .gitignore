@@ -26,7 +26,11 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
-.claude/
+# Claude Code: per-machine state stays local; the project commands and
+# instructions are committed so cloud sessions (which only get the clone)
+# run the same OpenSpec workflow as a local checkout.
+.claude/*
+!.claude/commands/
 
 # OpenSpec
 openspec/traces/

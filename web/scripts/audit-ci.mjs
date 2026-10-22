@@ -1,5 +1,8 @@
 #!/usr/bin/env node
-// Web dependency audit gate. Replaces a bare `npm audit --audit-level=moderate`
+// Dependency audit gate for BOTH npm trees: `web/` (the default) and the repo
+// root (`--dir .`, run from the repo root by CI). One implementation and one
+// allowlist, so an exception is reviewed once rather than drifting between two
+// copies. Replaces a bare `npm audit --audit-level=moderate`
 // so we can carry a *narrow, documented* allowlist for advisories that are both
 // (a) not reachable in this app AND (b) not cleanly fixable by a bump — the two
 // conditions that make ADR-008's "bump, never suppress" impossible to satisfy.
@@ -12,12 +15,49 @@
 // Fails CI on any advisory at moderate+ whose GHSA is not on the allowlist.
 
 import { execSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 
+// `--dir <path>` selects which npm tree to audit; defaults to the current
+// directory, so `npm run audit:ci` inside web/ behaves exactly as before.
+const dirFlag = process.argv.indexOf('--dir')
+const AUDIT_DIR = resolve(dirFlag !== -1 ? process.argv[dirFlag + 1] : '.')
+
+// Each entry is excused ONLY when every condition holds — otherwise it fails
+// the build like any other advisory:
+//   ghsa      the advisory id
+//   package   the package carrying it; the same GHSA on any other package is
+//             NOT excused
+//   devOnly   when true, every installed copy of `package` in the audited tree
+//             must be `dev: true` in its package-lock.json. If the package ever
+//             becomes a production dependency, the exception stops applying.
+//   reviewBy  YYYY-MM-DD. After this date the entry stops applying and CI goes
+//             red until someone re-reviews it — an exception cannot quietly
+//             outlive its justification.
+//   reason / whyNoBump   the ADR-008 rationale, required in prose.
+//
+// History: the react-router RSC-CSRF entry (GHSA-qwww-vcr4-c8h2) was removed on
+// 2026-08-03 once its own documented exit condition was met — react-router
+// published 8.3.0 (2026-07-22), outside the vulnerable 7.12.0–8.2.0 range.
 const ALLOWLIST = [
-  // Empty. The react-router RSC-CSRF entry (GHSA-qwww-vcr4-c8h2) was removed on
-  // 2026-08-03 once its own documented exit condition was met — react-router
-  // published 8.3.0 (2026-07-22), outside the vulnerable 7.12.0–8.2.0 range.
-  // The fix was a react-router-dom -> react-router v8 move; see chore-react-router-8.
+  {
+    ghsa: 'GHSA-vfj7-8cjw-p6xm',
+    package: 'braces',
+    devOnly: true,
+    reviewBy: '2026-11-02',
+    reason:
+      'Stack-exhaustion DoS from deeply nested brace PATTERNS. braces is reached ' +
+      'only through dev/CI tooling — root: @fission-ai/openspec -> fast-glob -> ' +
+      'micromatch; web: build tooling, dev:true in the lockfile. Every pattern it ' +
+      'ever expands comes from our own repository, so the worst case is someone ' +
+      'with commit access crashing our own CI. Nothing in the chain ships to users.',
+    whyNoBump:
+      'No patched release exists: the advisory covers braces <= 3.0.3 and 3.0.3 is ' +
+      'the latest published version (checked 2026-10-03). Every link above it is ' +
+      'already at latest (openspec 1.14.0, fast-glob 3.3.3, micromatch 4.0.8) and ' +
+      'still depends on braces. npm\'s own suggested fix is a DOWNGRADE of openspec ' +
+      'from 1.x to 0.17.2, which drops fast-glob but does nothing for web/.',
+  },
 ]
 
 const SEVERITY_RANK = { info: 1, low: 2, moderate: 3, high: 4, critical: 5 }
@@ -47,6 +87,7 @@ function runNpmAudit() {
   // discarding it is what made this failure mode invisible in the first place.
   try {
     const stdout = execSync('npm audit --json --fetch-timeout=45000 --fetch-retries=0', {
+      cwd: AUDIT_DIR,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
     })
@@ -102,7 +143,33 @@ for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
 
 const allowed = new Map(ALLOWLIST.map((a) => [a.ghsa, a]))
 const seenGhsa = new Set()
-const offending = new Map() // ghsa -> { severity, title, pkg }
+const offending = new Map() // ghsa -> { severity, title, pkg, why }
+
+// Loaded lazily: only needed when a devOnly entry has to be checked.
+let lockPackages
+function lockfilePackages() {
+  if (lockPackages === undefined) {
+    const lock = JSON.parse(readFileSync(join(AUDIT_DIR, 'package-lock.json'), 'utf8'))
+    lockPackages = lock.packages || {}
+  }
+  return lockPackages
+}
+
+const today = new Date().toISOString().slice(0, 10)
+
+// Returns null when `entry` genuinely excuses this finding, or the reason it
+// does not. Every refusal falls through to `offending`, i.e. fails the build.
+function exceptionRefusal(entry, pkg, vuln) {
+  if (entry.package !== pkg) return `allowlisted for ${entry.package}, but reported on ${pkg}`
+  if (today > entry.reviewBy) return `allowlist entry expired on ${entry.reviewBy} — re-review it`
+  if (entry.devOnly) {
+    const nodes = vuln.nodes || []
+    if (nodes.length === 0) return 'devOnly entry, but npm reported no install paths to verify'
+    const prod = nodes.filter((n) => lockfilePackages()[n]?.dev !== true)
+    if (prod.length > 0) return `devOnly entry, but installed as a non-dev dependency at ${prod.join(', ')}`
+  }
+  return null
+}
 
 for (const [pkg, vuln] of Object.entries(report.vulnerabilities || {})) {
   for (const via of vuln.via || []) {
@@ -112,16 +179,19 @@ for (const [pkg, vuln] of Object.entries(report.vulnerabilities || {})) {
     if ((SEVERITY_RANK[via.severity] || 0) < THRESHOLD) continue
     const ghsa = match[0]
     seenGhsa.add(ghsa)
-    if (!allowed.has(ghsa)) offending.set(ghsa, { severity: via.severity, title: via.title, pkg })
+    const entry = allowed.get(ghsa)
+    const refusal = entry ? exceptionRefusal(entry, pkg, vuln) : 'not allowlisted'
+    if (refusal) offending.set(ghsa, { severity: via.severity, title: via.title, pkg, why: refusal })
   }
 }
 
 // Transparency: report every allowlisted advisory, and flag stale ones.
+console.log(`audit:ci — auditing ${AUDIT_DIR}`)
 for (const entry of ALLOWLIST) {
-  if (seenGhsa.has(entry.ghsa)) {
+  if (!seenGhsa.has(entry.ghsa)) {
+    console.log(`STALE    ${entry.ghsa} (${entry.package}) is not reported in this tree — delete it once no tree reports it.`)
+  } else if (!offending.has(entry.ghsa)) {
     console.log(`ALLOWED  ${entry.ghsa} (${entry.package}) — review by ${entry.reviewBy}`)
-  } else {
-    console.log(`STALE    ${entry.ghsa} (${entry.package}) is no longer reported — delete it from the allowlist.`)
   }
 }
 
@@ -129,6 +199,7 @@ if (offending.size > 0) {
   console.error(`\n${offending.size} advisory(ies) at moderate+ are NOT allowlisted:`)
   for (const [ghsa, info] of offending) {
     console.error(`  ${ghsa} [${info.severity}] ${info.pkg} — ${info.title}`)
+    console.error(`      ${info.why}`)
   }
   console.error('\nFix by bumping the dependency (ADR-008). Only allowlist if the advisory is both unreachable AND unpatchable, with a documented rationale + review date.')
   process.exit(1)

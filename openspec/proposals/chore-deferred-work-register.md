@@ -10,7 +10,7 @@ branch: tbd
 
 Archiving a completed change **deletes its "Out of scope" section from the working set.** Three changes are archived in this batch. Two of them — [`feature-events-pagination`](../changes/archive/2026-08-07-feature-events-pagination/) (#221) and [`perf-boundary-area-precompute`](../changes/archive/2026-08-07-perf-boundary-area-precompute/) (#211) — carry **six unchecked deferrals** between them, plus two findings that were *measured during* #221 and never recorded anywhere at all. The third, [`feature-impact-categories`](../changes/archive/2026-08-07-feature-impact-categories/), is closed unimplemented and leaves one surviving idea (§C).
 
-This project has a documented failure mode of exactly this shape, and it is not hypothetical: **B6 below has been outstanding since v1.1** because it lives in a source comment that names a follow-up proposal nobody ever created. [`chore-web-audit-leftovers`](chore-web-audit-leftovers.md) exists for the same reason, for a different batch. This is that register for this batch.
+This project has a documented failure mode of exactly this shape, and it is not hypothetical: **B6 below has been outstanding since v1.1** because it lives in a source comment that names a follow-up proposal nobody ever created. [`chore-web-audit-leftovers`](../archive/proposal-chore-web-audit-leftovers.md) existed for the same reason, for a different batch (shipped in #283, archived). This is that register for this batch.
 
 **Nothing here is urgent, and nothing here should be done as one PR.** This is a holding record so the items are *visible*, not a plan to execute them together. Each numbered item is independently schedulable, and several will turn out to be "no, and here is why" — which is a valid outcome as long as it is a recorded one.
 
@@ -78,11 +78,11 @@ Migration `000013` rewrote `admin_boundaries` under `ACCESS EXCLUSIVE` — sub-m
 
 This is a **standing constraint on future work**, not a task to complete. It belongs in the record because the migration comment is the only place it currently lives.
 
-### B2. Codify the adversarial enrichment cases as regression tests — ⚠️ pre-existing CI gap
+### B2. Codify the adversarial enrichment cases as regression tests — ✅ CLOSED by `chore-enrichment-regression-tests`
 
-The tie-break, shared-border and geometry-update cases that the `000013` review exercised by hand are **not covered by CI**. A future change to the boundary-matching logic would not be caught. Explicitly flagged as pre-existing rather than introduced by #211.
+The tie-break, shared-border and geometry-update cases that the `000013` review exercised by hand were **not covered by CI**. A future change to the boundary-matching logic would not have been caught. Explicitly flagged as pre-existing rather than introduced by #211.
 
-Highest-value item in section B: it protects the enrichment correctness that the whole product's location labelling rests on.
+Closed 2026-10-09: `api/internal/database/enrichment_adversarial_test.go` (integration-tagged, runs in the existing CI step) pins all four — shared-border vertices discovered from the fixture, an exact-area tie that only the `id` terminator can decide, a geometry update that must clear a stale state, and every vertex of Nigeria's exterior ring getting a country — each with an oracle independent of the trigger, plus a final test that proves the fixtures were cleaned up. Record: [`chore-enrichment-regression-tests`](chore-enrichment-regression-tests.md).
 
 ### B3. Geometry simplification at `0.001°`
 
@@ -136,10 +136,42 @@ They are now `openspec/archive/design-fix-{border-event-enrichment,ingest-bbox-v
 
 ⚠️ **The two remaining files in `openspec/specs/`** — `feature-ai-digest-narrative.md` and `feature-secondary-oracle.md` — are **correct and were left alone**: both have live proposals in `openspec/proposals/`, so their companion links resolve. That is what the directory is for.
 
+## F. Deferred by `chore-web-audit-leftovers` (#283)
+
+Added in that PR, on independent-review advice, because its spec's "Out of scope" section will leave the working set when the change is archived — the exact failure mode this register exists for.
+
+### F1. `EventDetail` loading region has no live region and its own text-only treatment
+
+`web/src/pages/EventDetail.tsx` renders `<div className="event-detail-state">Loading event telemetry...</div>` — the same two defects #283 fixed for the dashboard (no `role="status"`, a different treatment from the spinner card). The loading branch is one `LoadingState` away; `.event-detail-state` stays, because it is also the not-found card (`EventDetail.tsx:73`).
+
+### F2. The hero CTA's `#dashboard` anchor does not exist while the chunk loads
+
+`Explore latest events` is `href="#dashboard"`, and `#dashboard` is rendered by the lazy `EventsDashboard`. A tap during the wait does nothing — on a slow phone connection, precisely the moment the user is most likely to tap it. Giving the Suspense fallback the id, or scrolling on mount, are both small; measure which reads better with the #193 reservation.
+
+### F3. Synthetic-user-agent false-positive rate is still unmeasured
+
+#283 kept the unanchored regex in `web/src/analytics.ts` on the proposal's own "measure before changing" rule, because the rate cannot be measured from this repo: Umami stores a parsed browser name, not the raw UA. A real number needs a raw-UA sample on the analytics or edge side (a temporary Caddy access-log sample would do). Until one exists the decision is recorded at the regex and pinned by a test (`FooPageSpeedBar/1.0` is suppressed) so that anchoring later is a visible choice, not drift.
+
+## G. Deferred by `fix-eonet-polygon-transposition` (#264, archived `2026-10-08-fix-eonet-polygon-transposition`)
+
+Carried here when the change record was archived, from its tasks §8 ("Deliberately NOT done, and why") and the one verification box it could not close.
+
+### G1. Persisted degraded run status and alerting — ⚠️ real gap
+
+When GDACS geometry resolution fails systematically, the ingest run still records `success`, `/health` still reports `ok`, and nothing pages. The counters (`events_geom_resolved` / `events_geom_unresolved`) and warnings exist only in logs, and #264 itself demonstrated that **a counter nobody reads is not a control**. Deferred because it is a new subsystem — persisted per-run status, typed failure reasons, alert routing — not because it is unimportant. Until it lands, a GDACS outage degrades coverage quietly.
+
+### G2. MultiPolygon end-to-end support — rejected rather than half-built
+
+Supporting it properly means the resolver, the `geometry_type` enum in `openapi.yaml`, and both web consumers, for a geometry EONET has never been observed to send. The normalizer refuses it explicitly (an error naming the type) rather than silently dropping it, so an arrival will be visible. Revisit only if one arrives.
+
+### G3. Production verification of the corrected geometry — not performed from the repo
+
+#264 shipped in v1.6.1 with migration `000015`, but task 4.2's check — `/v1/events?category=floods` shows no Kwara flood, the two corrected events carry Polygon geometry **and** coordinates, `events_geom_resolved` is non-zero on a run that ingests a polygon — needs the production API, which is not reachable from a development session. One `curl` by a person closes it.
+
 ## Out of Scope
 
 - Doing any of the above. This proposal is the record, not the work.
-- [`chore-web-audit-leftovers`](chore-web-audit-leftovers.md) — the equivalent register for the 2026-07-26 web-audit batch, still open and unaffected.
+- [`chore-web-audit-leftovers`](../archive/proposal-chore-web-audit-leftovers.md) — the register for the 2026-07-26 web-audit batch; implemented in #283 and archived, which added §F above.
 
 ## Verification
 

@@ -15,7 +15,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
-          go-version: '1.26.6'        # Satisfies api/go.mod (go 1.26); pinned to the patch that fixes 7 stdlib advisories reachable from our code (GO-2026-5026/5972/6088/6089/6090/6091/6218, 2026-08) — see ADR-008
+          go-version: '1.26.10'       # Satisfies api/go.mod (go 1.26); pinned to the patch that fixes GO-2026-6809 (crypto/x509 compromised-intermediate distrust, "Fixed in 1.26.10"), which govulncheck found reachable on 2026-10-22; 1.26.9 cleared GO-2026-6599…6611 and 1.26.6 the 2026-08 batch the same way — see ADR-008. Keep in sync with openspec-verify.yml and api/Dockerfile GO_IMAGE.
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
@@ -80,7 +80,13 @@ jobs:
         # the first attempt, and if the endpoint is unreachable on every attempt the
         # step FAILS — a gate that could not run must never report as a gate that
         # passed.
-        run: ./scripts/npm-audit-retry.sh moderate
+        #
+        # Runs the SAME gate as the web audit below, pointed at the repo root, so
+        # both trees share one implementation and one allowlist. Until 2026-10-03
+        # the root ran a bare `npm audit` with no allowlist, so an advisory that is
+        # unreachable AND unpatchable (ADR-008's exception case) blocked every PR
+        # with no way to record the exception — GHSA-vfj7-8cjw-p6xm did exactly that.
+        run: node web/scripts/audit-ci.mjs --dir .
 
       - name: Run Web Dependency Audit
         # Wrapper over `npm audit --audit-level=moderate` that carries a narrow,
