@@ -8,6 +8,7 @@
 * **analytics:** address the independent review of the Umami upgrade ([0457558](https://github.com/didi-rare/vigilafrica/commit/0457558c1c728e6cf4531f52b43b18c5b4804768))
 * **analytics:** upgrade Umami to 3.4.0 on a patched Node.js runtime ([6d12c42](https://github.com/didi-rare/vigilafrica/commit/6d12c424d8422dda8f75cea0dd1ca0d589a6425c))
 * **analytics:** upgrade Umami to 3.4.0 on a patched Node.js runtime ([f498266](https://github.com/didi-rare/vigilafrica/commit/f49826603250ca42213ba24c21c777deca072091))
+* **ci:** run openspec-verify on Node 22, Node 20 is end-of-life ([eecaa35](https://github.com/didi-rare/vigilafrica/commit/eecaa353867bd6e1a1e71ca69691de95c4cdbdd3))
 * **deploy:** address the independent review of the disk-hygiene change ([f123c58](https://github.com/didi-rare/vigilafrica/commit/f123c58dbacdc93e151d704670ff7419a3ce3004))
 
 ## [1.6.2](https://github.com/didi-rare/vigilafrica/compare/v1.6.1...v1.6.2) (2026-10-22)
