@@ -182,12 +182,17 @@ is part of first deploy, not optional.
 - **Back up the `umami` database before upgrading across Umami releases.**
   Umami applies its Prisma migrations automatically on boot, and they are
   forward-only: after 3.1.0 → 3.4.0 (migrations 20–26), the old image is not a
-  clean rollback target. From the environment's directory:
+  clean rollback target. The dump goes to your home directory, because the
+  `>` redirect runs as you rather than under `sudo`, and the environment
+  trees under `/opt/vigilafrica` are root-owned:
 
   ```bash
-  sudo docker compose -f docker-compose.prod.yml exec -T prod-db \
-    sh -c 'pg_dump -U "$POSTGRES_USER" -Fc umami' > umami-$(date +%F).dump
+  sudo docker compose -f /opt/vigilafrica/production/docker-compose.prod.yml exec -T prod-db \
+    sh -c 'pg_dump -U "$POSTGRES_USER" -Fc umami' > ~/umami-production-$(date +%F).dump
   ```
+
+  For staging, use `/opt/vigilafrica/staging/docker-compose.staging.yml` and
+  `staging-db`.
 
 - Postgres growth from analytics rows is negligible at v1.3 scale; revisit
   retention only if VPS disk pressure becomes a real signal.
