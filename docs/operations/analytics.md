@@ -173,26 +173,72 @@ is part of first deploy, not optional.
   immutable refs): the upstream Umami release, and the official `node` image
   whose binary replaces Umami's own. Upstream only rebuilds on an Umami
   release, so a Node.js security release can leave its newest image on a
-  vulnerable runtime; the copy closes that gap. The two images must share an
-  Alpine version (check `/etc/alpine-release` in each) so the binary's musl and
-  libstdc++ match. Once upstream ships an image at or above the patched Node
-  version, delete the Dockerfile and pin the upstream image directly.
+  vulnerable runtime; the copy closes that gap. Pick a `node` image on the
+  same Alpine minor as the Umami image (`cat /etc/alpine-release` in each).
+  The build then runs the copied binary and loads every native addon, so a
+  mismatch fails the build rather than the deploy. Once upstream ships an
+  image at or above the patched Node version, delete the Dockerfile and pin
+  the upstream image directly.
 - To re-pin either image, resolve the tag's index digest with
   `docker buildx imagetools inspect <image>:<tag>` and update the `ARG` line.
-- **Back up the `umami` database before upgrading across Umami releases.**
-  Umami applies its Prisma migrations automatically on boot, and they are
-  forward-only: after 3.1.0 → 3.4.0 (migrations 20–26), the old image is not a
-  clean rollback target. The dump goes to your home directory, because the
-  `>` redirect runs as you rather than under `sudo`, and the environment
-  trees under `/opt/vigilafrica` are root-owned:
+- Two-factor authentication (added in Umami 3.3) stays **off**: it needs a
+  `TWO_FACTOR_ENCRYPTION_KEY` (64 hex characters), which no environment sets.
+  Add it to the compose files and `.env` if you want 2FA for the dashboard.
 
-  ```bash
-  sudo docker compose -f /opt/vigilafrica/production/docker-compose.prod.yml exec -T prod-db \
-    sh -c 'pg_dump -U "$POSTGRES_USER" -Fc umami' > ~/umami-production-$(date +%F).dump
-  ```
+### Upgrading Umami across releases
 
-  For staging, use `/opt/vigilafrica/staging/docker-compose.staging.yml` and
-  `staging-db`.
+Umami applies its Prisma migrations automatically on boot. They are
+forward-only, so after an upgrade the old image is not a clean rollback
+target, and some of them **rewrite data**. For 3.1.0 → 3.4.0 (migrations
+20–26):
+
+- **23** deletes all but the newest `session_data` row per
+  `(session_id, data_key)`, then adds a unique index. Only `umami.identify()`
+  writes that table, and our tracker calls only `umami.track()`, so it is
+  expected to be empty. Count it first.
+- **24** lowercases usernames, so the dashboard login name may change case.
+
+`scripts/rehearse-umami-upgrade.sh` runs the upgrade on a throwaway database
+seeded with both shapes. For the real one, run these steps per environment.
+The examples use production; for staging, use
+`/opt/vigilafrica/staging/docker-compose.staging.yml` and `staging-db`. Dumps
+go to your home directory: the `>` redirect runs as you rather than under
+`sudo`, and the trees under `/opt/vigilafrica` are root-owned.
+
+```bash
+C="sudo docker compose -f /opt/vigilafrica/production/docker-compose.prod.yml"
+
+# 1. Preflight (read-only). Prints: session_data rows, rows migration 23 would
+#    delete, then usernames migration 24 would change. Expect "0 0" and "0".
+$C exec -T prod-db sh -c 'psql -U "$POSTGRES_USER" -d umami -tA -F " " \
+  -c "select count(*), count(*) - count(distinct (session_id, data_key)) from session_data" \
+  -c "select count(*) from \"user\" where username <> lower(username)"'
+
+# 2. Back up, then prove the dump is readable. A failed dump still leaves a
+#    file behind, so check both: a non-trivial size, and a TABLE DATA count
+#    well above zero.
+$C exec -T prod-db sh -c 'pg_dump -U "$POSTGRES_USER" -Fc umami' > ~/umami-production-$(date +%F).dump
+ls -lh ~/umami-production-$(date +%F).dump
+$C exec -T prod-db pg_restore --list < ~/umami-production-$(date +%F).dump | grep -c "TABLE DATA"
+```
+
+After the deploy, `curl -fsS https://analytics.vigilafrica.org/api/heartbeat`
+must succeed (staging: `analytics.staging.vigilafrica.org`). The deploy does
+not wait for Umami, so check it.
+
+**If a migration fails**, Umami restarts in a loop, and the database may hold
+a half-applied migration (Prisma does not wrap these in a transaction).
+Restore the dump, then roll the deploy back to the previous tag so the old
+image starts against the old schema:
+
+```bash
+$C stop prod-umami
+$C exec -T prod-db sh -c 'psql -U "$POSTGRES_USER" -d postgres -v ON_ERROR_STOP=1 \
+  -c "DROP DATABASE umami WITH (FORCE)" -c "CREATE DATABASE umami OWNER umami"'
+$C exec -T prod-db sh -c 'pg_restore -U "$POSTGRES_USER" -d umami --exit-on-error' \
+  < ~/umami-production-YYYY-MM-DD.dump
+# then: Actions -> Deploy Production -> Run workflow -> previous tag
+```
 
 - Postgres growth from analytics rows is negligible at v1.3 scale; revisit
   retention only if VPS disk pressure becomes a real signal.
