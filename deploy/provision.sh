@@ -313,55 +313,9 @@ systemctl enable --now fail2ban
 dpkg-reconfigure -f noninteractive unattended-upgrades
 
 # --- disk hygiene -------------------------------------------------------------
-#
-# Every deploy runs `docker compose up -d --build`, and nothing pruned the
-# BuildKit cache that leaves behind: on 2026-10-22 it held 23.8 GB of the 31 GB
-# in use (none of it referenced), and the journal another 3.3 GB. A weekly timer
-# drops cache older than a week, so routine deploys keep their layer cache, and
-# journald is capped. Both apply without restarting Docker, so running this on
-# a live host does not bounce the stack.
-#
-# ⚠️ BUILD CACHE ONLY. `docker system prune --volumes` or `docker volume prune`
-# would delete the Postgres volumes behind both the app and Umami.
-cat > /etc/systemd/system/vigil-docker-builder-prune.service <<'EOF'
-[Unit]
-Description=Prune Docker build cache older than a week
-Requires=docker.service
-After=docker.service
-
-[Service]
-Type=oneshot
-ExecStart=/usr/bin/docker builder prune --all --force --filter until=168h
-EOF
-cat > /etc/systemd/system/vigil-docker-builder-prune.timer <<'EOF'
-[Unit]
-Description=Weekly Docker build cache prune
-
-[Timer]
-OnCalendar=weekly
-RandomizedDelaySec=1h
-Persistent=true
-
-[Install]
-WantedBy=timers.target
-EOF
-chmod 0644 /etc/systemd/system/vigil-docker-builder-prune.{service,timer}
-
-# ⚠️ OPPOSITE precedence to sshd above: systemd reads journald.conf.d in
-# filename order and the LAST value wins, so this drop-in sorts high. The cap
-# also bounds how far back the vigil-deploy / vigil-deploy-run audit lines go:
-# export them (`journalctl -t vigil-deploy -t vigil-deploy-run`) if you need a
-# longer record.
-install -d -m 0755 -o root -g root /etc/systemd/journald.conf.d
-cat > /etc/systemd/journald.conf.d/90-vigilafrica.conf <<'EOF'
-[Journal]
-SystemMaxUse=1G
-EOF
-chmod 0644 /etc/systemd/journald.conf.d/90-vigilafrica.conf
-
-systemctl daemon-reload
-systemctl enable --now vigil-docker-builder-prune.timer
-systemctl restart systemd-journald
+# Weekly Docker build-cache prune + journald cap. Kept in its own script so an
+# already-provisioned host can apply exactly the same thing; see that script.
+bash "${SCRIPT_DIR}/install-disk-hygiene.sh"
 
 # ---------------------------------------------------------------------------
 # FINAL CUTOVER STEP. Everything above must have succeeded first.

@@ -386,27 +386,28 @@ curl -fsS https://api.vigilafrica.org/health
 
 ## Disk Hygiene
 
-Every deploy runs `docker compose up -d --build`, which leaves BuildKit cache behind. Unpruned, it reached 23.8 GB of the 31 GB in use by 2026-10-22, with the journal adding another 3.3 GB. `provision.sh` installs two guards:
+Every deploy runs `docker compose up -d --build`, which leaves BuildKit cache behind. Unpruned, it reached 23.8 GB of the 31 GB in use by 2026-10-22, with the journal adding another 3.3 GB. [`deploy/install-disk-hygiene.sh`](../../deploy/install-disk-hygiene.sh) (run by `provision.sh`) installs two guards:
 
-- `vigil-docker-builder-prune.timer`: weekly, prunes build cache older than 7 days. Routine deploys keep their recent layer cache.
-- `/etc/systemd/journald.conf.d/90-vigilafrica.conf`: caps the journal at 1 GB. That also bounds how far back the `vigil-deploy` / `vigil-deploy-run` audit lines go, so export them with `journalctl -t vigil-deploy -t vigil-deploy-run` if you need a longer record.
+- `vigil-docker-builder-prune.timer`: weekly, prunes build cache **unused for 7 days**. Recently used cache is kept, so routine deploys stay fast. It skips the run if Docker is stopped rather than starting it. It bounds cache by age, not size, so a week of heavy building can still grow it; check `docker system df` if disk climbs between runs.
+- `/etc/systemd/journald.conf.d/90-vigilafrica.conf`: `SystemMaxUse=1G` for the persistent journal. journald deletes only archived files to meet it, so usage can run slightly over. The cap also bounds how far back the `vigil-deploy` / `vigil-deploy-run` audit lines go, so export them with `sudo journalctl -t vigil-deploy -t vigil-deploy-run` if you need a longer record.
 
-Neither restarts Docker. On a host provisioned before these existed, run the same block from a checkout that has it (staging tracks `main`):
-
-```bash
-sudo bash -c "$(sed -n '/^# --- disk hygiene/,/^systemctl restart systemd-journald/p' /opt/vigilafrica/staging/deploy/provision.sh)"
-```
-
-Verify:
+Neither restarts Docker. To apply them to a host provisioned before they existed, run the installer from a checkout that contains it. The staging tree sits at the last commit **deployed** to staging, so confirm the file is there first:
 
 ```bash
-systemctl list-timers vigil-docker-builder-prune.timer   # NEXT should be the coming Monday
-systemd-analyze cat-config systemd/journald.conf | grep SystemMaxUse   # SystemMaxUse=1G, nothing later overriding it
-journalctl --disk-usage
-sudo docker system df   # Build Cache should stay small between deploys
+ls -l /opt/vigilafrica/staging/deploy/install-disk-hygiene.sh   # missing = staging not yet deployed with it
+sudo bash /opt/vigilafrica/staging/deploy/install-disk-hygiene.sh
 ```
 
-To reclaim space immediately, `sudo docker builder prune -a -f` is safe: it removes only build cache, so the next deploy just rebuilds from scratch once. **Never** use `docker system prune --volumes` or `docker volume prune`, which delete the Postgres volumes behind the app and Umami.
+The script runs in strict mode and exits non-zero unless the timer is enabled and active and `SystemMaxUse=1G` is the last effective journald value. To inspect afterwards:
+
+```bash
+systemctl list-timers vigil-docker-builder-prune.timer   # NEXT: the coming Monday
+systemd-analyze cat-config systemd/journald.conf | grep -E '^SystemMaxUse=' | tail -n 1   # SystemMaxUse=1G
+sudo journalctl --disk-usage
+sudo docker system df
+```
+
+To reclaim space immediately, `sudo docker builder prune -a -f` is safe: it removes only build cache, so the next deploy rebuilds from scratch once. The Postgres data for the app and Umami lives in **named** volumes. Commands that can delete them are `docker compose down -v`, `docker volume rm`, and `docker volume prune --all` once their containers are gone. Since Docker 23, plain `docker volume prune` and `docker system prune --volumes` remove only unused anonymous volumes, but on older Engines `docker volume prune` removed unused named volumes too, so check `docker version` before relying on that.
 
 ## Backups
 
