@@ -10,7 +10,8 @@ archived_on: 2026-10-11
 # Spec: Adversarial Enrichment Regression Tests
 
 Technical spec for [`chore-enrichment-regression-tests`](proposal-chore-enrichment-regression-tests.md).
-Tests only; no production code changes.
+No application runtime changes. Besides the test, #285 also carried the Go 1.26.9 toolchain bump
+(`baaa48b`), which govulncheck required before its CI could pass; that changed the build image.
 
 ## Components touched
 
@@ -19,6 +20,9 @@ Tests only; no production code changes.
 | `api/internal/database/enrichment_adversarial_test.go` | **new** — four test functions, `//go:build integration`, `package database_test` |
 | `openspec/proposals/chore-deferred-work-register.md` | B2 marked closed with a pointer to the file |
 | `Task.md` | task list with evidence |
+| `.github/workflows/ci-cd.yml`, `.github/workflows/openspec-verify.yml` | `setup-go` 1.26.6 → 1.26.9 |
+| `api/Dockerfile` | `GO_IMAGE` digest → the 1.26.9 build |
+| `docs/standards/developers-go.md` | §10.11 example pin updated to 1.26.9 |
 
 Nothing under `api/db/migrations/` or the non-test files in `api/internal/database/` changes.
 
