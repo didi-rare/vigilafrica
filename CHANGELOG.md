@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.6.2](https://github.com/didi-rare/vigilafrica/compare/v1.6.1...v1.6.2) (2026-10-22)
+
+
+### Bug Fixes
+
+* **api:** bump golang.org/x/sys to v0.44.0 for GO-2026-5024 ([0790802](https://github.com/didi-rare/vigilafrica/commit/0790802dbc3db852a3f65239aa19f4f7b0e65a40))
+* **api:** bump golang.org/x/text to v0.41.0 for GO-2026-6629 ([a844521](https://github.com/didi-rare/vigilafrica/commit/a844521f75811e3cda2d4e1094fe2545dd4b4f97))
+* **ci:** bump Go toolchain to 1.26.10 for GO-2026-6809 ([c39e401](https://github.com/didi-rare/vigilafrica/commit/c39e40139e189842a48686263bf3a19afc4202dd))
+* **ci:** bump Go toolchain to 1.26.9 to clear 11 reachable stdlib advisories ([baaa48b](https://github.com/didi-rare/vigilafrica/commit/baaa48b0239aed07b118b3f0f5495f926bead08b))
+* **ci:** unblock both audit gates — one shared allowlist, bump the rest ([#279](https://github.com/didi-rare/vigilafrica/issues/279)) ([e256a7c](https://github.com/didi-rare/vigilafrica/commit/e256a7c0ed8ff7a1c61645cc4d1e3fc63c6f6480))
+* **deps:** clear the Go and npm advisories blocking CI ([4c2bcc5](https://github.com/didi-rare/vigilafrica/commit/4c2bcc50b612aa209aa820d928f25c3b3db5e6b1))
+* **deps:** clear the govulncheck and npm audit advisories blocking CI ([00c734b](https://github.com/didi-rare/vigilafrica/commit/00c734bedd3aab670889e0e827577743fc97bb02))
+* **web:** address the independent review of the web-audit leftovers ([abf4e4b](https://github.com/didi-rare/vigilafrica/commit/abf4e4bab43e278fde8d9891b94ce761965ff841))
+* **web:** bump postcss-selector-parser and source-map-js for two audit advisories ([85c4b18](https://github.com/didi-rare/vigilafrica/commit/85c4b18e091562b87300b265cbbee23aaaa6d786))
+* **web:** bump vite to 8.1.6 and vitest to 4.1.12 for six audit advisories ([b5b03a5](https://github.com/didi-rare/vigilafrica/commit/b5b03a5a7f2bede52b4a582645598800afc0d030))
+* **web:** second independent review of [#283](https://github.com/didi-rare/vigilafrica/issues/283) — name the status region, register the deferrals ([5d68e64](https://github.com/didi-rare/vigilafrica/commit/5d68e6472c7e4d0d4b32d76506cd599175dd0390))
+
 ## [1.6.1](https://github.com/didi-rare/vigilafrica/compare/v1.6.0...v1.6.1) (2026-09-11)
 
 
