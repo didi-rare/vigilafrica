@@ -177,9 +177,11 @@ When GDACS geometry resolution fails systematically, the ingest run still record
 
 Supporting it properly means the resolver, the `geometry_type` enum in `openapi.yaml`, and both web consumers, for a geometry EONET has never been observed to send. The normalizer refuses it explicitly (an error naming the type) rather than silently dropping it, so an arrival will be visible. Revisit only if one arrives.
 
-### G3. Production verification of the corrected geometry — not performed from the repo
+### G3. Production verification of the corrected geometry — ✅ CLOSED 2026-10-23
 
 #264 shipped in v1.6.1 with migration `000015`, but task 4.2's check — `/v1/events?category=floods` shows no Kwara flood, the two corrected events carry Polygon geometry **and** coordinates, `events_geom_resolved` is non-zero on a run that ingests a polygon — needs the production API, which is not reachable from a development session. One `curl` by a person closes it.
+
+Closed 2026-10-23 against production v1.6.3: no Kwara flood among all five served floods; both corrected events are Polygons with coordinates in their true locations (Cameroon; Nigeria/Jigawa); their stored geometry matches the GDACS extents exactly (1311 and 28 points, not transposed); and 10 ingestion runs logged `events_geom_resolved: 1`. Evidence in [task 4.2](../changes/archive/2026-10-08-fix-eonet-polygon-transposition/tasks.md).
 
 ## Out of Scope
 
