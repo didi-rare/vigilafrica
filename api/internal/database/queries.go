@@ -280,9 +280,15 @@ func (r *pgRepo) CompleteIngestionRun(ctx context.Context, id int64, status mode
 			error          = $5
 		WHERE id = $1
 	`
-	_, err := r.pool.Exec(ctx, query, id, status, fetched, stored, errMsg)
+	tag, err := r.pool.Exec(ctx, query, id, status, fetched, stored, errMsg)
 	if err != nil {
 		return fmt.Errorf("failed to complete ingestion run %d: %w", id, err)
+	}
+	// An UPDATE that matches no row is not a completion. Without this check a
+	// run whose row was never created, or was deleted underneath it, would be
+	// reported as recorded (independent review, PR #280, round 4).
+	if n := tag.RowsAffected(); n != 1 {
+		return fmt.Errorf("failed to complete ingestion run %d: expected to update 1 row, updated %d", id, n)
 	}
 	return nil
 }
@@ -293,6 +299,11 @@ func (r *pgRepo) GetLastIngestionRun(ctx context.Context) (*models.IngestionRun,
 	query := `
 		SELECT id, country_code, started_at, completed_at, status, events_fetched, events_stored, error, created_at
 		FROM ingestion_runs
+		-- Completed runs only (independent review, PR #280, round 3). Every
+		-- scheduled run inserts a 'running' row first; reading it made /health
+		-- report the in-progress run for the whole duration of each run, hiding a
+		-- failed or degraded state behind 'ok' — and a crash orphan hid it forever.
+		WHERE status <> 'running'
 		ORDER BY started_at DESC
 		LIMIT 1
 	`
@@ -323,7 +334,9 @@ func (r *pgRepo) GetLastSuccessfulIngestionRun(ctx context.Context) (*models.Ing
 	query := `
 		SELECT id, country_code, started_at, completed_at, status, events_fetched, events_stored, error, created_at
 		FROM ingestion_runs
-		WHERE status = 'success'
+		-- degraded runs DID ingest data (fix-gdacs-degraded-run-status). Without
+		-- this, a GDACS outage would also fire a FALSE staleness alert.
+		WHERE status IN ('success', 'degraded')
 		ORDER BY completed_at DESC NULLS LAST, started_at DESC
 		LIMIT 1
 	`
@@ -378,6 +391,45 @@ func (r *pgRepo) GetFirstIngestionRun(ctx context.Context) (*models.IngestionRun
 	return &run, nil
 }
 
+// GetPreviousCompletedIngestionRun — see the Repository interface.
+func (r *pgRepo) GetPreviousCompletedIngestionRun(ctx context.Context, countryCode string, beforeID int64) (*models.IngestionRun, error) {
+	query := `
+		SELECT id, country_code, started_at, completed_at, status, events_fetched, events_stored, error, created_at, alert_sent_at
+		FROM ingestion_runs
+		WHERE country_code = $1 AND id < $2 AND status <> 'running'
+		ORDER BY id DESC
+		LIMIT 1
+	`
+	var run models.IngestionRun
+	err := r.pool.QueryRow(ctx, query, countryCode, beforeID).Scan(
+		&run.ID,
+		&run.CountryCode,
+		&run.StartedAt,
+		&run.CompletedAt,
+		&run.Status,
+		&run.EventsFetched,
+		&run.EventsStored,
+		&run.Error,
+		&run.CreatedAt,
+		&run.AlertSentAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to query previous completed run for %s: %w", countryCode, err)
+	}
+	return &run, nil
+}
+
+// MarkIngestionRunAlerted — see the Repository interface.
+func (r *pgRepo) MarkIngestionRunAlerted(ctx context.Context, id int64, deliveredAt time.Time) error {
+	if _, err := r.pool.Exec(ctx, `UPDATE ingestion_runs SET alert_sent_at = $2 WHERE id = $1`, id, deliveredAt); err != nil {
+		return fmt.Errorf("failed to mark ingestion run %d alerted: %w", id, err)
+	}
+	return nil
+}
+
 // GetLastIngestionRunAllCountries returns the most recent run per country.
 // Used by: /health last_ingestion_by_country map.
 func (r *pgRepo) GetLastIngestionRunAllCountries(ctx context.Context) (map[string]*models.IngestionRun, error) {
@@ -385,6 +437,7 @@ func (r *pgRepo) GetLastIngestionRunAllCountries(ctx context.Context) (map[strin
 		SELECT DISTINCT ON (country_code)
 			id, country_code, started_at, completed_at, status, events_fetched, events_stored, error, created_at
 		FROM ingestion_runs
+		WHERE status <> 'running' -- completed runs only; see GetLastIngestionRun
 		ORDER BY country_code, started_at DESC
 	`
 	rows, err := r.pool.Query(ctx, query)
