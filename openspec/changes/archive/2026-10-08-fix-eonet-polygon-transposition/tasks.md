@@ -153,7 +153,7 @@ origin rather than a second opinion.
       all episodes are enumerated, extents must correspond, and incomplete proof
       exits non-zero.
 
-- [ ] 4.2 **Deploy to staging, then production, and verify.** `/v1/events?
+- [x] 4.2 **Deploy to staging, then production, and verify.** `/v1/events?
       category=floods` must show no Kwara flood; the two corrected events must
       carry Polygon geometry AND coordinates; `events_geom_resolved` should be
       non-zero on a run that ingests a polygon.
@@ -162,6 +162,20 @@ origin rather than a second opinion.
       2026-10-08: the production API is not reachable from the archiving
       session. Left unticked on purpose; carried to the deferred-work register
       as G3 so it is not lost with the archive.
+      **Verified 2026-10-23 against production v1.6.3** (which carries
+      `000015`), all three checks:
+      - `GET /v1/events?category=floods&limit=200` returned all five floods
+        (`meta.total: 5`, open and closed) and none mentions Kwara.
+        `EONET_22248` is a Polygon in Cameroon at 4.6027, 9.4139;
+        `EONET_23208` is a Polygon in Nigeria/Jigawa at 12.5287, 9.8956. Both
+        points lie inside the GDACS extents the migration records.
+      - The stored geometry, queried on the production database
+        (`ST_NPoints` and `ST_XMin/XMax/YMin/YMax` on `events.geom`), matches
+        GDACS exactly and is not transposed: `EONET_22248` POLYGON, 1311
+        points, lon 9.2156–9.5688, lat 4.3770–4.8284; `EONET_23208` POLYGON,
+        28 points, lon 9.8523–9.9306, lat 12.4681–12.5893.
+      - The API container's current JSON logs (`docker compose logs prod-api`)
+        show 10 ingestion runs with `"events_geom_resolved":1` and 30 with 0.
 
 ## 5. Security
 
