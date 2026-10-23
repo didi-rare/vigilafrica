@@ -312,6 +312,11 @@ systemctl enable --now caddy
 systemctl enable --now fail2ban
 dpkg-reconfigure -f noninteractive unattended-upgrades
 
+# --- disk hygiene -------------------------------------------------------------
+# Weekly Docker build-cache prune + journald cap. Kept in its own script so an
+# already-provisioned host can apply exactly the same thing; see that script.
+bash "${SCRIPT_DIR}/install-disk-hygiene.sh"
+
 # ---------------------------------------------------------------------------
 # FINAL CUTOVER STEP. Everything above must have succeeded first.
 #

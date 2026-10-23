@@ -82,7 +82,7 @@ This is a **standing constraint on future work**, not a task to complete. It bel
 
 The tie-break, shared-border and geometry-update cases that the `000013` review exercised by hand were **not covered by CI**. A future change to the boundary-matching logic would not have been caught. Explicitly flagged as pre-existing rather than introduced by #211.
 
-Closed 2026-10-09: `api/internal/database/enrichment_adversarial_test.go` (integration-tagged, runs in the existing CI step) pins all four — shared-border vertices discovered from the fixture, an exact-area tie that only the `id` terminator can decide, a geometry update that must clear a stale state, and every vertex of Nigeria's exterior ring getting a country — each with an oracle independent of the trigger, plus a final test that proves the fixtures were cleaned up. Record: [`chore-enrichment-regression-tests`](chore-enrichment-regression-tests.md).
+Closed 2026-10-09: `api/internal/database/enrichment_adversarial_test.go` (integration-tagged, runs in the existing CI step) pins three of the four cases, each with an oracle independent of the trigger — shared-border vertices discovered from the fixture, an exact-area tie that only the `id` terminator can decide, and a geometry update that must clear a stale state — plus a final test that proves the fixtures were cleaned up. The fourth is weaker than "every vertex": it checks that an evenly spaced sample of Nigeria's exterior-ring vertices (at most 200 probes; 196 of 6,253 when it merged) each get a country. None of those probes needed the ADM0 fallback (0 of 196), so it is a smoke check, not a test of the fallback. The three trigger mutants it was reasoned to catch have never been executed; that is item B5 below. Record: [`chore-enrichment-regression-tests`](../archive/proposal-chore-enrichment-regression-tests.md) (merged in #285, archived 2026-10-11).
 
 ### B3. Geometry simplification at `0.001°`
 
@@ -93,6 +93,10 @@ Separate work item, never opened. ⚠️ **Probably already settled — check be
 The 11–13× figure comes from **replicated fixtures** (the real 53 ADM1 polygons translated to ~795), which is representative of volume but not of real continental geometry complexity. Re-run `scripts/bench-enrichment/bench.sql` once real boundaries are loaded.
 
 ---
+
+### B5. Execute the trigger mutants against real PostGIS
+
+Carried from `chore-enrichment-regression-tests` task 9.11, which was archived with it unchecked. The claim that each regression test catches its own mutation of `trg_enrich_event_location` (for example, `ORDER BY area_m2 ASC` without `, id ASC`) was reasoned from PostgreSQL's sort and heap behaviour, not run, and the first round of that reasoning was wrong: the original tie-break design let the mutant pass (task 9.1). To close it, replay each of the three mutated triggers on a Docker host (`scripts/test-api.ps1 -Integration`, or `go test -tags=integration`), confirm the matching test fails, and restore the trigger.
 
 ## C. Surviving from `feature-impact-categories` (archived unimplemented)
 
@@ -151,6 +155,15 @@ Added in that PR, on independent-review advice, because its spec's "Out of scope
 ### F3. Synthetic-user-agent false-positive rate is still unmeasured
 
 #283 kept the unanchored regex in `web/src/analytics.ts` on the proposal's own "measure before changing" rule, because the rate cannot be measured from this repo: Umami stores a parsed browser name, not the raw UA. A real number needs a raw-UA sample on the analytics or edge side (a temporary Caddy access-log sample would do). Until one exists the decision is recorded at the regex and pinned by a test (`FooPageSpeedBar/1.0` is suppressed) so that anchoring later is a visible choice, not drift.
+
+### F4. Route changes move no focus and announce nothing, and the event page's arrival is silent
+
+Found while specifying F1 (`chore-detail-loading-and-cta-anchor`). Two related gaps against `developers-react.md` §9.7 (dynamic updates are announced via `aria-live` or focus movement):
+
+- **Route changes.** A client-side navigation (dashboard → event, event → back, → `/for-partners`) swaps the page content with no focus move and no announcement of the new page. This is app-wide, not one page.
+- **The event page's arrival.** When the event renders, its loading region unmounts and the content appears; nothing in it is a live region and focus does not move.
+
+Not every arrival is silent: the dashboard's freshness banner and result count are `role="status"` / `aria-live` regions that update as its data arrives. The usual remedies for the two gaps are moving focus to the new page's `h1` on route change, or one app-level live region announcing the new page's title. Either needs a decision about focus behaviour across the app and a manual check with a real screen reader, since unit tests prove markup, not speech.
 
 ## G. Deferred by `fix-eonet-polygon-transposition` (#264, archived `2026-10-08-fix-eonet-polygon-transposition`)
 
