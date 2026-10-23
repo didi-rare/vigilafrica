@@ -17,21 +17,21 @@ archive. This proposal closes both. Each is small; together they are one web PR.
 
 ### F1. The event page shows two different text-only waits, neither announced
 
-Opening an event can show **two consecutive waits**, and today both are plain text with no
-`role="status"`:
+Opening an event whose data is not already cached can show **two consecutive waits**, and today
+both are plain text with no `role="status"`:
 
 1. **The route-level Suspense fallback** while the `EventDetail` chunk downloads
    ([`App.tsx`](../../web/src/App.tsx), the `/events/:id` route):
-   `<div className="container section">Loading event telemetry...</div>`, with no page shell and
+   `<div className="container section">Loading event telemetry...</div>`, with no page frame and
    no back link. The chunk is not preloaded, so this shows on the **first** event opened in a
-   visit; later opens reuse the loaded chunk and skip it.
+   visit.
 2. **`EventDetail`'s own pending branch** while the event query runs
    ([`EventDetail.tsx`](../../web/src/pages/EventDetail.tsx)): the same words in the dashed
-   `.event-detail-state` card, inside the page shell, under the back link. This shows on
-   **every** event opened.
+   `.event-detail-state` card, inside the page frame, under the back link. This shows whenever
+   the event's data is not already in the query cache.
 
 So a first visit flashes unstyled text, then a different card, while every other wait in the
-app now shows the spinner card. A screen-reader user hears nothing through either wait.
+app now shows the spinner card. Neither wait is a live region.
 
 ### F2. The hero CTA's `#dashboard` anchor does not exist while the chunk loads
 
@@ -39,60 +39,63 @@ app now shows the spinner card. A screen-reader user hears nothing through eithe
 lazy `EventsDashboard` chunk, so while the chunk is in flight the anchor target does not exist
 and a tap does nothing: no scroll, no focus move, no feedback. On a slow phone connection that
 is precisely the moment the user is most likely to tap it. A visitor arriving at `/#dashboard`
-directly (a shared link or bookmark) may have the same problem: the browser's fragment scroll
-can run before the target exists.
+directly (a shared link or bookmark) is not scrolled at all (verified in Chromium 156, below).
 
 ## What Changes
 
-### F1: both waits become one spinner card, announced once
+### F1: one loading region that is never replaced
 
-Both waits render the **same** component, `EventDetailLoading`: the event page shell, the back
-link, and `LoadingState` with "Loading event telemetry...". Swapping one for the other is then
-invisible, so a first visit reads as one continuous wait.
+The two waits are two Suspense handoffs, and React does not reuse DOM across one: when a
+boundary's content resolves, its fallback is unmounted and the content mounted fresh. Two
+look-alike placeholders would still restart the spinner, drop keyboard focus from a back link
+inside them, and mount a second live region. So F1 makes the whole wait **one** suspension
+behind **one** fallback:
 
-- **Only the second wait announces.** The route fallback renders it with `announce={false}`;
-  `EventDetail`'s pending branch with the default `announce`. The second wait happens on every
-  open and the first only on the first, so announcing the second gives exactly one announcement
-  per open either way. This is the rule #283 already applies on the dashboard: one wait, one
-  announcement (the map fallback is `announce={false}` for the same reason).
-- **The shell's styles must load before the chunk.** `.event-detail-page` (2rem top padding,
-  `min-height: 100vh`) lives in `EventDetail.css`, which ships inside the lazy chunk. A route
-  fallback using it would render without the padding and then jump 32px when the chunk lands.
-  The rule moves to `App.css`, which loads with the app. `.back-link`, `.container` and
-  `LoadingState`'s own stylesheet already load up front.
-- **The not-found card is untouched.** `.event-detail-state` stays: it is an end state, not a
-  wait.
-- **What F1 does not claim.** It does not announce the event *arriving*. Nothing in the app
-  announces content arriving or moves focus on a route change; that is a site-wide gap, recorded
-  as register item **F4**, not something to imply here.
+- **An eager page frame.** The route renders a new eager component, `EventDetailRoute`: the
+  page frame (`.event-detail-page`), the back link, and, inside them, one `Suspense` whose
+  fallback is `<LoadingState message="Loading event telemetry..." />` around the lazy
+  `EventDetail`. The frame and back link are outside the boundary, so they never unmount.
+- **The data wait suspends too.** `EventDetail` reads the event with `useSuspenseQuery` instead
+  of `useQuery`. While the chunk downloads, the boundary shows its fallback. When the chunk
+  arrives, `EventDetail` suspends again on the query, and React keeps the **already-committed**
+  fallback rather than remounting it. One region, one spinner, one announcement opportunity,
+  from the first frame to the event. That React behaviour is what the tests must prove (spec §1).
+- **"Event not found" moves to a local error boundary.** `fetchEventById` throws `ApiError` on a
+  non-OK response; `useSuspenseQuery` rethrows it. A local `ErrorBoundary` inside the frame
+  renders the existing not-found card for `ApiError` only. Any other error (a failed chunk
+  download, a render bug) is rethrown to the app-level `ErrorBoundary`, as today.
+- **Styles live with the frame.** `.event-detail-page` and `.event-detail-state` move from
+  `EventDetail.css` (lazy) to `EventDetailRoute.css` beside the new component, which loads up
+  front. That is the co-location rule (`developers-react.md` §1.5), and it is what lets the frame
+  render correctly before the chunk arrives.
+- **What F1 does not claim.** It does not announce the event *arriving*, and it does not
+  guarantee speech: the tests prove markup (one polite `role="status"` region with the visible
+  text), and whether a given screen reader speaks a live region that mounts already holding its
+  text varies. The arrival gap is register item **F4**.
 
-### F2: the Suspense fallback carries `id="dashboard"` while the chunk is pending
-
-The register offered two mechanisms, "giving the Suspense fallback the id, or scrolling on
-mount". This proposal takes the first, **and measures before adding the second**:
+### F2: the Suspense fallback carries `id="dashboard"`, plus a first-load scroll
 
 - **The click.** The reservation `div` (`.dashboard-fallback`) carries `id="dashboard"`. A tap
   during the load scrolls to it, and the reservation starts where the dashboard will start, so
-  the dashboard appears where the user landed. It is the browser's own anchor behaviour: no
-  JavaScript, `:target` works, and React unmounts the fallback before mounting the dashboard, so
-  the id is never on two elements.
-- **Clearing the fixed nav.** `App.css` gives `section[id]`, `h2[id]` and `#dashboard-heading`
+  the dashboard appears where the user landed. React unmounts the fallback before mounting the
+  dashboard, so the id is never on two elements.
+- **Clearing the sticky nav.** `App.css` gives `section[id]`, `h2[id]` and `#dashboard-heading`
   `scroll-margin-top: 88px`. The fallback is a `div`, which `section[id]` does not match, so the
   rule gains a `#dashboard` selector. Without it the landing sits under the nav.
-- **Direct `/#dashboard` loads: measured, not assumed, and probably needing the contingency.**
-  The HTML Standard's "try to scroll to the fragment" gives up once the document's parser has
-  stopped parsing. The app is a module script, which runs after parsing stops, so by the standard
-  even the placeholder is created too late, and direct loads would still fail. Browsers may retry
-  longer than the standard requires, so the bench measures it in a real browser with the
-  dashboard chunk held. **If the measurement fails, as the standard predicts,** the same PR adds
-  a one-time scroll for that case (spec §2, *Contingency*); if it passes, nothing is added.
+- **Direct `/#dashboard` loads need code.** The HTML Standard's "try to scroll to the fragment"
+  stops retrying once the parser has stopped, and the app's entry point is a non-async module
+  script, which runs only after that. So no element exists during the retries. The review
+  confirmed it in Chromium 156: with the chunk held, `scrollY` stayed 0, and releasing the chunk
+  did not retry. `DashboardFallback` therefore scrolls once on the app's first load, judged by
+  where the target actually is, not by `scrollY` (spec §2). It never runs on reload or
+  back/forward, where the browser restores the user's position, and never on a CTA click.
 - **Why not scroll-on-mount for the click.** A tap would still do nothing at tap time, and the
-  page would then move on its own seconds later, after the user may have scrolled or given up.
-  The contingency is limited to the direct-load case, where no tap has happened.
+  page would then move on its own seconds later. The first-load scroll runs at the app's first
+  commit, before the user can have scrolled.
 
-The bench (`scripts/bench-dashboard-cls/capture-fallback.mjs`) gains the CTA-click and direct-load
-measurements; its existing "the chunk mounted anyway" guard moves to a selector only the mounted
-dashboard has (`section#dashboard.dashboard`), since the fallback now matches `#dashboard` too.
+The bench (`scripts/bench-dashboard-cls/capture-fallback.mjs`) gains the CTA-click, direct-load
+and event-page measurements; its existing "the chunk mounted anyway" guard moves to a selector
+only the mounted dashboard has (`section#dashboard.dashboard`).
 
 ## Out of Scope
 
@@ -101,7 +104,9 @@ dashboard has (`section#dashboard.dashboard`), since the fallback now matches `#
   mounts only after the event has arrived, so it is a separate wait with a different shape.
 - **The `/for-partners` route fallback** (`Loading...`, text-only). Same shape of gap as F1's
   first wait, on a different page; it can follow the same pattern later if wanted.
-- **Announcing content arrival / focus on route change**: register **F4**.
+- **Route-change focus and announcing the event's arrival**: register **F4**.
+- **Retry behaviour on a not-found event.** The default `QueryClient` retries a failing query
+  three times before the not-found card appears; that is unchanged.
 - **F3** (synthetic-user-agent rate) is unmeasurable from this repo, as the register records.
 - Any change to the reservation heights or the progress bar from #283.
 
@@ -115,16 +120,15 @@ The sentinel counts a governance record only if it is **changed in the same PR**
 
 Full criteria in the spec. In short:
 
-- **F1, unit:** both waits render the same shell and card; only `EventDetail`'s announces; axe
-  clean on the pending and not-found states. These tests prove the **markup** (a polite status
-  region with the right text), not that a given screen reader speaks it; a manual check with a
-  real screen reader is recommended but not a gate.
-- **F1, no jump:** in a real browser on a cold load, the loading card's position is the same
-  (±2px) before and after the chunk lands.
-- **F2, click and direct load:** two-arm bench (control build vs branch) at 375×812 and
-  1350×940, with the chunk held: the control shows the click doing nothing (the positive
-  control); the branch lands the reservation at the scroll margin, and after release the
-  dashboard appears in place. The direct-load arm decides whether the contingency is built.
-- **CLS:** `measure-cls.mjs`, 8 runs per viewport against a recorded control SHA, no viewport
-  worse than control beyond the stated tolerance.
+- **F1, unit:** the status region and the back link are the **same DOM nodes** from the first
+  fallback frame through the chunk arriving to the query resolving, there is never more than one
+  status region, focus on the back link survives, and not-found and other errors route correctly.
+- **F1, real browser:** on a cold load, the loading card does not move (±2px) or remount when
+  the chunk lands.
+- **F2:** two-arm bench (control build vs branch) at 375×812 and 1350×940, with the chunk held:
+  the control shows the click doing nothing (the positive control); the branch lands the
+  reservation at the scroll margin; the direct-load arm lands it on first load and leaves reload
+  and back/forward positions alone.
+- **CLS:** `measure-cls.mjs`, 8 runs per viewport against a recorded control SHA, medians within
+  the stated tolerance.
 - `npm run lint`, `type-check`, `lint:styles`, `test`, `build` clean.

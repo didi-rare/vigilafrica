@@ -14,90 +14,114 @@ Two independent items in `web/src/`, both reusing what #283 built.
 
 | file | change |
 |---|---|
-| `web/src/components/EventDetailLoading.tsx` | **new**: the event page shell + back link + `LoadingState`, with an `announce` prop passed through |
-| `web/src/components/EventDetailLoading.test.tsx` | **new**: renders the shell, back link and card; `announce={false}` has no status region |
-| `web/src/App.tsx` | `/events/:id` Suspense fallback → `<EventDetailLoading announce={false} />`; `DashboardFallback`'s reservation `div` gets `id="dashboard"` |
-| `web/src/pages/EventDetail.tsx` | pending branch → `<EventDetailLoading />` |
-| `web/src/pages/EventDetail.test.tsx` | pending state: one polite status region with the message; not-found card is not a status region; axe |
-| `web/src/App.css` | gains the `.event-detail-page` rule (moved); the scroll-margin rule gains a `#dashboard` selector |
-| `web/src/pages/EventDetail.css` | loses `.event-detail-page` (moved); comment on `.event-detail-state` updated: it is the not-found card only |
-| `web/src/App.fallback.test.tsx` | the CTA's `href` resolves to the reservation while the chunk is pending |
-| `scripts/bench-dashboard-cls/capture-fallback.mjs` | chunk-mounted guard moves to `section#dashboard.dashboard`; new CTA-click, direct-load and post-release measurements |
-| `scripts/bench-dashboard-cls/README.md` | the new measurements and their two-arm protocol |
+| `web/src/components/EventDetailRoute.tsx` | **new**, eager: page frame, back link, local `ErrorBoundary`, one `Suspense` around the lazy `EventDetail` (the `lazy()` call moves here from `App.tsx`) |
+| `web/src/components/EventDetailRoute.css` | **new**: `.event-detail-page` and `.event-detail-state`, moved verbatim from `EventDetail.css` |
+| `web/src/components/EventDetailRoute.test.tsx` | **new**: the single-region, node-identity, focus and error-routing tests (§1) |
+| `web/src/pages/EventDetail.tsx` | `useQuery` → `useSuspenseQuery`; the pending and error branches and the page frame/back link are removed; it renders the event only |
+| `web/src/pages/EventDetail.css` | loses the two moved rules |
+| `web/src/pages/EventDetail.test.tsx` | renders `EventDetail` inside a `Suspense` with a resolved query; the pending/not-found cases move to `EventDetailRoute.test.tsx` |
+| `web/src/App.tsx` | `/events/:id` route element → `<EventDetailRoute />`; `DashboardFallback`'s reservation `div` gets `id="dashboard"` and the first-load scroll effect (§2) |
+| `web/src/App.css` | the scroll-margin rule gains a `#dashboard` selector |
+| `web/src/App.test.tsx` | with the dashboard mocked as mounted, exactly one `#dashboard`, and it is the section |
+| `web/src/App.fallback.test.tsx` | the CTA's `href` resolves to the reservation while the chunk is pending; the first-load scroll's unit cases (§2) |
+| `scripts/bench-dashboard-cls/capture-fallback.mjs` | chunk-mounted guard → `section#dashboard.dashboard`; new `CLICK_CTA`, `DEEP_LINK` and `EVENT_DETAIL` modes (§2, §3) |
+| `scripts/bench-dashboard-cls/README.md` | the new modes, the two-arm protocol, and the CLS results table |
 
-No change to `LoadingState` itself or to `EventsDashboard`. If the direct-load measurement fails,
-the contingency in §2 adds one effect to `App.tsx` and its test.
+No change to `LoadingState` or to `EventsDashboard`.
 
-## 1. The event page's two waits (F1)
+## 1. The event page: one suspension, one fallback (F1)
 
-**Today:**
+**Today**, two separate handoffs:
 
 ```tsx
-// App.tsx, /events/:id route: wait 1, first event opened in a visit only
+// App.tsx: wait 1, while the EventDetail chunk downloads
 <Suspense fallback={<div className="container section">Loading event telemetry...</div>}>
+  <EventDetail />
+</Suspense>
 
-// EventDetail.tsx: wait 2, every event opened
-if (isPending) {
-  return (
-    <div className="event-detail-page">
-      <div className="container section">
-        <Link to="/" className="back-link">← Back to Sentinel Dashboard</Link>
-        <div className="event-detail-state">Loading event telemetry...</div>
-      </div>
-    </div>
-  )
-}
+// EventDetail.tsx: wait 2, while useQuery is pending
+if (isPending) return (
+  <div className="event-detail-page"><div className="container section">
+    <Link to="/" className="back-link">← Back to Sentinel Dashboard</Link>
+    <div className="event-detail-state">Loading event telemetry...</div>
+  </div></div>
+)
 ```
 
-**Design.** A new `components/EventDetailLoading.tsx`:
+React does not reuse DOM across a Suspense handoff: when the content resolves, the fallback is
+unmounted and the content mounted. Rendering the same-looking card in both places would still
+restart the spinner, remove a focused back link, and mount a second live region.
+
+**Design.** `components/EventDetailRoute.tsx`:
 
 ```tsx
-export function EventDetailLoading({ announce = true }: { announce?: boolean }) {
+const EventDetail = lazy(async () => ({ default: (await import('../pages/EventDetail')).EventDetail }))
+
+export function EventDetailRoute() {
+  const { id = '' } = useParams<{ id: string }>()
   return (
     <div className="event-detail-page">
-      <div className="container section">
+      <div className="container">
         <Link to="/" className="back-link">← Back to Sentinel Dashboard</Link>
-        <LoadingState message="Loading event telemetry..." announce={announce} />
+        <ErrorBoundary resetKeys={[id]} fallbackRender={EventNotFoundOrRethrow}>
+          <Suspense key={id} fallback={<LoadingState message="Loading event telemetry..." />}>
+            <EventDetail />
+          </Suspense>
+        </ErrorBoundary>
       </div>
     </div>
   )
 }
 ```
 
-The route fallback renders `<EventDetailLoading announce={false} />`; `EventDetail`'s pending
-branch renders `<EventDetailLoading />`.
+and `EventDetail` reads the event with
+`useSuspenseQuery({ queryKey: eventKeys.detail(id), queryFn: () => fetchEventById(id) })`.
 
-- **One announcement per open.** Wait 2 happens on every open and wait 1 only on the first, so
-  announcing wait 2 gives exactly one announcement either way. Announcing wait 1 instead would
-  leave repeat opens silent; announcing both would queue two polite regions back to back on a
-  first visit, which #283 already rules out (its map fallback is `announce={false}`).
-- **It lives in `components/`, not `pages/`.** `App.tsx` imports it eagerly, so it must not pull
-  the `EventDetail` chunk in with it. It imports only `react-router`'s `Link` and `LoadingState`,
-  both already in the main bundle.
-- **The shell's CSS moves to `App.css`.** `.event-detail-page { padding-top: 2rem; min-height:
-  100vh; }` is in `EventDetail.css`, which loads with the lazy chunk. Wait 1 renders before
-  that, so without the move wait 1 would sit 2rem higher and jump when the chunk's CSS arrives.
-  The rule moves verbatim. `.back-link` (`App.css`), `.container` (`App.css`) and
-  `.loading-state` (`LoadingState.css`, imported by the main bundle's `LoadingState`) already
-  load up front.
-- **The not-found card is untouched.** `.event-detail-state` stays for it. It is an end state,
-  not a wait, and is not a status region.
+- **One suspension.** On a cold open the boundary suspends on the lazy chunk and shows its
+  fallback. When the chunk resolves, `EventDetail` renders and suspends on the query; the
+  boundary is still in its fallback state, so React keeps the **committed** fallback instead of
+  remounting it. The fallback (and its `role="status"` region and spinner) is therefore mounted
+  once, from the first frame until the event renders. **This is the claim the tests must prove**
+  (node identity across the chunk resolving); it rests on React keeping a committed fallback while
+  a boundary re-suspends, not on an assumption about timing.
+  *Probed 2026-10-23* in vitest/jsdom against this repo's React 19.2.8 and TanStack Query 5.99.0:
+  with a held `lazy()` and a held `useSuspenseQuery`, the status node was the same object before
+  and after the chunk resolved, there was one status region throughout, and an outside link kept
+  focus. A control using today's shape (the inner component rendering its own pending card with
+  `useQuery`) got a **different** node, so the probe distinguishes the two. jsdom is not a
+  browser, which is why the `EVENT_DETAIL=1` bench criterion stays.
+- **Warm paths.** Chunk cached, data not: one suspension on the query, same fallback. Data
+  cached (revisiting an event): no suspension, no wait, nothing to announce.
+- **The frame and back link never unmount.** They sit outside the boundary, so keyboard focus on
+  the back link survives the whole wait.
+- **`key={id}` on the `Suspense`.** Moving to a different event remounts the boundary, so it
+  shows the fallback for the new event instead of holding the previous one on screen, and
+  `resetKeys={[id]}` clears a previous not-found.
+- **Error routing.** `fetchEventById` throws `ApiError` for any non-OK response, which
+  `useSuspenseQuery` rethrows. `EventNotFoundOrRethrow` renders the existing card
+  (`<div className="event-detail-state">Event not found in Command Center.</div>`) for an
+  `ApiError`, and **rethrows anything else** (a failed chunk import, a render error) so it reaches
+  the app-level `ErrorBoundary` and `PageError`, which is where those go today.
+- **`useParams` and `enabled`.** The route only matches with an `:id`, so `id` is always
+  present; `useSuspenseQuery` has no `enabled` option and needs none.
+- **Styles.** `.event-detail-page` and `.event-detail-state` move verbatim to
+  `EventDetailRoute.css`, imported by `EventDetailRoute.tsx` (co-location, `developers-react.md`
+  §1.5). That file loads with the main bundle, so the frame renders correctly before the chunk
+  arrives. The classes keep their `event-detail-` names: they style the event page, of which
+  this component is the eager half, and renaming them is churn with no behaviour change. The
+  frame uses `container`; `.section` has no rule of its own outside the dashboard, so dropping
+  it from the old loading wrapper changes nothing visible.
 - **Spacing.** `.loading-state` has `margin-top: 2rem` where `.event-detail-state` has `1.5rem`.
-  That is the one treatment applied as-is (§7.3: no page-specific override of a component's own
-  stylesheet). Nothing below the card is reserved, so the 8px moves nothing else.
-- **Leaving the wait is not announced.** When the event arrives, the `h1`, the `role="note"`
-  disclaimer and the rest replace the card, but none of them is a live region, and focus does
-  not move. A screen-reader user is not told the content arrived. That is true of every route
-  change in the app, so it is register item **F4**, not part of F1, and nothing here claims
-  otherwise.
-- **Markup, not speech.** The tests below prove the semantics (`role="status"`,
-  `aria-live="polite"`, the visible text as the live text). Whether a given screen reader speaks
-  a live region that mounts already containing its text varies by product; a manual check with a
-  real screen reader is recommended, but it is not an acceptance gate.
-
-Standards: `developers-react.md` §9.7/§9.8 (a loading state is a `role="status"` region whose
-visible text is the announcement; a spinner beside text is `aria-hidden`), already satisfied by
-`LoadingState`.
+  The component's own stylesheet is applied as-is; nothing below the card is reserved, so the 8px
+  moves nothing else.
+- **Markup, not speech.** The tests prove one polite `role="status"` region whose visible text is
+  the message (`developers-react.md` §9.8). Whether a screen reader speaks a live region that
+  mounts already containing its text varies by product; a manual check is recommended, not
+  gated.
+- **The event's arrival is not announced.** When the event renders, the fallback unmounts and
+  the content appears, with no live region and no focus move. That falls short of §9.7 (dynamic
+  updates are announced via `aria-live` or focus movement), and it is the same for every route
+  change in the app, so it is register item **F4**, not part of F1.
 
 ## 2. Hero CTA anchor during the chunk load (F2)
 
@@ -105,7 +129,7 @@ visible text is the announcement; a spinner beside text is `aria-hidden`), alrea
 `<div className="container section dashboard-fallback">` around `LoadingState`. The `#dashboard`
 `<section>` exists only once `EventsDashboard` mounts.
 
-**Design:** the reservation `div` carries `id="dashboard"`:
+**Design, the click:** the reservation `div` carries `id="dashboard"`:
 
 ```tsx
 <div id="dashboard" className="container section dashboard-fallback">
@@ -113,96 +137,118 @@ visible text is the announcement; a spinner beside text is `aria-hidden`), alrea
 </div>
 ```
 
-- **Which element.** The reservation, not the progress bar (fixed, zero-footprint, so a scroll to
-  it would go nowhere) and not the `LoadingState` card (its `margin-top` would land the scroll
-  32px short of where the mounted section starts). The reservation's top is where
-  `section#dashboard` will be.
+- **Which element.** The reservation, not the progress bar (fixed, zero-footprint) and not the
+  `LoadingState` card (its `margin-top` would land the scroll 32px short). The reservation's top
+  is where `section#dashboard` will be.
 - **Scroll margin (an `App.css` change).** `App.css` gives `section[id]`, `h2[id]` and
-  `#dashboard-heading` `scroll-margin-top: 88px` so anchored targets clear the fixed nav. The
-  fallback is a `div`, so `section[id]` does not match it; the rule gains `#dashboard` as a
-  selector, which matches both the fallback and, redundantly, the mounted section. A selector
-  addition, not a new value, so no token is involved.
-- **Uniqueness.** React removes the Suspense fallback before committing the lazy subtree, and
-  `App.tsx` lazy-loads the chunk once per page, so there is never a moment with two
-  `#dashboard` elements. `App.test.tsx` already renders the mocked dashboard and asserts the
-  CTA's `href`; `App.fallback.test.tsx` holds the chunk and asserts the target resolves.
-- **Direct loads: measured, then decided.** On a page opened at `/#dashboard`, the HTML
-  Standard's "try to scroll to the fragment" retries only until "its parser has stopped
-  parsing". The app's entry point is a module script, which runs after parsing stops, so by the
-  standard the fallback does not exist yet during those retries, and direct loads still fail.
-  Browsers may retry longer than the standard requires, so the bench's direct-load arm (below)
-  decides it. **Expect the contingency to be needed.**
-- **Contingency, built only if the direct-load arm fails on the branch.** `App.tsx` adds one
-  effect that runs once after the first render: if `location.hash === '#dashboard'` **and**
-  `window.scrollY === 0` (the browser did not scroll, and neither did the user), it calls
-  `document.getElementById('dashboard')?.scrollIntoView?.()` (the optional call because jsdom
-  lacks `scrollIntoView`, the same guard `Select.tsx` uses). It never fires after the user has
-  scrolled, and it does not run on CTA clicks. A unit test covers both guards.
-- **Why not scroll-on-mount for the click.** A tap would still do nothing at tap time, and the
-  page would then move on its own seconds later. The contingency is only for direct loads,
-  where no tap happened.
+  `#dashboard-heading` `scroll-margin-top: 88px`, which clears the sticky nav (its bottom edge
+  measured 73.75px at 375×812 and 81.75px at 1350×940). The fallback is a `div`, so the rule
+  gains a `#dashboard` selector.
+- **Uniqueness.** React unmounts the fallback before mounting the dashboard, and the chunk loads
+  once, so `#dashboard` is never on two elements.
+- **`:target` is not relied on.** The fallback matches `:target` while it exists, but the mounted
+  section does not inherit it after the swap, and nothing in the app styles `:target`.
 
-**Bench script changes** (`capture-fallback.mjs`):
+**Design, direct `/#dashboard` loads.** The HTML Standard's "try to scroll to the fragment"
+aborts once the parser has stopped; non-async module scripts run only after that, and
+`web/index.html` loads the app as one. So no target exists during the retries, and Chromium 156
+was observed leaving `scrollY` at 0 with the chunk held, with no retry after release.
+`DashboardFallback` therefore runs a first-load scroll in an effect:
+
+1. **Once per document.** A module-level flag makes it run at most once, including under
+   StrictMode's double-invoked effects.
+2. **Only on a fresh navigation.** It proceeds only if
+   `performance.getEntriesByType('navigation')[0]?.type === 'navigate'`. On `reload` and
+   `back_forward` the browser restores the user's own position, and overriding it would be wrong.
+3. **Only for this hash.** It proceeds only if `location.hash === '#dashboard'`.
+4. **Judged by the outcome.** In the next animation frame it reads the target's
+   `getBoundingClientRect().top`. If that is within ±4px of the target's computed
+   `scroll-margin-top` (the browser already landed it), it does nothing; otherwise it calls
+   `document.getElementById('dashboard')?.scrollIntoView?.()`. The optional call is because jsdom
+   lacks `scrollIntoView`, the same guard `Select.tsx` uses. `scrollIntoView` honours the scroll
+   margin, and `html`'s `scroll-behavior` (smooth, or `auto` under reduced motion) applies.
+5. **When it runs.** The fallback mounts at the app's first commit, immediately after the module
+   script runs, before the user can have scrolled, so there is no user position to protect.
+   Client-side navigation back to `/` mounts no new fallback once the chunk is loaded, and the
+   flag stops a re-run in any case.
+
+**Why not scroll-on-mount for the click.** A tap would still do nothing at tap time, and the page
+would then move on its own seconds later. The first-load scroll is only for direct loads, where
+no tap has happened.
+
+## 3. Bench script changes (`capture-fallback.mjs`)
 
 1. `chunkMounted` becomes `document.querySelector('section#dashboard.dashboard') !== null`,
-   because the fallback now also matches `#dashboard`. Without this the script's own guard would
-   be satisfied by the fallback and could never fire.
-2. **Click arm.** With the chunk held, click `#hero-explore-cta`, let scrolling settle (motion
-   forced to `auto` via `page.emulateMedia({ reducedMotion: 'reduce' })`, which the existing
-   reduced-motion rule honours), and report `window.scrollY`, the reservation's rectangle, the
-   nav's bottom edge, and whether the `role="status"` region is in the viewport.
-3. **Direct-load arm** (`DEEP_LINK=1`). Open `/#dashboard` with the chunk held from the start,
-   wait for the load event plus one second, and report the same values.
-4. **Release.** Release the held chunk route, wait for `section#dashboard.dashboard`, and report
-   the mounted section's rectangle, the `#dashboard-heading` rectangle and `window.scrollY`.
-5. The exit code stays non-zero on any null rectangle or on the chunk having mounted before
-   release. `CLICK_CTA=0` keeps the pre-existing #283 measurement reproducible on its own.
+   because the fallback now also matches `#dashboard`.
+2. **`CLICK_CTA=1`** (default on). With the dashboard chunk held, click `#hero-explore-cta`, let
+   scrolling settle (motion forced to `auto` via `page.emulateMedia({ reducedMotion: 'reduce' })`),
+   and report `window.scrollY`, the reservation's rectangle and the nav's bottom edge.
+   `CLICK_CTA=0` reproduces the pre-existing #283 report on its own.
+3. **`DEEP_LINK=1`.** Three cases, each with the chunk held: (a) a fresh `page.goto('/#dashboard')`,
+   once with reduced motion and once without (waiting for smooth scrolling to settle); (b) scroll
+   to y = 400, then `page.reload()`; (c) navigate away to `/for-partners`, scroll, and `page.goBack()`.
+   Report the reservation's rectangle and `scrollY` for each.
+4. **Release.** Release the held chunk, wait for `section#dashboard.dashboard`, and report the
+   mounted section's rectangle, the `#dashboard-heading` rectangle and `scrollY`.
+5. **`EVENT_DETAIL=1`.** Serve a fixture event for `GET /v1/events/<fixture-id>` via
+   `page.route`, holding both the `EventDetail-*.js` chunk and that API response. Open
+   `/events/<fixture-id>`, tag the `role="status"` element (`data-bench-id`), focus the back link,
+   and record the card's rectangle. Release the chunk; after 500ms confirm the same tagged element
+   is still attached, the back link still has focus, and the card's top is unchanged. Release the
+   API response and confirm the event's `h1` renders and no `role="status"` remains.
+6. The exit code stays non-zero on any null rectangle or on a chunk mounting before release.
 
-**F1 bench addition.** With the `EventDetail` chunk held on a cold load of `/events/<id>`, report
-the loading card's top; release the chunk with the event query held, and report it again.
-
-The protocol in the README: two arms, control (the recorded `origin/development` SHA the branch is
-based on) and branch, at 375×812 and 1350×940.
+**Protocol (README):** two arms, control (the `origin/development` SHA the branch is based on,
+recorded) and branch, at 375×812 and 1350×940.
 
 ## Acceptance criteria
 
 ### F1
 
-- [ ] `EventDetailLoading` renders the page shell, the back link and the card. With
-      `announce={false}` there is no `role="status"` in the document.
-- [ ] With `fetchEventById` held pending, `EventDetail` renders **exactly one** `role="status"`
-      region, with `aria-live="polite"`, accessible name "Loading status", and text
-      "Loading event telemetry..."; the back link is present above it.
-- [ ] The `/events/:id` Suspense fallback renders `EventDetailLoading` with no status region.
-- [ ] With `fetchEventById` rejecting, the not-found card renders with no `role="status"` in the
-      document.
-- [ ] axe reports no violations in the pending state and in the not-found state.
-- [ ] `EventDetailLoading.tsx` imports nothing from `web/src/pages/` (it must not pull in the lazy
-      chunk), and the production build still emits `EventDetail` as its own chunk.
-- [ ] Bench, cold load, both viewports: the loading card's top is the same (±2px) before and
-      after the `EventDetail` chunk lands.
-- [ ] No spec or code comment claims the event's arrival is announced. Register F4 exists.
+- [ ] `EventDetailRoute.test.tsx`, with the lazy import and `fetchEventById` both held: exactly
+      one `role="status"` region (polite, name "Loading status", text "Loading event
+      telemetry..."), with the back link above it.
+- [ ] Same test: resolve the lazy import with the query still held. The status region is the
+      **same node** as before (`toBe`), there is still exactly one, and a back link focused
+      beforehand still has focus. Then resolve the query: the event's `h1` renders, no
+      `role="status"` remains, and the back link is the same node throughout.
+- [ ] `fetchEventById` rejecting with `ApiError` (404): the not-found card renders inside the
+      frame, with no `role="status"`. A non-`ApiError` (e.g. the lazy import rejecting) is **not**
+      caught by the local boundary; it reaches the app-level `ErrorBoundary`.
+- [ ] Changing `:id` after a not-found shows the new event's wait and then the event.
+- [ ] axe reports no violations in the waiting state and in the not-found state.
+- [ ] `EventDetailRoute.tsx` imports nothing from `web/src/pages/` except through `lazy()`, and
+      the production build still emits `EventDetail` as its own JS and CSS chunks.
+- [ ] Bench `EVENT_DETAIL=1`, both viewports: the tagged status element is still attached after
+      the chunk is released, the back link keeps focus, and the card's top is unchanged (±2px).
+- [ ] No document claims the event's arrival is announced. Register F4 exists.
 
 ### F2
 
 - [ ] With the dashboard chunk held, `document.querySelector(cta.getAttribute('href'))` is the
       `.dashboard-fallback` element, and no other element has `id="dashboard"`.
-- [ ] With the dashboard chunk mocked as mounted (`App.test.tsx`), exactly one element has
-      `id="dashboard"` and it is the dashboard section.
-- [ ] Click arm, chunk held: on the **control**, `scrollY` is 0 (the positive control); on the
-      **branch**, the reservation's top is 88px (±2px) from the viewport top at both sizes, and
-      at or below the nav's bottom edge.
+- [ ] `App.test.tsx`, dashboard mocked as mounted: exactly one element has `id="dashboard"`, and
+      it is the dashboard section.
+- [ ] Unit (`App.fallback.test.tsx`), first-load scroll: called for `navigate` + `#dashboard` +
+      target off its landing; **not** called for `reload`, for `back_forward`, without the hash,
+      when the target already sits at its scroll margin, or on a second mount.
+- [ ] Bench, click: on the **control**, `scrollY` is 0 (the positive control); on the **branch**,
+      the reservation's top is 88px (±2px) from the viewport top at both sizes, and at or below
+      the nav's bottom edge.
+- [ ] Bench, direct load (a), both motion settings: the reservation's top is 88px (±2px).
+      Cases (b) and (c): `scrollY` is the restored position (±2px), not the reservation.
 - [ ] After release, branch: the mounted section's top equals the reservation's pre-release top
-      (±2px), `scrollY` is unchanged (±2px), and `#dashboard-heading` is in the viewport and at
-      or below the nav's bottom edge.
-- [ ] Direct-load arm, branch: the same position criterion as the click arm. **If it fails,**
-      the contingency is built and the arm must then pass; the result, either way, is recorded
-      in the README with the run's numbers.
-- [ ] `measure-cls.mjs`, 8 runs per cell at 1920×1600, 1350×940, 768×1024 and 375×812 against
-      the control SHA (the README's protocol): for every cell, the branch median is no more than
-      the control median + 0.001.
+      (±2px), `scrollY` is unchanged (±2px), and `#dashboard-heading` is in the viewport and at or
+      below the nav's bottom edge.
 - [ ] `capture-fallback.mjs` with `CLICK_CTA=0` produces the #283 report unchanged
       (bar at y 0–3 at 375×812).
+
+### CLS
+
+- [ ] `measure-cls.mjs`, 8 runs per cell at 1920×1600, 1350×940, 768×1024 and 375×812, control
+      SHA recorded. The README gains a table with both arms' printed per-run values and each
+      cell's median (computed by hand from the printed values; the script prints runs, not
+      medians). For every cell, the branch median is no more than the control median + 0.001.
 
 ### Both
 
