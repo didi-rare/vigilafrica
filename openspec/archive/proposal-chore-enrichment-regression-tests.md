@@ -1,8 +1,10 @@
 ---
 id: chore-enrichment-regression-tests
-status: in-progress
+status: archived
 branch: claude/chore-web-audit-leftovers-xt5v6i
-spec: ../specs/chore-enrichment-regression-tests.md
+spec: spec-chore-enrichment-regression-tests.md
+merged_pr: https://github.com/didi-rare/vigilafrica/pull/285
+archived_on: 2026-10-11
 ---
 
 # Proposal: Codify the Adversarial Enrichment Cases as CI Regression Tests (chore-enrichment-regression-tests)
@@ -61,6 +63,9 @@ existing testcontainers PostGIS harness. Four groups:
 4. **Exterior-ring safety net.** Every vertex of Nigeria's ADM0 exterior ring resolves to a
    non-NULL country. These are the hardest points the ADM0 fallback has to catch; the reviewer's
    suite walked all 37 by hand, and this walks however many there are now.
+   *As built, this is narrower:* the ring has 6,253 vertices, so the test probes an evenly spaced
+   sample of at most 200 (196 when it merged), and none of those needed the fallback, which makes
+   it a smoke check rather than a test of the fallback (spec group 4; `Task.md` 5.3, 9.3, 9.10).
 
 Each group is table-driven, uses `t.Run` names that say what the case is, and leaves nothing
 behind: synthetic boundaries and all inserted events are removed in `t.Cleanup`, because the suite

@@ -270,7 +270,30 @@ func TestGDACSBudgetCachesAndBounds(t *testing.T) {
 		}
 	})
 
-	t.Run("a failure is cached too, so a dead upstream is asked once", func(t *testing.T) {
+	t.Run("a refusal is cached, so an unmatchable event is asked once", func(t *testing.T) {
+		// 404 from GDACS is an answer ("no such event"), and answers are cached.
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(404)
+		}))
+		defer srv.Close()
+		swapGDACSURLs(t, srv.URL, srv.URL)
+
+		b := NewRunBudget()
+		url := "https://www.gdacs.org/report.aspx?eventtype=FL&eventid=1"
+		b.resolve(context.Background(), url, ring4)
+		spent := maxGDACSRequestsPerRun - b.requestsLeft
+		b.resolve(context.Background(), url, ring4)
+		if got := maxGDACSRequestsPerRun - b.requestsLeft; got != spent {
+			t.Errorf("a cached refusal still spent budget: %d -> %d", spent, got)
+		}
+	})
+
+	t.Run("an upstream failure is retried, and the budget bounds what that can cost", func(t *testing.T) {
+		// Round 5 (independent review, PR #280): outages are NOT cached — a
+		// transient 500 must not be replayed as a fact for the rest of the run,
+		// and the budget is shared across countries. The price is that a dead
+		// upstream is asked again per lookup; the run budget caps that, and an
+		// exhausted budget still fails closed.
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(500)
 		}))
@@ -282,8 +305,17 @@ func TestGDACSBudgetCachesAndBounds(t *testing.T) {
 		b.resolve(context.Background(), url, ring4)
 		spent := maxGDACSRequestsPerRun - b.requestsLeft
 		b.resolve(context.Background(), url, ring4)
-		if got := maxGDACSRequestsPerRun - b.requestsLeft; got != spent {
-			t.Errorf("a cached failure still spent budget: %d -> %d", spent, got)
+		if got := maxGDACSRequestsPerRun - b.requestsLeft; got <= spent {
+			t.Errorf("an upstream failure was served from cache: spend stayed at %d", spent)
+		}
+		for i := 0; i < maxGDACSRequestsPerRun+5; i++ {
+			b.resolve(context.Background(), url, ring4)
+		}
+		if b.requestsLeft < 0 {
+			t.Errorf("budget overspent: requestsLeft = %d", b.requestsLeft)
+		}
+		if _, ok := b.resolve(context.Background(), url, ring4); ok {
+			t.Error("an exhausted budget must still fail closed")
 		}
 	})
 

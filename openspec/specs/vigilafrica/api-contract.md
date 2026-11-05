@@ -73,6 +73,7 @@ CORS is enabled and the allowed `Origin` is set via the `CORS_ORIGIN` environmen
 
 - Fields that may be absent use `null` in the JSON response — fields are **never omitted** from the response shape
 - Array fields are always `[]` (empty array) when empty — never `null`
+- Two documented exceptions, both on `GET /health`: `last_ingestion_by_country` is omitted when there are no completed runs or the database is unreachable (an empty map carries no information), and a run record's `country_code` is omitted when empty. Both are marked optional in the OpenAPI schema and the TypeScript type. `last_ingestion` follows the rule and is `null` in those cases; the six other run-record keys are always present.
 
 ---
 
@@ -84,7 +85,9 @@ CORS is enabled and the allowed `Origin` is set via the `CORS_ORIGIN` environmen
 
 ### Description
 
-Returns the health status of the API service. No database dependency — this endpoint must respond even if the database is unavailable.
+Returns the health status of the API service and ingestion telemetry. It must still respond `200` when the database is unavailable — it is the liveness probe the container healthcheck uses — in which case `last_ingestion` is `null` and `last_ingestion_by_country` is omitted (see Null Handling above). Deployment smoke tests gate on `GET /ready`, which answers `503` for a real failure and `200` otherwise, so a `degraded` service status never blocks a deploy.
+
+> **Updated 2026-10-03 (`fix-gdacs-degraded-run-status`).** This section described the v0.1 shape until then; `last_ingestion`, `last_ingestion_by_country` and the `degraded` status have existed since v0.5 (ADR-011). `openspec/specs/vigilafrica/openapi.yaml` holds the full schema.
 
 ### Request
 
@@ -99,14 +102,50 @@ No query parameters. No request body.
 ```json
 {
   "status": "ok",
-  "version": "0.1.0"
+  "version": "1.6.1",
+  "last_ingestion": {
+    "country_code": "NG",
+    "status": "success",
+    "started_at": null,
+    "completed_at": "2026-10-03T10:00:41Z",
+    "events_fetched": null,
+    "events_stored": null,
+    "error": null
+  },
+  "last_ingestion_by_country": {
+    "NG": {
+      "country_code": "NG",
+      "status": "success",
+      "started_at": null,
+      "completed_at": "2026-10-03T10:00:41Z",
+      "events_fetched": null,
+      "events_stored": null,
+      "error": null
+    }
+  }
 }
 ```
 
+Every key of a run record except `country_code` (omitted when empty) is always present. On the public API `started_at`, `events_fetched`,
+`events_stored` and `error` are **redacted to `null`** (`runToResponse` in
+`api/internal/handlers/health.go`; nothing in the server enables the unredacted form today), so
+only `status`, `completed_at` and `country_code` carry values. `status` is never `null`.
+
+Before the first completed run, or when the database is unreachable, the same request returns `{"status": "ok", "version": "1.6.1", "last_ingestion": null}`.
+
 | Field     | Type   | Description                                         |
 |-----------|--------|-----------------------------------------------------|
-| `status`  | string | Always `"ok"` when the API is running               |
+| `status`  | string | `"ok"`, or `"degraded"` when any country's last ingestion run was `failure` or `degraded` |
 | `version` | string | Semantic version, injected at build time via ldflags |
+| `last_ingestion` | object\|null | Always present. Most recent **completed** run across all countries (in-progress runs are never reported); `null` before the first completed run or when the database is unreachable |
+| `last_ingestion_by_country` | object | Most recent **completed** run per country code. **Omitted** when empty or when the database is unreachable |
+| `last_ingestion.status` | string | `success`, `failure`, `degraded` (`running` stays in the enum but is never reported) — never `null` |
+| `last_ingestion.completed_at` | string\|null | RFC 3339; the only timestamp exposed publicly |
+| `last_ingestion.started_at`, `events_fetched`, `events_stored`, `error` | null | Always `null` on the public API (redacted); keys are present so the shape is stable |
+
+Run `status` is one of `running`, `success`, `failure`, `degraded`. **`degraded`**: the run completed, but GDACS returned no usable answer for at least one flood polygon (unreachable, erroring, rate-limited, or the per-run request budget ran out); new flood areas among them were not stored and existing ones kept their last verified outline. It counts as a completed run for staleness alerting; `failure` does not.
+
+**`GET /ready`** uses the same body but returns **`503`** when any country's last run is `failure` or the database cannot be queried. A `degraded` run does **not** make `/ready` fail: an upstream data provider being down does not stop this API serving.
 
 ### Performance Contract
 

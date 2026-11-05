@@ -1,8 +1,8 @@
 # chore-enrichment-regression-tests
 
-**Branch:** `claude/chore-web-audit-leftovers-xt5v6i`
-**Proposal:** [openspec/proposals/chore-enrichment-regression-tests.md](openspec/proposals/chore-enrichment-regression-tests.md)
-**Spec:** [openspec/specs/chore-enrichment-regression-tests.md](openspec/specs/chore-enrichment-regression-tests.md)
+**Branch:** `claude/chore-web-audit-leftovers-xt5v6i` — **merged in #285, archived 2026-10-11**
+**Proposal:** [openspec/archive/proposal-chore-enrichment-regression-tests.md](openspec/archive/proposal-chore-enrichment-regression-tests.md)
+**Spec:** [openspec/archive/spec-chore-enrichment-regression-tests.md](openspec/archive/spec-chore-enrichment-regression-tests.md)
 **Origin:** deferred-work register item B2, carrying task 3.8 of
 `2026-08-07-perf-boundary-area-precompute` (#211)
 
@@ -62,9 +62,15 @@ by reading, not by running, and says so.
       (−30, −30); precondition asserts `count(DISTINCT area_m2) = 1`.
 - [x] 3.2 Two subtests with opposite insertion order; each expects the
       first-inserted (lowest `id`) name. Reset between subtests.
+      **Superseded by 9.1:** with that design a mutant without `, id ASC`
+      also passed. The shipped test sets ids explicitly so the first-inserted
+      row has the HIGHER id, and each subtest expects the second-inserted
+      (lower-id) name.
 - [x] 3.3 CI (`baaa48b`): both subtests pass — `alpha inserted first wins`
       and `beta inserted first wins` both green, so the `id` terminator is
-      what decides the tie.
+      what decides the tie. **Superseded:** this run tested the original
+      design, so it did not show that; the revised test's evidence is 9.10
+      (`24f1c46`).
 
 ## 4. Group 3 — geometry update (`TestEnrichment_GeometryUpdateRelabelsAndClears`)
 
@@ -202,4 +208,5 @@ pulled directly. One P1, eight P2s, all taken:
       three mutants once with Docker (`scripts/test-api.ps1 -Integration`, or
       `go test -tags=integration` on any Docker host, after replaying a mutated
       `trg_enrich_event_location`) would turn §7 from reasoning into evidence.
-      Not possible from this session.
+      Not possible from this session. Carried to the deferred-work register
+      as B5 when this record was archived.
