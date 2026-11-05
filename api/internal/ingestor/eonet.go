@@ -3,6 +3,7 @@ package ingestor
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -125,7 +126,70 @@ type IngestResult struct {
 	// which already existed, so their non-geometry fields were refreshed while the
 	// stored geometry was left untouched.
 	EventsMetadataOnly int
-	Run                *models.IngestionRun
+
+	// EventsGeomUpstreamFailed is the subset of EventsGeomUnresolved that failed
+	// because GDACS could not ANSWER (transport, 5xx, budget, partial episode
+	// scan) — as opposed to answering with no matching polygon. Any non-zero
+	// value makes the run degraded (fix-gdacs-degraded-run-status).
+	EventsGeomUpstreamFailed int
+
+	// StorageErrors counts events whose database write (upsert or metadata-only
+	// update) failed. Any non-zero value makes the run a FAILURE: the run did not
+	// store what it fetched, and recording success — or merely degraded — over a
+	// lost write is exactly the silent-loss shape this change exists to remove
+	// (independent review, PR #280, round 4; before, these were only logged).
+	StorageErrors int
+
+	Run *models.IngestionRun
+}
+
+// runOutcome decides the recorded status of a finished run.
+//
+// ⚠️ Before fix-gdacs-degraded-run-status this was "failure if ingestErr, else
+// success", so a GDACS outage that silently dropped every flood polygon still
+// recorded success and kept /health green. A completed run with any upstream
+// GDACS failure is now degraded. Refusals (GDACS answered, nothing matched) do
+// NOT degrade a run: that is the fail-closed check working, and counting it
+// would leave the system degraded forever over one unmatchable flood.
+func runOutcome(result *IngestResult, ingestErr error) (models.IngestionRunStatus, *string) {
+	// Precedence: a fetch/record error, then lost writes, then a GDACS outage.
+	// But the MESSAGE carries every cause that applies, in that order: a run
+	// that failed to fetch its second response may also have lost a write from
+	// the first and hit a GDACS outage, and the operator needs all three
+	// (independent review, PR #280, round 7; earlier rounds kept only the first).
+	var causes []string
+	if result != nil {
+		if result.StorageErrors > 0 {
+			causes = append(causes, fmt.Sprintf("%d event(s) could not be written to the database", result.StorageErrors))
+		}
+		if result.EventsGeomUpstreamFailed > 0 {
+			causes = append(causes, fmt.Sprintf("GDACS returned no usable answer for %d polygon event(s)", result.EventsGeomUpstreamFailed))
+		}
+	}
+	join := func(first string, rest []string) *string {
+		msg := first
+		for _, c := range rest {
+			msg += "; additionally " + c
+		}
+		return &msg
+	}
+	if ingestErr != nil {
+		return models.RunStatusFailure, join(ingestErr.Error(), causes)
+	}
+	if result != nil && result.StorageErrors > 0 {
+		// Takes precedence over degraded: a lost write is a failure of THIS
+		// system, not of an upstream, and must not be reported as the milder
+		// condition (round 4).
+		return models.RunStatusFailure, join("failure: "+causes[0], causes[1:])
+	}
+	if result != nil && result.EventsGeomUpstreamFailed > 0 {
+		msg := fmt.Sprintf("degraded: GDACS returned no usable answer for %d polygon event(s) "+
+			"(unreachable, erroring, rate-limited, or run budget exhausted); new ones were not stored "+
+			"and existing ones kept their last verified geometry",
+			result.EventsGeomUpstreamFailed)
+		return models.RunStatusDegraded, &msg
+	}
+	return models.RunStatusSuccess, nil
 }
 
 // Ingest pulls events from NASA EONET for the given country, upserts them
@@ -143,9 +207,14 @@ func Ingest(ctx context.Context, repo database.Repository, country CountryConfig
 func IngestWithBudget(ctx context.Context, repo database.Repository, country CountryConfig, budget *RunBudget) (*IngestResult, error) {
 	startedAt := time.Now()
 
-	runID, err := repo.CreateIngestionRun(ctx, startedAt, country.Code)
-	if err != nil {
-		slog.Error("ingestion: failed to create run record", "country", country.Code, "err", err)
+	runID, createErr := repo.CreateIngestionRun(ctx, startedAt, country.Code)
+	if createErr != nil {
+		// Ingestion still proceeds — events are worth storing even when the
+		// run cannot be recorded — but the outcome is a FAILURE: with no run
+		// row, /health keeps reporting the previous run and nothing would
+		// otherwise alert (independent review, PR #280, round 6; before, this
+		// was only logged and the run returned success).
+		slog.Error("ingestion: failed to create run record", "country", country.Code, "err", createErr)
 		runID = 0
 	}
 
@@ -160,16 +229,39 @@ func IngestWithBudget(ctx context.Context, repo database.Repository, country Cou
 	completedAt := time.Now()
 	duration := completedAt.Sub(startedAt)
 
-	if runID > 0 {
-		status := models.RunStatusSuccess
-		var errMsg *string
-		if ingestErr != nil {
-			status = models.RunStatusFailure
-			msg := ingestErr.Error()
-			errMsg = &msg
+	if createErr != nil {
+		recordErr := fmt.Errorf("run record could not be created, so this run is unrecorded: %w", createErr)
+		if ingestErr == nil {
+			ingestErr = recordErr
+		} else {
+			ingestErr = fmt.Errorf("%w; additionally %w", ingestErr, recordErr)
 		}
+	}
+
+	status, errMsg := runOutcome(result, ingestErr)
+	if ingestErr == nil && status == models.RunStatusFailure {
+		// A failure decided from the result itself (lost database writes) must
+		// propagate exactly like a fetch failure, or the scheduler would take the
+		// success branch and never send the failure alert (round 4).
+		ingestErr = errors.New(*errMsg)
+	}
+
+	if runID > 0 {
 		if completeErr := repo.CompleteIngestionRun(ctx, runID, status, result.EventsFetched, result.EventsStored, errMsg); completeErr != nil {
-			slog.Error("ingestion: failed to complete run record", "run_id", runID, "err", completeErr)
+			// The outcome was computed but never recorded: the row stays
+			// 'running', /health keeps reporting the previous run, and the
+			// scheduler would otherwise treat this run as done. Surface it as
+			// the failure it is so the failure alert fires (independent review,
+			// PR #280, round 4; before, this was only logged).
+			slog.Error("ingestion: failed to complete run record", "run_id", runID, "status", status, "err", completeErr)
+			if ingestErr == nil {
+				ingestErr = fmt.Errorf("run %d finished as %s but its record could not be updated: %w", runID, status, completeErr)
+			} else {
+				// Both failed: the run's own error AND the fact that it was never
+				// recorded. Neither may hide the other in the alert (round 5).
+				ingestErr = fmt.Errorf("%w; additionally the run record could not be updated: %w", ingestErr, completeErr)
+			}
+			status, errMsg = runOutcome(result, ingestErr)
 		}
 		result.Run = &models.IngestionRun{
 			ID:            runID,
@@ -194,6 +286,7 @@ func IngestWithBudget(ctx context.Context, repo database.Repository, country Cou
 			"events_geom_unresolved", result.EventsGeomUnresolved,
 			"events_geom_resolved", result.EventsGeomResolved,
 			"events_metadata_only", result.EventsMetadataOnly,
+			"events_geom_upstream_failed", result.EventsGeomUpstreamFailed,
 			"err", ingestErr,
 		)
 		return result, ingestErr
@@ -209,6 +302,7 @@ func IngestWithBudget(ctx context.Context, repo database.Repository, country Cou
 		"events_geom_unresolved", result.EventsGeomUnresolved,
 		"events_geom_resolved", result.EventsGeomResolved,
 		"events_metadata_only", result.EventsMetadataOnly,
+		"events_geom_upstream_failed", result.EventsGeomUpstreamFailed,
 	)
 	return result, nil
 }
@@ -468,9 +562,12 @@ func processEONETBody(
 				source = *event.SourceURL
 			}
 
-			resolved, ok := gdacsBudget.resolve(ctx, source, positions)
-			if !ok {
+			resolved, failure := gdacsBudget.resolveTyped(ctx, source, positions)
+			if failure != resolveOK {
 				result.EventsGeomUnresolved++
+				if failure == resolveUpstream {
+					result.EventsGeomUpstreamFailed++
+				}
 
 				// ⚠️ Do NOT drop the whole event. Its geometry is suspect; its
 				// title, status, category and dates are not, and they do not depend
@@ -486,6 +583,7 @@ func processEONETBody(
 				if err != nil {
 					slog.Error("ingestion: metadata-only update failed",
 						"country", country.Code, "source_id", event.SourceID, "err", err)
+					result.StorageErrors++
 					continue
 				}
 				if updated {
@@ -554,6 +652,7 @@ func processEONETBody(
 		// F-013: upsert on source_id — idempotent, no duplicates
 		if err := repo.UpsertEvent(ctx, event, geoJSON); err != nil {
 			slog.Error("ingestion: upsert failed", "country", country.Code, "source_id", event.SourceID, "err", err)
+			result.StorageErrors++
 			continue
 		}
 		result.EventsStored++

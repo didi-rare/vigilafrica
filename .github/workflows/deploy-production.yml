@@ -88,5 +88,9 @@ jobs:
           DEPLOY_TAG: ${{ steps.ref.outputs.tag }}
         run: |
           set -euo pipefail
+          # Readiness is the deploy gate: /ready answers 503 for a real failure
+          # and 200 for ok OR degraded — a GDACS outage is not unreadiness
+          # (fix-gdacs-degraded-run-status). curl -f fails the step on 503.
+          curl -fsS -o /dev/null https://api.vigilafrica.org/ready
           curl -fsS https://api.vigilafrica.org/health \
-            | jq -e --arg version "${DEPLOY_TAG}" '.status == "ok" and .version == $version'
+            | jq -e --arg version "${DEPLOY_TAG}" '(.status == "ok" or .status == "degraded") and .version == $version'

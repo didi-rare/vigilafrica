@@ -110,7 +110,12 @@ export async function fetchContext(): Promise<ContextResponse> {
 // ── Health / ingestion freshness (v0.5 — ADR-011) ────────────────────────────
 
 export interface LastIngestion {
-  status: 'success' | 'failure' | 'running' | null
+  // Present on every record except a global record with no country; omitted
+  // when empty (Go: `json:"country_code,omitempty"`).
+  country_code?: string
+  // 'degraded': the run completed, but GDACS returned no usable answer for some flood
+  // polygons; new ones are missing, existing ones may be out of date (fix-gdacs-degraded-run-status).
+  status: 'success' | 'failure' | 'running' | 'degraded'
   started_at: string | null
   completed_at: string | null
   events_fetched: number | null
@@ -122,7 +127,8 @@ export interface HealthResponse {
   status: 'ok' | 'degraded'
   version: string
   last_ingestion: LastIngestion | null
-  last_ingestion_by_country?: Record<string, LastIngestion | null>
+  // Omitted when there are no completed runs; its values are never null.
+  last_ingestion_by_country?: Record<string, LastIngestion>
 }
 
 export async function fetchHealth(): Promise<HealthResponse> {

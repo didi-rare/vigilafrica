@@ -39,26 +39,11 @@ const AUDIT_DIR = resolve(dirFlag !== -1 ? process.argv[dirFlag + 1] : '.')
 // History: the react-router RSC-CSRF entry (GHSA-qwww-vcr4-c8h2) was removed on
 // 2026-08-03 once its own documented exit condition was met — react-router
 // published 8.3.0 (2026-07-22), outside the vulnerable 7.12.0–8.2.0 range.
-const ALLOWLIST = [
-  {
-    ghsa: 'GHSA-vfj7-8cjw-p6xm',
-    package: 'braces',
-    devOnly: true,
-    reviewBy: '2026-11-02',
-    reason:
-      'Stack-exhaustion DoS from deeply nested brace PATTERNS. braces is reached ' +
-      'only through dev/CI tooling — root: @fission-ai/openspec -> fast-glob -> ' +
-      'micromatch; web: build tooling, dev:true in the lockfile. Every pattern it ' +
-      'ever expands comes from our own repository, so the worst case is someone ' +
-      'with commit access crashing our own CI. Nothing in the chain ships to users.',
-    whyNoBump:
-      'No patched release exists: the advisory covers braces <= 3.0.3 and 3.0.3 is ' +
-      'the latest published version (checked 2026-10-03). Every link above it is ' +
-      'already at latest (openspec 1.14.0, fast-glob 3.3.3, micromatch 4.0.8) and ' +
-      'still depends on braces. npm\'s own suggested fix is a DOWNGRADE of openspec ' +
-      'from 1.x to 0.17.2, which drops fast-glob but does nothing for web/.',
-  },
-]
+// The braces stack-exhaustion entry (GHSA-vfj7-8cjw-p6xm, dev-only, no patched
+// release) was removed on 2026-10-29: GitHub WITHDREW the advisory on
+// 2026-10-23, after which neither tree reported it and the gate flagged the
+// entry STALE in both. braces 3.0.3 is still installed; nothing about it changed.
+const ALLOWLIST = []
 
 const SEVERITY_RANK = { info: 1, low: 2, moderate: 3, high: 4, critical: 5 }
 const THRESHOLD = SEVERITY_RANK.moderate // mirror the previous --audit-level=moderate

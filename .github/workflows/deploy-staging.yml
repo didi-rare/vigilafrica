@@ -52,5 +52,9 @@ jobs:
         run: |
           set -euo pipefail
           short_sha="${EXPECTED_VERSION::7}"
+          # Readiness is the deploy gate: /ready answers 503 for a real failure
+          # and 200 for ok OR degraded — a GDACS outage is not unreadiness
+          # (fix-gdacs-degraded-run-status). curl -f fails the step on 503.
+          curl -fsS -o /dev/null https://api.staging.vigilafrica.org/ready
           curl -fsS https://api.staging.vigilafrica.org/health \
-            | jq -e --arg version "${short_sha}" '.status == "ok" and .version == $version'
+            | jq -e --arg version "${short_sha}" '(.status == "ok" or .status == "degraded") and .version == $version'
