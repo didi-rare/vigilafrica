@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.6.4](https://github.com/didi-rare/vigilafrica/compare/v1.6.3...v1.6.4) (2026-11-05)
+
+
+### Bug Fixes
+
+* **api:** report a GDACS outage as a degraded run, not a healthy one ([09b298f](https://github.com/didi-rare/vigilafrica/commit/09b298f10d7ae4ce5a92fb271080b0f0b76686d7))
+* **deps:** clear the zod, undici and fast-uri advisories blocking CI ([f8b6d31](https://github.com/didi-rare/vigilafrica/commit/f8b6d31f68b9392e5a7825942866f489cb9c6dd9))
+* **deps:** clear the zod, undici and fast-uri advisories blocking CI ([d75d0a5](https://github.com/didi-rare/vigilafrica/commit/d75d0a56d4aa6aaeb95beef74d631c438fd93626))
+* **web:** clear minimatch GHSA-g3hv-75wg-m249 with an npm override ([f65a044](https://github.com/didi-rare/vigilafrica/commit/f65a04495bb1838542eb9f402bd52f375e913c8e))
+* **web:** clear minimatch GHSA-g3hv-75wg-m249 with an npm override ([4759c07](https://github.com/didi-rare/vigilafrica/commit/4759c07dac644cb89c89e58678694b6b89fe0e05))
+
 ## [1.6.3](https://github.com/didi-rare/vigilafrica/compare/v1.6.2...v1.6.3) (2026-10-22)
 
 
