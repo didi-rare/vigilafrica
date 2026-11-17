@@ -22,6 +22,31 @@ branch: tbd
 >
 > ⚠️ **The Africa box is a rectangle, not the continent.** It admits parts of southern Europe and the Middle East, so the Africa-wide figure is an **over**-count. An earlier note called that "the conservative direction" — backwards: overstating Africa **inflates** the multiplier and flatters the case for widening. Treat **11.3× as an upper bound**.
 
+> ### ⚠️ CORRECTED 2026-11-17 — the flood figures below are overstated; the flood multiplier is ~12–13×, not 17.7×
+>
+> A by-month recount found that `measure.mjs` cannot count floods reliably, for two reasons:
+>
+> 1. **Flood polygons arrive with latitude and longitude transposed for some events and not others.** On 2026-11-17 the September 2026 polygons were transposed and the late-October and November ones were not, so neither reading order places them all correctly. `measure.mjs` reads every polygon as delivered. (This is the defect `fix-eonet-polygon-transposition` handles in production by resolving against GDACS.)
+> 2. **The Africa rectangle admits southern Europe and the Middle East**, and floods titled Israel, Türkiye, Jordan, Cyprus, Iran, Lebanon, Yemen and Spain were inside it.
+>
+> Every flood in the window is GDACS-sourced and titled `Flood in <country>`, so floods are now counted **by title country** with a committed script — [`scripts/eonet-density/floods-by-title.mjs`](../../scripts/eonet-density/floods-by-title.mjs). Re-run it rather than trusting the figures here.
+>
+> | window | African floods | Nigeria + Ghana | multiplier |
+> |---|---|---|---|
+> | this proposal's window (2024-10-01 → 2026-08-04), as originally claimed | 159 | 9 | 17.7× |
+> | same window, by title | **90** | **7** (NG 5, GH 2) | **12.9×** |
+> | 2024-10-01 → 2026-11-17, by title | **123** | **10** (NG 7, GH 3) | **12.3×** |
+>
+> **What else the recount shows:**
+>
+> - **The flood record starts on 2025-04-24.** No African flood appears in the feed before that date, so the "22-month" flood rate is really a ~16-month one. Across the 20 months to 2026-11-17 the continent averages about **6 floods a month** (range 0–16).
+> - **Floods continue through the West African dry season elsewhere:** 37 of 123 are dated November–March, against **0** for Nigeria and Ghana in those months.
+> - **32 countries** have at least one flood; Algeria (14), DR Congo (13), South Africa (12) and Kenya (8) lead. Nigeria has 7.
+>
+> **Not affected:** wildfires are point geometry, so the wildfire and total-event counts stand as upper bounds, and wildfires remain ~95% of events. The regional flood table further down (17 / 23 / 46 / 18 / 40) was produced by the same coordinate method and has **not** been recounted — treat it as unreliable. The conclusion drawn from it, *do not tranche by region*, is not weakened: fewer floods spread over the same regions makes each region thinner still.
+>
+> ⚠️ **Limits of the title method:** it measures feed availability, not stored rows; it attributes a flood to a country, not to a state; and Nigeria + Ghana by title is not what the production boxes store (the Nigeria box also catches Cameroonian floods near the border).
+
 Measured 2026-08-04, same 22-month window (2024-10-01 → 2026-08-04), production bboxes + guard:
 
 | source | method | Nigeria + Ghana | Africa-wide |
