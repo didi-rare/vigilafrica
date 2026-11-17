@@ -20,30 +20,38 @@ branch: tbd
 >
 > ⚠️ **This measures feed AVAILABILITY at a geography, not what production currently stores.** Production polls unwindowed `status=open` plus `status=closed&days=30`; the script queries `status=all` across the full window, so the stored count is lower than 290. The **ratio** is what this proposal rests on and both sides are measured identically, so it holds — but do not read 290 as a database count.
 >
-> ⚠️ **The Africa box is a rectangle, not the continent.** It admits parts of southern Europe and the Middle East, so the Africa-wide figure is an **over**-count. An earlier note called that "the conservative direction" — backwards: overstating Africa **inflates** the multiplier and flatters the case for widening. Treat **11.3× as an upper bound**.
+> ⚠️ **The Africa box is a rectangle, not the continent.** It admits parts of southern Europe and the Middle East, so the Africa-wide figure is an **over**-count. An earlier note called that "the conservative direction" — backwards: overstating Africa **inflates** the multiplier and flatters the case for widening. Treat ~~**11.3× as an upper bound**~~ *(superseded 2026-11-17: counts for a closed window drift upward as the feed back-fills, and a re-run gave 11.9×; see the CORRECTED 2026-11-17 block at the top of "Why")*.
 
-> ### ⚠️ CORRECTED 2026-11-17 — the flood figures below are overstated; the flood multiplier is ~12–13×, not 17.7×
+> ### ⚠️ CORRECTED 2026-11-17 — the flood figures below are overstated; the flood multiplier is roughly 12×, not 17.7×
 >
-> A by-month recount found that `measure.mjs` cannot count floods reliably, for two reasons:
+> A by-month recount found that `measure.mjs` cannot count floods reliably, for two reasons, listed in order of size:
 >
-> 1. **Flood polygons arrive with latitude and longitude transposed for some events and not others.** On 2026-11-17 the September 2026 polygons were transposed and the late-October and November ones were not, so neither reading order places them all correctly. `measure.mjs` reads every polygon as delivered. (This is the defect `fix-eonet-polygon-transposition` handles in production by resolving against GDACS.)
-> 2. **The Africa rectangle admits southern Europe and the Middle East**, and floods titled Israel, Türkiye, Jordan, Cyprus, Iran, Lebanon, Yemen and Spain were inside it.
+> 1. **The Africa rectangle admits southern Europe and the Middle East**, and floods titled Israel, Türkiye, Jordan, Cyprus, Iran, Lebanon, Yemen and Spain were inside it. *From an uncommitted reviewer check on 2026-11-17, not reproducible from a committed script:* within this proposal's own window (to 2026-08-04) this was the larger cause of the overcount, about 44 events versus about 27 for transposition.
+> 2. **Flood geometry changed shape in the feed, and polygons were delivered transposed for a period.** `floods-by-title.mjs` prints a geometry summary. On 2026-11-17 it reports that floods in the window are **Point** geometry until late June 2026 and **Polygon** after: for 2024-10-01 → 2026-08-04, 644 Point and 68 Polygon floods worldwide, first Polygon dated 2026-06-30; for 2024-10-01 → 2026-11-17, 644 Point and 247 Polygon, first Polygon again 2026-06-30. `measure.mjs` reads a polygon's first position as `[lon, lat]` as delivered. *From an uncommitted reviewer check on 2026-11-17, not reproducible from a committed script:* polygons were delivered transposed until about 2026-09-25 and in the correct order after, a one-time upstream switch rather than per-event randomness; points were always correctly ordered. (Production handles the transposition by resolving against GDACS; see `fix-eonet-polygon-transposition`.) An earlier draft of this block said polygons were transposed "for some events and not others", with September 2026 transposed and late October/November not; that description is withdrawn.
 >
-> Every flood in the window is GDACS-sourced and titled `Flood in <country>`, so floods are now counted **by title country** with a committed script — [`scripts/eonet-density/floods-by-title.mjs`](../../scripts/eonet-density/floods-by-title.mjs). Re-run it rather than trusting the figures here.
+> Every flood in the window is GDACS-sourced and titled `Flood in <country>`, so floods are now counted **by title country** with a committed script — [`scripts/eonet-density/floods-by-title.mjs`](../../scripts/eonet-density/floods-by-title.mjs). The title is the one location field that does not depend on coordinate order, so this remains the right method. Re-run it rather than trusting the figures here.
+>
+> Figures below are from `node scripts/eonet-density/floods-by-title.mjs --end 2026-08-04` and `node scripts/eonet-density/floods-by-title.mjs`, both run on 2026-11-17:
 >
 > | window | African floods | Nigeria + Ghana | multiplier |
 > |---|---|---|---|
-> | this proposal's window (2024-10-01 → 2026-08-04), as originally claimed | 159 | 9 | 17.7× |
+> | this proposal's window (2024-10-01 → 2026-08-04), as originally claimed | ~~159~~ | ~~9~~ | ~~17.7×~~ |
 > | same window, by title | **90** | **7** (NG 5, GH 2) | **12.9×** |
 > | 2024-10-01 → 2026-11-17, by title | **123** | **10** (NG 7, GH 3) | **12.3×** |
 >
+> **Read the multiplier as roughly 12×, an order of magnitude, not a precise ratio.** The Nigeria + Ghana denominator is only 7 to 10 floods, so one more or fewer event moves the ratio by more than the gap between 12.3× and 12.9×. No confidence interval is scripted, so none is quoted.
+>
+> **Counts drift, so every figure in this file is a dated snapshot.** Counts for a closed historical window drift upward because the feed back-fills. `node scripts/eonet-density/measure.mjs`, re-run on 2026-11-17 for the same closed window (2024-10-01 → 2026-08-04), gave Africa-wide **3,457 events, of which 3,296 wildfires** (and 161 box-counted floods), and Nigeria + Ghana **291 events** (NG 175, GH 116), against the 3,268 / 3,109 / 290 quoted elsewhere in this file from 2026-08-04. The events multiplier on that run is **11.9×** (3,457 / 291). The earlier statement "treat 11.3× as an upper bound" therefore **no longer holds**: a re-run of a closed window exceeds it, because counts rise as the feed back-fills. Wildfires are point geometry, so transposition does not touch them, but the box still admits non-African events. Wildfires / (wildfires + title-counted floods) for the same window is 3,296 / (3,296 + 90) = **97.3%** (`measure.mjs` prints 95.3% because it uses its own box-counted 161 floods). That replaces "wildfires remain ~95%".
+>
 > **What else the recount shows:**
 >
-> - **The flood record starts on 2025-04-24.** No African flood appears in the feed before that date, so the "22-month" flood rate is really a ~16-month one. Across the 20 months to 2026-11-17 the continent averages about **6 floods a month** (range 0–16).
-> - **Floods continue through the West African dry season elsewhere:** 37 of 123 are dated November–March, against **0** for Nigeria and Ghana in those months.
-> - **32 countries** have at least one flood; Algeria (14), DR Congo (13), South Africa (12) and Kenya (8) lead. Nigeria has 7.
+> - **When the flood record starts.** In this window the earliest flood for *any* country is **2025-01-20**, and the first African-titled flood is **2025-04-24** (script, 2026-11-17). A flood series that begins this late looks like a feed-onset effect, not an African one. **Likely**, on the basis that the earliest worldwide flood is only about three months before the first African one; when the GDACS flood stream became dense was not checked, so this is unverified. The script's month table runs 2025-04 → 2026-08 for the first window (17 calendar rows, about 15 months of elapsed time since the first and last are partial), so the "22-month" flood rate used elsewhere is really about a 15 to 17 month one. Across the 20 calendar months 2025-04 → 2026-11 the continent averages about **6 floods a month** (123 / 20; monthly range 0–16).
+> - **July 2026 shows 0 African-titled floods** (and Nigeria and Ghana 0) between months with 5 and 10. This is **unexplained and unverified against GDACS**; whether it is a real lull or a feed gap is not established.
+> - **Floods continue through the West African dry season elsewhere:** 37 of 123 are dated November–March, against **0** for Nigeria and Ghana in those months. This rests on **a single full dry season (2025-11 → 2026-03) plus part of November 2026**, and on only **10 Nigeria + Ghana floods in total**, so it is suggestive, not a seasonal statistic.
+> - **Countries.** The script prints **32** entries for the window to 2026-11-17 (30 to 2026-08-04). That count includes entries that arise only from multi-country titles (for example Western Sahara, which a reviewer found only in a title that also names Mauritania), so read it as **about 30 countries and territories**. Algeria (14), DR Congo (13), South Africa (12) and Kenya (8) lead. Nigeria has 7.
+> - **By region (UN geoscheme; a multi-country title counts once per region named, so the rows sum to slightly more than the total).** Window to 2026-08-04: North 26, East/Horn 23, Central 18, West 14, Southern 11 (sum 92 for 90 floods). Window to 2026-11-17: North 36, East/Horn 27, West 25, Central 24, Southern 13 (sum 125 for 123 floods).
 >
-> **Not affected:** wildfires are point geometry, so the wildfire and total-event counts stand as upper bounds, and wildfires remain ~95% of events. The regional flood table further down (17 / 23 / 46 / 18 / 40) was produced by the same coordinate method and has **not** been recounted — treat it as unreliable. The conclusion drawn from it, *do not tranche by region*, is not weakened: fewer floods spread over the same regions makes each region thinner still.
+> **The regional flood table further down (17 / 23 / 46 / 18 / 40) is superseded.** It was produced by the coordinate method and by overlapping boxes, so it is not comparable like-for-like with the UN-geoscheme counts above (for example the geoscheme puts Sudan in North, not East). The earlier assertion that the *do not tranche by region* conclusion "is not weakened" was made without a recount and is replaced by the numbers: on title counts no region has more than 26 floods in the 2026-08-04 window (West 14, about 1 a month), and a West Africa tranche about doubles the Nigeria + Ghana flood count (7 → 14, about 2×) while still needing the whole loader build. The numbers still support going continental in one step: the full set is 90 floods and no single region comes near it. The margin the old table gave ("under 2×") is now "about 2×", so the argument is a little weaker than it was written, not unaffected.
 >
 > ⚠️ **Limits of the title method:** it measures feed availability, not stored rows; it attributes a flood to a country, not to a state; and Nigeria + Ghana by title is not what the production boxes store (the Nigeria box also catches Cameroonian floods near the border).
 
@@ -51,19 +59,19 @@ Measured 2026-08-04, same 22-month window (2024-10-01 → 2026-08-04), productio
 
 | source | method | Nigeria + Ghana | Africa-wide |
 |---|---|---|---|
-| **EONET** (already ingested) | satellite detection | **290 events, 9 floods** *(NG 174, GH 116)* | **3,268 events, 159 floods** |
+| **EONET** (already ingested) | satellite detection | **290 events, ~~9 floods~~** *(NG 174, GH 116)* | **3,268 events, ~~159 floods~~** *(floods superseded 2026-11-17: 7 and 90 by title; event counts are a 2026-08-04 snapshot, re-run 2026-11-17 gave 291 and 3,457; see the CORRECTED 2026-11-17 block at the top of "Why")* |
 | GDACS | model + impact threshold | **0** | ~150 / 13 months ⚠️ *see stop-block caveat* |
 | ReliefWeb `/v2/disasters` | human declaration | **3** (2 floods) | — |
 
-**We discard ~91% of our own feed at the bounding box.** The same source, polled by the same code, carries **11.3× more events** — and **17.7× more floods** — if the box opens to the continent.
+**We discard ~91% of our own feed at the bounding box.** The same source, polled by the same code, carries **11.3× more events** *(2026-08-04 snapshot; the 2026-11-17 re-run of the same window gave 11.9×, see the CORRECTED 2026-11-17 block at the top of "Why")* — and ~~**17.7× more floods**~~ *(superseded 2026-11-17: roughly 12× by title, an order of magnitude on a denominator of 7 to 10; see the CORRECTED 2026-11-17 block at the top of "Why")* — if the box opens to the continent.
 
-*The flood multiplier being higher than the event multiplier is the genuinely encouraging part: widening is disproportionately good for the hazard this product is actually about.*
+~~*The flood multiplier being higher than the event multiplier is the genuinely encouraging part: widening is disproportionately good for the hazard this product is actually about.*~~ **Retracted 2026-11-17:** after the title recount the two multipliers are about the same (roughly 12× for floods, 11.9× for events on the 2026-11-17 re-run), and any difference between them is not meaningful on a Nigeria + Ghana flood denominator of 7 to 10 events. See the CORRECTED 2026-11-17 block at the top of "Why".
 
 Critically, the sparsity is **real, not a detection artifact**. ReliefWeb is reports-based rather than satellite-limited and is the control that rules this out: it records **3 declared disasters** for both countries in 22 months, and only **64 since 1986**. Nigeria and Ghana do not generate a dense stream of discrete, nameable hazard events. **No additional data source fixes this** — see [[project-flood-data-source-gap]] for the full triangulation.
 
 There are exactly two levers on density: widen the geography (this proposal), or drop below disaster granularity to local reports (a separate, larger architectural change). This one is cheap and has no external dependency.
 
-⚠️ **Scope honestly: this makes the product non-empty. It does not make it locally relevant.** Of the **3,268** Africa-wide events, **3,109 are wildfires — 95.1%**. The urban-pluvial flooding that matters most to Lagos residents remains invisible to every global source. Do not let this proposal be mistaken for a fix to that.
+⚠️ **Scope honestly: this makes the product non-empty. It does not make it locally relevant.** Of the **3,268** Africa-wide events, **3,109 are wildfires — 95.1%** *(2026-08-04 snapshot; on 2026-11-17 the re-run gave 3,296 wildfires and 97.3% of wildfires plus title-counted floods; see the CORRECTED 2026-11-17 block at the top of "Why")*. The urban-pluvial flooding that matters most to Lagos residents remains invisible to every global source. Do not let this proposal be mistaken for a fix to that.
 
 ## What the code already supports (better than expected)
 
@@ -191,21 +199,23 @@ Counted live against EONET v3, `status=all`, 2024-10-01 → 2026-08-04, per cand
 
 | region | floods | wildfires | total |
 |---|---|---|---|
-| West Africa | 17 | 521 | 538 |
-| Central Africa | 23 | 1,970 | 1,995 |
-| **East / Horn** | **46** | 1,791 | 1,842 |
-| Southern Africa | 18 | 577 | 600 |
-| North Africa | 40 | 22 | 62 |
-| **Africa (all)** | **159** | **3,109** | **3,268** |
-| *ingested today (NG+GH)* | *9* | *281* | *290* |
+| West Africa | ~~17~~ | 521 | 538 |
+| Central Africa | ~~23~~ | 1,970 | 1,995 |
+| **East / Horn** | ~~**46**~~ | 1,791 | 1,842 |
+| Southern Africa | ~~18~~ | 577 | 600 |
+| North Africa | ~~40~~ | 22 | 62 |
+| **Africa (all)** | ~~**159**~~ | **3,109** | **3,268** |
+| *ingested today (NG+GH)* | ~~*9*~~ | *281* | *290* |
+
+*Flood column superseded 2026-11-17: counted by the coordinate method and overlapping boxes; replaced by the by-title and by-region counts in the CORRECTED 2026-11-17 block at the top of "Why".*
 
 *Regional boxes overlap slightly and are not a partition; they indicate distribution, not an exact decomposition.*
 
 ### ✅ Settles open question 5 — do NOT tranche by region
 
-A West Africa first tranche yields **17 floods in 22 months** — under 2× today — while still requiring the *entire* loader, simplification and pacing build. **Floods are thinly spread; no region has flood density.** Even the richest (East/Horn, 46) is ~2 floods/month.
+A West Africa first tranche yields ~~**17 floods in 22 months** — under 2× today~~ *(superseded 2026-11-17: West is 14 floods by title in the same window against 7 for Nigeria + Ghana, about 2×; see the CORRECTED 2026-11-17 block at the top of "Why")* — while still requiring the *entire* loader, simplification and pacing build. **Floods are thinly spread; no region has flood density.** Even the richest (~~East/Horn, 46~~ *(superseded 2026-11-17: North, 26 by title)*) is ~~about 2 floods a month~~ *(about 1.5 a month by title over 17 calendar months)*.
 
-The flood payoff only arrives at full continental scale: **9 → 159 floods, 17.7×**. **Recommendation: go continental in one step, and tranche by *engineering* risk instead** — sequence South Africa's 89 MB and the 9 SHP-only countries late.
+The flood payoff only arrives at full continental scale: ~~**9 → 159 floods, 17.7×**~~ *(superseded 2026-11-17: 7 → 90 floods, 12.9×, roughly 12×; see the CORRECTED 2026-11-17 block at the top of "Why")*. **Recommendation: go continental in one step, and tranche by *engineering* risk instead** — sequence South Africa's 89 MB and the 9 SHP-only countries late.
 
 ### ⚠️ 95.1% of Africa-wide events are wildfires — this forces a product decision
 
@@ -295,7 +305,7 @@ Mobile TBT remains a separate and **currently unverified** question: the inherit
 2. ~~**What simplification tolerance?**~~ **✅ ANSWERED — none. Do not simplify.** The sweep was re-run from a committed, **seeded** harness ([`scripts/bench-simplification/sweep.sql`](../../scripts/bench-simplification/sweep.sql)) and overturned the earlier `0.001°` recommendation: its headline "zero unassigned points" was an artefact of unseeded sampling, and the real figure is **0.038%**. Since geometry volume was separately measured as *not* a constraint (13 MB at 795 polygons), simplification buys ~440 kB in exchange for a non-zero rate of silent enrichment failure. Load at full resolution; revisit only if volume ever becomes a measured constraint.
 3. **How many ADM1 units are there in Africa, exactly?** Still estimated at ~700–800, **unverified**. Requires counting features in the downloaded files. *(Partially de-risked: a 795-polygon fixture built from real geometry occupies ~13 MB, confirming geometry volume is not a constraint — but the true count remains unverified.)*
 4. ~~What are EONET's published rate limits?~~ **✅ ANSWERED 2026-08-04 — there are none published.** Pace by judgement; a politeness budget, not a compliance one.
-5. ~~Do we widen to all of Africa at once, or in tranches?~~ **✅ ANSWERED 2026-08-04 — do NOT tranche by region.** West Africa alone yields 17 floods/22 months for the full build cost; the flood payoff exists only at continental scale. **Tranche by engineering risk instead** — sequence South Africa (89 MB) and the 9 SHP-only countries late.
+5. ~~Do we widen to all of Africa at once, or in tranches?~~ **✅ ANSWERED 2026-08-04 — do NOT tranche by region.** West Africa alone yields ~~17 floods/22 months~~ *(superseded 2026-11-17: 14 by title, about 2× Nigeria + Ghana)* for the full build cost; the flood payoff exists only at continental scale. **Tranche by engineering risk instead** — sequence South Africa (89 MB) and the 9 SHP-only countries late.
 6. Does "VigilAfrica" still position as Nigeria/Ghana-focused with continental data, or reposition entirely? Affects item 8 and the partnership narrative.
 
 ## Origin
