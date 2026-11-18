@@ -37,7 +37,7 @@ There is no near-me view. Verified in the tree:
 - The context response is used for the `context_resolve` analytics event and to centre the map (`web/src/components/EventsDashboard.tsx`).
 - The list always comes from the events fetch, unfiltered by default (category "All Categories", all countries). The only empty state is "No events match these filters".
 
-So today's default view already is the "all covered countries" rung of any ladder, and Phase 1 is **the first near-me interface**, not a patch to an empty state.
+So today's default view already is the "all covered countries" rung of any ladder, and Phase 3 is **the first near-me interface**, not a patch to an empty state.
 
 ### What the feed supports
 
@@ -71,31 +71,40 @@ VigilAfrica shows **what is happening, by place name, across Africa**, for whate
 
 - Amend [`product.md`](../specs/vigilafrica/product.md) §1–§2 with a dated direction addendum. That file's lock rule reads, in full: *"Any change to this document requires explicit maintainer review and a corresponding update to `roadmap.md`. No feature may be implemented unless it has an F-ID in this registry. Any implementation diverging from acceptance criteria here is drift."* Three clauses: maintainer review; a matching roadmap update; and the F-ID rule. Its §2.1 "Explicitly Out of Scope" list says the items there "must not be implemented until explicitly promoted by a new ADR in `decisions.md`", and it names **"Coverage beyond Nigeria (v0.6+ expansion model)"** and **"Event types beyond Floods and Wildfires"**. So this direction needs an ADR, not only an addendum.
 - **Write the next ADR.** `decisions.md` indexes ADR-001 to ADR-016, so the next is **ADR-017**: continental, hazard-neutral scope. It must supersede **ADR-004 — Initial Country Scope: Nigeria First** (status ACCEPTED, 2026-04-12). ADR-004's stated consequences conflict with `feature-continental-coverage`: it locks the EONET bounding box to Nigeria (lat 4.0–14.0, long 2.0–15.0), loads only Nigerian ADM0/ADM1 boundaries, and calls any non-Nigeria boundary data before v0.6 out of scope. The shipped system already departs from it (Ghana is live), and `feature-continental-coverage` assumes 54 countries.
-- **The F-ID question belongs to that ADR.** The F-ID rule says no feature may be implemented without an F-ID. In `openspec/`, the F-IDs in use are F-001 to F-017 in `product.md`, plus a prospective F-101 in `feature-secondary-oracle.md`. There is none above F-017 in the product registry, and the features shipped since launch (digest, pagination, `location_source`, nearby events, and so on) were governed by OpenSpec proposals and change records, not by new F-IDs. The registry has therefore been bypassed in practice since launch. ADR-017 must settle one of: retire the F-ID rule, or assign F-IDs going forward (and say how). Until it does, this proposal's Phase 1 changes the context endpoint contract without an F-ID, which the written rule forbids.
+- **The F-ID question belongs to that ADR.** The F-ID rule says no feature may be implemented without an F-ID. In `openspec/`, the F-IDs in use are F-001 to F-017 in `product.md`, plus a prospective F-101 in `feature-secondary-oracle.md`. There is none above F-017 in the product registry, and the features shipped since launch (digest, pagination, `location_source`, nearby events, and so on) were governed by OpenSpec proposals and change records, not by new F-IDs. The registry has therefore been bypassed in practice since launch. ADR-017 must settle one of: retire the F-ID rule, or assign F-IDs going forward (and say how). Until it does, this proposal's Phase 3 changes the context endpoint contract without an F-ID, which the written rule forbids.
 - Bring the [`roadmap.md`](../specs/vigilafrica/roadmap.md) milestone index up to date: v1.3 is shipped (the index row still says *Proposed*), v1.4–v1.6 are missing, and a new milestone records this direction.
 - In [`feature-continental-coverage`](feature-continental-coverage.md): reverse the 2026-08-04 "floods default, wildfires opt-in" decision, and answer its open question 6 (positioning).
 - Commit the by-month wildfire script and the stale-open-wildfire age script (spec, Phase 0 tasks 1 and 2).
 - **Registry drift is recorded, not fixed.** The F-ID registry is not rewritten. Entries verified as out of step with the code are listed as drift in the spec (F-008 so far).
 
-### Phase 1 — a near-me panel with a scope ladder
+### Phase 1 — continental coverage
 
-This is new interface work, not a small patch (see *What the "near me" feature is today*). See D5.
+**Moved first on 2026-11-18, by the maintainer:** continental coverage is what changes what a visitor sees, so it is built before the gate rather than after it. The conversations run alongside it, and an early stop rule (Phase 2) protects the release.
+
+- It stays its own proposal, [`feature-continental-coverage`](feature-continental-coverage.md), and starts once ADR-017 (Phase 0) is merged, because `product.md` §2.1 requires an ADR before coverage beyond Nigeria. That proposal contains two decisions titled "Decision 1 — how are boundaries loaded?" and "Decision 2 — one Africa bbox, or 54 country bboxes?". **This proposal settles neither**; the maintainer decides both, and what to do with Madagascar's 2010 boundaries, when Phase 1 starts. What this proposal settles there is open question 6 (positioning: reposition as continental, per D1) and the 2026-08-04 floods-default decision (reversed, per D2).
+- **First release: the 45 countries whose boundaries HDX publishes as GeoJSON.** The 9 shapefile-only countries and South Africa's 89 MB file follow, per that proposal's tranching by engineering risk.
+- **The hard-coded two-country lists are removed in this phase** (see spec), so every later change is built for all covered countries.
+- **Hazard-neutral copy** on the landing page and metadata, and on the partner page subject to D4, ships with the first release: "Nigeria and Ghana live" stops being true the day it lands.
+- **Stale-open wildfires multiply with coverage.** The list is ordered newest first, so they sink below current events; the display window (D6) arrives in Phase 3. If they visibly crowd the first page after release, bring the window forward.
+- **The cost of building before the gate:** if the gate says freeze, roughly three to four weeks of build is sunk (**assumption**: an estimate of the maintainer's pace, not measured). The early stop rule limits that.
+
+### Phase 2 — validation gate
+
+The demand question cannot be answered from the feed. The conversations run alongside Phase 0 and Phase 1 (see *How we will know*).
+
+- **Early stop rule, before the Phase 1 release:** if the first three conversations held all say they need neighbourhood- or street-level precision and would not use country- or state-level data, Phase 1 is not released and the freeze decision is taken instead.
+- **Gate, after the Phase 1 release:** a dated **go / hold / freeze** decision before Phase 3 starts, judged on the conversations and on the first weeks of traffic with continental content.
+
+### Phase 3 — a near-me panel with a scope ladder
+
+This is new interface work, not a small patch (see *What the "near me" feature is today*). See D5. It starts only on a *go* from Phase 2, and because it follows continental coverage its country rung is built once for every covered country.
 
 - **A near-me panel with a scope ladder.** Near you, then your country, then all covered countries, each with a count, so a visitor with nothing nearby still learns something true. Today's default list stays as the "all covered countries" rung.
 - **Say what "now" means**, according to D6. Whichever option is chosen, the interface states the basis of every count and list ("open, or closed since DATE", or "in the last N days") rather than implying live status, and the stale-open wildfires are handled by name.
 - **Say what the product cannot see.** One persistent, plain sentence: events come from global satellite-and-model feeds (NASA EONET, with floods sourced from GDACS); street-level and urban flash flooding are not covered. It extends the standing honesty rule defined below, and the Lagos geocoding spike measured why the gap is not closable soon.
-- **Hazard-neutral copy** on the landing page and metadata, and on the partner page, subject to D4.
-- **Absorb or sequence the location marker?** `feature-current-location-marker` already requires IP-derived location to be labelled approximate and lists wiring `nearby_events` as out of scope. **Recommendation: sequence the marker first, as its own small frontend-only change, and do not absorb it.** It is independent and cheap; its non-goal text explicitly assigns the near-me panel to a separate feature; and Phase 1 then reuses its "approximate, based on your network" wording instead of inventing a second one. If the marker slips, Phase 1 must carry the same approximate-location wording itself.
+- **Absorb or sequence the location marker?** `feature-current-location-marker` already requires IP-derived location to be labelled approximate and lists wiring `nearby_events` as out of scope. **Recommendation: sequence the marker first, as its own small frontend-only change, and do not absorb it.** It is independent and cheap; its non-goal text explicitly assigns the near-me panel to a separate feature; and Phase 3 then reuses its "approximate, based on your network" wording instead of inventing a second one. If the marker slips, Phase 3 must carry the same approximate-location wording itself.
 
 **The standing honesty rule** (defined here because no document names it): VigilAfrica is an awareness tool, not an emergency alert system; event locations and timing may be approximate; users must confirm with local authorities. It is stated in the dashboard disclaimer (`web/src/components/EventsDashboard.tsx`, the `dashboard-disclaimer` block, lines 167–176) and in `llms.txt` under "Important limitation" (`web/vite.config.ts`, line 141). New copy must not contradict it.
-
-### Phase 2 — validation gate
-
-The demand question cannot be answered from the feed. Before more is built: hold the conversations and take a dated **go / hold / freeze** decision (see *How we will know*). The gate sits here so that Phase 3 does not start on supply evidence alone.
-
-### Phase 3 — continental coverage
-
-Unchanged in substance; it stays its own proposal, [`feature-continental-coverage`](feature-continental-coverage.md), and starts only on a *go* from Phase 2. That proposal contains two decisions titled "Decision 1 — how are boundaries loaded?" and "Decision 2 — one Africa bbox, or 54 country bboxes?". **This proposal settles neither.** What it settles there is open question 6 (positioning: reposition as continental, per D1) and the 2026-08-04 floods-default decision (reversed, per D2).
 
 ### Phase 4 — judge it in season
 
@@ -109,9 +118,9 @@ D1 to D4 were made on 2026-11-17 and D5 and D6 on 2026-11-18, each as recommende
 |---|---|---|
 | D1 | **Positioning.** A continental product, or a Nigeria + Ghana product with continental data? | **Decided 2026-11-17: continental.** See reasoning below. |
 | D2 | **Default view.** All hazards by recency, or floods first? | **Decided 2026-11-17: all hazards.** The dashboard already defaults to "All Categories", so this formally reverses the unimplemented 2026-08-04 decision. Note that an all-hazards view currently includes the stale-open wildfires; see D6. |
-| D3 | **More categories now?** The feed also carries severe storms (13 in the window, mostly Indian Ocean cyclones) and volcanoes (4). | **Decided 2026-11-17: not in this change.** Seventeen events in 26 months does not justify new category support yet. Revisit after Phase 3, when Mozambique and Madagascar are covered. The 13 and 4 are from a 2026-11-17 scratch run, **not backed by a committed script**. The wording was "the category registry"; the registry was never built (`roadmap.md`'s v1.3 note records it only as a deferred item, `chore-deferred-work-register` §C1), so read this as "the categories the product supports". |
+| D3 | **More categories now?** The feed also carries severe storms (13 in the window, mostly Indian Ocean cyclones) and volcanoes (4). | **Decided 2026-11-17: not in this change.** Seventeen events in 26 months does not justify new category support yet. Revisit after Phase 1, when Mozambique and Madagascar are covered. The 13 and 4 are from a 2026-11-17 scratch run, **not backed by a committed script**. The wording was "the category registry"; the registry was never built (`roadmap.md`'s v1.3 note records it only as a deferred item, `chore-deferred-work-register` §C1), so read this as "the categories the product supports". |
 | D4 | **The flood digest and the partner offer.** `/v1/digest/today.json` and the partner page are flood-specific. | **Decided 2026-11-17: reword the partner page's lead; leave the digest endpoint alone.** The partner page must continue to describe the digest as flood-only. Partner material may lead with floods in season. Changing the digest's content is a contract change and deserves its own proposal once a partner exists to ask for it. |
-| D5 | **Build a near-me panel with a scope ladder** (Phase 1). | **Decided 2026-11-18: yes, after the location marker.** Re-opened on 2026-11-17 because the earlier "yes, smallest change" rested on there being an existing near-me view to patch; there is none. This is new interface plus an API change, built because it is the only change that answers the product's own question. `feature-current-location-marker` lands first, as its own frontend-only change. |
+| D5 | **Build a near-me panel with a scope ladder** (Phase 3). | **Decided 2026-11-18: yes, after the location marker.** Re-opened on 2026-11-17 because the earlier "yes, smallest change" rested on there being an existing near-me view to patch; there is none. This is new interface plus an API change, built because it is the only change that answers the product's own question. `feature-current-location-marker` lands first, as its own frontend-only change. |
 | D6 | **What "now" means.** (a) introduce a display window, or (b) keep showing everything and say so plainly. | **Decided 2026-11-18: (a), a display window, applied to `/v1/context` first.** The window length is set from the Phase 0 age-of-open-wildfires script. See below. |
 
 ### D1 — reasoning
@@ -119,7 +128,7 @@ D1 to D4 were made on 2026-11-17 and D5 and D6 on 2026-11-18, each as recommende
 Alternatives considered:
 
 - **A different or additional anchor country.** Today's output of `floods-by-title.mjs` shows four countries with more floods than Nigeria's 7: Algeria 14, Democratic Republic of Congo 13, South Africa 12, Kenya 8. Anchoring elsewhere would give a denser flood record than Nigeria. It would also abandon the geography the project has boundary data and contacts for, and one-country anchors keep the same single-season exposure.
-- **Freeze now.** The supply evidence does not by itself show demand, so freezing is a coherent choice. It is addressed by the Phase 2 gate rather than by deciding it today.
+- **Freeze now.** The supply evidence does not by itself show demand, so freezing is a coherent choice. It is addressed by the Phase 2 early stop rule and gate rather than by deciding it today.
 
 Continental is still recommended because the feed carries events across the continent in every season and a two-country frame is what produces the sparse view. **The evidence is about the supply of events, not demand.** It says nothing about whether anyone wants the product.
 
@@ -132,7 +141,7 @@ Options:
 
 Either way the stale-open wildfires are a named problem to handle: under (a) they fall outside the window; under (b) they need separate treatment in counts and wording.
 
-**Decision (2026-11-18): (a), applied consistently to `/v1/context` first.** Whether `/v1/events` adopts the same window is decided in Phase 1, when its effect on the partner page's documented endpoints is known. A near-me count that includes an old fire the feed never closed is wrong in a safety-adjacent product. Whether those old open fires are still burning or were simply never closed is not known (**assumption**: mostly never closed; if wrong, a window would hide real long burns). Phase 0 task 2 commits a script that reports the age of open wildfires; the window length is set from its output, before Phase 1 starts.
+**Decision (2026-11-18): (a), applied consistently to `/v1/context` first.** Whether `/v1/events` adopts the same window is decided in Phase 3, when its effect on the partner page's documented endpoints is known. A near-me count that includes an old fire the feed never closed is wrong in a safety-adjacent product. Whether those old open fires are still burning or were simply never closed is not known (**assumption**: mostly never closed; if wrong, a window would hide real long burns). Phase 0 task 2 commits a script that reports the age of open wildfires; the window length is set from its output, before Phase 3 starts.
 
 ## Non-goals
 
@@ -145,8 +154,9 @@ Either way the stale-open wildfires are a named problem to handle: under (a) the
 
 This direction is a bet and should be falsifiable. The thresholds below are **proposed, for the maintainer to confirm**; none is decided.
 
-- **Before the rains — proposed date 2027-03-31:** at least three of five structured conversations with responders, journalists or logistics planners held and written up the same day; at least one reply to partner outreach. Analytics traffic is not a dry-season criterion: an empty season cannot produce it.
-- **Falsifier — proposed threshold:** if at least three of the conversations held (minimum three held) say they need neighbourhood- or street-level precision and would not use country- and state-level data, this direction does not serve them, and the honest outcome is to freeze rather than build Phase 3.
+- **Early stop check — proposed by 2026-12-15, before the Phase 1 release:** the first three conversations held, each written up the same day, read against the falsifier below.
+- **Gate — proposed 2027-01-12 if at least three conversations are held by then, otherwise 2027-03-31:** at least three of five structured conversations with responders, journalists or logistics planners held and written up the same day; at least one reply to partner outreach. Traffic from the first weeks with continental content is read and recorded, but no traffic threshold applies before the West African rains.
+- **Falsifier — proposed threshold:** if at least three of the conversations held (minimum three held) say they need neighbourhood- or street-level precision and would not use country- and state-level data, this direction does not serve them, and the honest outcome is to freeze. Before the Phase 1 release that is the early stop rule; at the gate it means Phase 3 is not built.
 - **In the 2027 rainy season (proposed window June to September 2027):**
   - *External visitors:* at least 50 Umami sessions a week on average with the maintainer excluded through the existing self-exclusion mechanism (`openspec/archive/proposal-chore-analytics-self-exclusion.md`). Analytics is cookieless (`docs/operations/analytics.md`), so counts undercount and the relative trend is the signal; 50 is a placeholder to be set once a baseline exists.
   - *A partner using the data:* a named organisation outside the maintainer's circle confirms in writing that it used VigilAfrica data (API, digest or the map) for an event-response or reporting task, and the confirmation is recorded in the repository (an issue or a dated note).
@@ -165,4 +175,4 @@ Project review, 2026-11-17: production is stable at v1.6.4; the maintainer raise
 
 ## Review history
 
-An independent review on 2026-11-17 found errors in the first draft. In substance: the draft said every event is closed and the product shows a 30-day window (it shows everything ingested, including stale-open wildfires; now D6); it treated the near-me ladder as a patch to an existing empty state (there is no near-me view; D5 re-opened); it called floods "satellite-detected" (all are GDACS-sourced); it quoted figures that no longer reproduce and an arithmetic slip about floods outside the two countries; it overstated the evidence for a five-month flood gap (one dry season); it omitted the governing lock rule, ADR-004 and the F-ID question; and it listed acceptance criteria that could not be tested. The phases were reordered so the validation gate precedes continental coverage.
+An independent review on 2026-11-17 found errors in the first draft. In substance: the draft said every event is closed and the product shows a 30-day window (it shows everything ingested, including stale-open wildfires; now D6); it treated the near-me ladder as a patch to an existing empty state (there is no near-me view; D5 re-opened); it called floods "satellite-detected" (all are GDACS-sourced); it quoted figures that no longer reproduce and an arithmetic slip about floods outside the two countries; it overstated the evidence for a five-month flood gap (one dry season); it omitted the governing lock rule, ADR-004 and the F-ID question; and it listed acceptance criteria that could not be tested. The phases were reordered so the validation gate precedes continental coverage. On 2026-11-18 the maintainer reordered them again: continental coverage first, because it is what changes what a visitor sees, with the conversations running alongside it, an early stop rule before its release, and the near-me panel after the gate.

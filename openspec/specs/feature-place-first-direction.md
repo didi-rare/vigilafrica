@@ -1,6 +1,6 @@
 # Spec: Place-First Direction (feature-place-first-direction)
 
-**Status:** Proposed — nothing here is implemented. Decisions D1–D4 in the proposal were made on 2026-11-17, so Phase 0 may start. D5 (build a near-me panel with a scope ladder, after the location marker) and D6 (option a: a display window, on `/v1/context` first) were decided on 2026-11-18. **Phase 1 must not start until the D6 window length is set from Phase 0 task 2.**
+**Status:** Proposed — nothing here is implemented. Decisions D1–D4 in the proposal were made on 2026-11-17, so Phase 0 may start. D5 (build a near-me panel with a scope ladder, after the location marker) and D6 (option a: a display window, on `/v1/context` first) were decided on 2026-11-18. Phase order changed on 2026-11-18: **continental coverage is Phase 1** and starts once ADR-017 (Phase 0 task 3) is merged; the near-me panel is **Phase 3**, after the Phase 2 gate, and must not start until the D6 window length is set from Phase 0 task 2.
 **Companion:** [`openspec/proposals/feature-place-first-direction.md`](../proposals/feature-place-first-direction.md) (rationale, evidence, decisions, risks). Decisions here are D1–D6; decisions inside `feature-continental-coverage` are referred to by their titles.
 
 ## Context
@@ -18,17 +18,17 @@ The product's stated question is "what is happening near me?", answered with adm
 - `nearby_events` is only a field on the `ContextResponse` type in `web/src/api/events.ts`; no component renders it. `openspec/proposals/feature-current-location-marker.md` records the same ("fetched but currently unused in the UI") and lists wiring it as out of scope.
 - The context response feeds the `context_resolve` analytics event (`web/src/components/EventsDashboard.tsx:326`) and centres the map (`EventsDashboard.tsx:345-351`).
 - The list always comes from the events fetch. `selectedCategory` falls back to `''` ("All Categories") at `EventsDashboard.tsx:207`; no country is selected by default. The only empty state is "No events match these filters" (`EventsDashboard.tsx:466`).
-- Therefore today's default view already is the "all covered countries" rung, and **Phase 1 is the first near-me interface**, not a patch to an empty state. It is a new panel, an API change and a copy change. It is not small.
+- Therefore today's default view already is the "all covered countries" rung, and **Phase 3 is the first near-me interface**, not a patch to an empty state. It is a new panel, an API change and a copy change. It is not small.
 - The "floods default" decision recorded in `feature-continental-coverage` was never implemented, so D2 is a documentation change.
 
 ### Other facts
 
 - **"Near me" in the API is a fixed 200 km radius, five events**, distance-ordered: `GetNearbyEvents(..., 200.0, 5)` at `api/internal/handlers/context.go:247`.
 - **Flood-first wording lives in copy, not logic:** `web/index.html:9,16,26`, `web/src/App.tsx:88,105,219–220`, and `web/src/pages/ForPartners.tsx` (lines 44, 48–49, 70, 74, 93, 98, 131–135, 247).
-- **Three hard-coded country lists exist**, which matters for Phase 3: `SUPPORTED_COUNTRIES` and `COUNTRY_CENTERS` in `EventsDashboard.tsx:22-25`, and `countryCodeToName` (NG, GH) in `api/internal/handlers/country.go:13`, which `/v1/events` uses to validate the `country` parameter.
+- **Three hard-coded country lists exist**, which Phase 1 removes: `SUPPORTED_COUNTRIES` and `COUNTRY_CENTERS` in `EventsDashboard.tsx:22-25`, and `countryCodeToName` (NG, GH) in `api/internal/handlers/country.go:13`, which `/v1/events` uses to validate the `country` parameter.
 - **Governing documents.** `product.md` is LOCKED; its lock rule has three clauses (maintainer review; matching `roadmap.md` update; no feature without an F-ID in the registry) and §2.1 requires a new ADR in `decisions.md` to promote "Coverage beyond Nigeria" and "Event types beyond Floods and Wildfires". `decisions.md` indexes ADR-001 to ADR-016; **ADR-004 "Initial Country Scope: Nigeria First"** is ACCEPTED and its consequences (bounding box locked to Nigeria; only Nigerian boundaries; non-Nigeria boundary data out of scope before v0.6) conflict with `feature-continental-coverage` and with the shipped Ghana support.
 - **F-IDs in practice.** The registry in `product.md` holds F-001 to F-017 (last: F-017, `product.md:302`); the only other F-ID under `openspec/` is a prospective F-101 in `feature-secondary-oracle.md`. Everything shipped since launch went through OpenSpec proposals and change records, not new F-IDs.
-- **The context contract documentation already disagrees with the implementation** (see Phase 1, *Contract*).
+- **The context contract documentation already disagrees with the implementation** (see Phase 3, *API*).
 
 ## Phase 0 — record the direction (documentation only)
 
@@ -46,7 +46,7 @@ No change under `api/internal/`, `api/cmd/` or `web/src/`. This PR touches `open
 
 ### Registered drift (not fixed here)
 
-- **F-008 (`GET /v1/context`)** in `product.md`, and `api-contract.md` §5, disagree with the implementation: they describe a list `events` in the caller's resolved country/state, with location fields `country_code`/`country_name`/`state_name`, no query parameters, `X-Forwarded-For` read directly, and "always 200, never an error". The implementation returns `nearby_events` (within 200 km, at most five), a location with `country`/`state`/`lat`/`lng`, a `location_source` field, accepts `lat` and `lng`, honours forwarded headers only from a trusted proxy, returns 400 on malformed coordinates and 500 on a database failure (`api/internal/handlers/context.go`). F-008's own "Out of Scope" lists lat/long radius search, which is implemented. Bringing the contract documents into agreement with the endpoint is larger than it reads; Phase 1 must do it for the fields it touches and list what remains.
+- **F-008 (`GET /v1/context`)** in `product.md`, and `api-contract.md` §5, disagree with the implementation: they describe a list `events` in the caller's resolved country/state, with location fields `country_code`/`country_name`/`state_name`, no query parameters, `X-Forwarded-For` read directly, and "always 200, never an error". The implementation returns `nearby_events` (within 200 km, at most five), a location with `country`/`state`/`lat`/`lng`, a `location_source` field, accepts `lat` and `lng`, honours forwarded headers only from a trusted proxy, returns 400 on malformed coordinates and 500 on a database failure (`api/internal/handlers/context.go`). F-008's own "Out of Scope" lists lat/long radius search, which is implemented. Bringing the contract documents into agreement with the endpoint is larger than it reads; Phase 3 must do it for the fields it touches and list what remains.
 
 ### Acceptance criteria
 
@@ -56,11 +56,43 @@ No change under `api/internal/`, `api/cmd/` or `web/src/`. This PR touches `open
 - [ ] ADR-017 exists, supersedes ADR-004 in the ADR index, and states the F-ID outcome.
 - [ ] No file under a sentinel-gated path is touched.
 
-## Phase 1 — near-me panel with a scope ladder
+## Phase 1 — continental coverage
 
-**D5 and D6 decided 2026-11-18; blocked only on the D6 window length (Phase 0 task 2) and on `feature-current-location-marker` landing.** Touches `api/internal/` and `web/src/`, so the PR needs a governance record **in its own diff**. The sentinel (`api/cmd/sentinel/main.go`, `isGovernanceRecord`) accepts only a changed file under `openspec/proposals/` or `openspec/changes/` (archive paths excluded). **A file under `openspec/specs/`, including this spec, does not count, and neither does a record merged in an earlier PR.** The Phase 1 PR must add `openspec/changes/<id>/` (proposal, spec, tasks) or modify a file under `openspec/proposals/`.
+Specified in [`feature-continental-coverage`](../proposals/feature-continental-coverage.md): its work items, its two blocking decisions and its acceptance criteria apply. **Moved ahead of the gate and the near-me panel on 2026-11-18, by the maintainer.** It starts once ADR-017 (Phase 0 task 3) is merged, because `product.md` §2.1 requires an ADR before coverage beyond Nigeria. It touches `api/internal/` and `web/src/`, so each PR carries its own governance record under `openspec/changes/<id>/` (see the sentinel note in Phase 3).
 
-Sequencing: `feature-current-location-marker` (frontend only, IP-derived location labelled approximate) should land first. Phase 1 reuses its approximate-location wording; if the marker has not landed, Phase 1 carries equivalent wording itself.
+Carried over from this change:
+
+- **Decisions at the start:** that proposal's "Decision 1 — how are boundaries loaded?" and "Decision 2 — one Africa bbox, or 54 country bboxes?", and what to do with Madagascar's 2010 boundaries.
+- **Tranching:** the first release covers the 45 countries whose HDX boundaries are published as GeoJSON. The 9 shapefile-only countries (BWA, DJI, GAB, LSO, MDG, MUS, RWA, SYC, TZA) and South Africa's 89 MB file follow.
+- **Hard-coded country lists:** `SUPPORTED_COUNTRIES` and `COUNTRY_CENTERS` (`web/src/components/EventsDashboard.tsx:22-25`) and `countryCodeToName` (`api/internal/handlers/country.go:13`) are replaced by one list derived from the loaded boundaries, so Phase 3 is built once for every covered country.
+- **Country picker:** that proposal's work item 7. Phase 3's country rung reuses it rather than adding a second way to choose a country.
+- **Copy, shipped with the first release:** hazard-neutral landing and metadata text (`web/index.html`, `App.tsx`). The partner page changes per D4: the lead may become hazard-neutral, but it must still describe the digest as flood-only (`ForPartners.tsx:48-49`, `:74`), and partner material may lead with floods in season. **`web/vite.config.ts`** generates `llms.txt` (lines ~134-171) and defines `SITEMAP_ROUTES` (line 84); both stay in step (the `llms.txt` text currently says "floods and wildfires" and "Nigeria and Ghana are live").
+- **Stale-open wildfires:** continental ingestion multiplies them. The list is ordered newest first (`api/internal/database/queries.go:136`), so they sink below current events; the D6 window arrives in Phase 3. After release, record how many appear on the first page; if they crowd it, bring the window forward.
+- **Early stop rule:** checked and recorded before the first release (Phase 2).
+
+### Acceptance criteria (in addition to `feature-continental-coverage`'s)
+
+- [ ] ADR-017 is merged before the first Phase 1 PR.
+- [ ] No two-country list remains in `api/internal/` or `web/src/` (grep for the three names above returns only the derived list).
+- [ ] Landing and metadata copy, including `llms.txt`, does not name floods ahead of other hazards, and nothing claims local or real-time coverage. The partner page still describes the digest as flood-only; partner material may lead with floods in season. (Checked by a test or grep over the three copy sources: `index.html`, `App.tsx`, `ForPartners.tsx`.)
+- [ ] The early stop check is recorded on the release PR before release.
+- [ ] An independent review is recorded on each PR.
+
+## Phase 2 — validation gate
+
+Not engineering. Runs alongside Phase 0 and Phase 1. Recorded so the criteria are fixed before the results are known. Thresholds are the proposal's proposed values and need the maintainer's confirmation.
+
+- [ ] Five structured conversations requested during Phase 0; each one held is written up the same day (how they learned of the last event, the location precision they needed, what they use today, their unprompted reaction, follow-up agreed or not).
+- [ ] **Early stop check before the Phase 1 release** (proposed by 2026-12-15): the falsifier applied to the first three conversations held. If it triggers, Phase 1 is not released.
+- [ ] Falsifier applied as written in the proposal at the gate (at least three of the conversations held, minimum three held, needing neighbourhood- or street-level precision means freeze).
+- [ ] The traffic read-out is recorded each time analytics is read, including when it is zero, from the first full week after the Phase 1 release.
+- [ ] A dated go / hold / freeze decision **before Phase 3 starts** (proposed 2027-01-12 if at least three conversations are held by then, otherwise 2027-03-31).
+
+## Phase 3 — near-me panel with a scope ladder
+
+**D5 and D6 decided 2026-11-18. Blocked on a *go* from the Phase 2 gate, on the D6 window length (Phase 0 task 2) and on `feature-current-location-marker` landing.** Built after Phase 1, so every rung serves all covered countries. Touches `api/internal/` and `web/src/`, so the PR needs a governance record **in its own diff**. The sentinel (`api/cmd/sentinel/main.go`, `isGovernanceRecord`) accepts only a changed file under `openspec/proposals/` or `openspec/changes/` (archive paths excluded). **A file under `openspec/specs/`, including this spec, does not count, and neither does a record merged in an earlier PR.** The Phase 3 PR must add `openspec/changes/<id>/` (proposal, spec, tasks) or modify a file under `openspec/proposals/`.
+
+Sequencing: `feature-current-location-marker` (frontend only, IP-derived location labelled approximate) should land first. Phase 3 reuses its approximate-location wording; if the marker has not landed, Phase 3 carries equivalent wording itself.
 
 ### API
 
@@ -71,7 +103,7 @@ Sequencing: `feature-current-location-marker` (frontend only, IP-derived locatio
   - *Explicit `lat`/`lng`.* The handler leaves `Country` and `State` empty by design (`parseExplicitLocation`: "no point-to-admin-name resolver exists"). The country rung is therefore unavailable for explicit coordinates unless a resolver is added, which is out of scope. Specified behaviour: the near rung and the all-countries rung are returned; the country rung is omitted and the response says why.
   - *`location: null`.* No GeoIP database (`h.geo == nil`), a failed lookup, or localhost leaves `Location` nil with `location_source: "unavailable"`; the handler deliberately has no hidden default centre. Specified behaviour: no near or country rung; the all-countries rung is returned so the panel is not empty.
   - *Visitor outside every covered country.* The IP resolves, the 200 km query returns nothing, and the country matches no covered country. Specified behaviour: the country rung is zero and the panel shows the all-countries rung, saying that the visitor's country is not covered.
-- **Country matching.** The country rung matches the geolocation provider's country name (`geoip` reader, English name from the MaxMind record, `api/internal/geoip/reader.go`) to `events.country_name`, which comes from boundary data. This works for two countries and is a **known risk at 54** (spelling and naming differences such as "Côte d'Ivoire" or "Democratic Republic of the Congo"). Prefer matching on country code if the boundary data carries one; otherwise add a test table of every covered country's provider name against its stored name before widening.
+- **Country matching.** The country rung matches the geolocation provider's country name (`geoip` reader, English name from the MaxMind record, `api/internal/geoip/reader.go`) to `events.country_name`, which comes from boundary data. This was built for two countries and is a **known risk at 54** (spelling and naming differences such as "Côte d'Ivoire" or "Democratic Republic of the Congo"). Prefer matching on country code if the boundary data carries one; otherwise add a test table that checks the provider's name against the stored name for every country loaded in Phase 1.
 - **Performance.** The earlier "reuse the existing spatial index" is withdrawn. The GiST index is on `geom` as geometry (`api/db/migrations/000001_create_events.up.sql:30`) while `GetNearbyEvents` filters on `geom::geography`; whether it is used is unverified. The counting queries need an `EXPLAIN` check. The country and all-countries counts are not spatial. The budget is `product.md` §5: **Context endpoint < 200ms** (`product.md:320`; F-008 repeats it at `:186`; `api-contract.md` §5 states "< 200ms (p99)"). Three counts must fit that budget, and the budget's premise ("local GeoIP lookup only") no longer holds once the handler runs database queries; the existing nearby query already breaks that premise.
 - **Contract first:** edit `openspec/specs/vigilafrica/openapi.yaml`, run `npm run sync:openapi`, and update `api-contract.md`, including the registered F-008 drift above for every field touched.
 
@@ -84,10 +116,9 @@ Components: `api/internal/handlers/context.go`, `api/internal/handlers/context_t
 - **Basis statement** next to the list heading, driven by the API value (D6), for example "open, or closed since DATE" or "in the last N days".
 - **Coverage statement:** one persistent sentence that events come from global satellite-and-model feeds (NASA EONET; floods are GDACS-sourced, which combines models with impact thresholds per `feature-continental-coverage`), and that street-level and urban flash flooding are not covered. It extends the standing honesty rule (the `dashboard-disclaimer` block, `EventsDashboard.tsx:167-176`, and `llms.txt` "Important limitation", `web/vite.config.ts:141`) and must not be dismissible into absence.
 - **Types:** extend the `ContextResponse` type in `web/src/api/events.ts` with the new fields.
-- **Copy:** hazard-neutral landing and metadata text (`web/index.html`, `App.tsx`). The partner page changes per D4: the lead may become hazard-neutral, but it must still describe the digest as flood-only (`ForPartners.tsx:48-49`, `:74`), and partner material may lead with floods in season. **`web/vite.config.ts`** generates `llms.txt` (lines ~134-171) and defines `SITEMAP_ROUTES` (line 84); both stay in step (the `llms.txt` text currently says "floods and wildfires" and "Nigeria and Ghana are live").
 - **Analytics:** a new event for the ladder action (proposed name `scope_ladder_selected`, payload `{ rung }`), added to the table in `docs/operations/analytics.md` (existing rows at lines 118-119), so validation can tell whether anyone used the ladder.
 - **Category rendering:** the `category === 'floods' ? 'flood' : 'fire'` branches in `web/src/components/EventsDashboard.tsx:562,576`, `web/src/components/Map.tsx:66,70` and `web/src/pages/EventDetail.tsx:79,92` are left as they are. They are correct for two categories; D3 defers a third.
-- **Tests:** `web/src/components/EventsDashboard.test.tsx` (ladder, each rung's empty case, the null-location case, the basis statement); `api/internal/handlers/context_test.go` (explicit coordinates, null location, outside-covered-country, each count); update any existing copy assertions in `web/src/pages/ForPartners.test.tsx` and `web/src/App.test.tsx` that the copy change breaks.
+- **Tests:** `web/src/components/EventsDashboard.test.tsx` (ladder, each rung's empty case, the null-location case, the basis statement); `api/internal/handlers/context_test.go` (explicit coordinates, null location, outside-covered-country, each count).
 
 ### Acceptance criteria
 
@@ -97,29 +128,12 @@ Components: `api/internal/handlers/context.go`, `api/internal/handlers/context_t
 - [ ] The basis shown in the interface equals the value the API returns; changing it server-side changes the interface with no web edit.
 - [ ] The behaviour chosen under D6 is recorded in `openapi.yaml`, and counts and `nearby_events` share one basis.
 - [ ] An `EXPLAIN` of each counting query is recorded on the PR, and the endpoint stays within the `product.md` §5 context budget (measured, with the script committed under `scripts/bench-*`).
-- [ ] Landing and metadata copy does not name floods ahead of other hazards, and nothing claims local or real-time coverage. The partner page still describes the digest as flood-only; partner material may lead with floods in season. (Checked by a test or grep over the three copy sources: `index.html`, `App.tsx`, `ForPartners.tsx`.)
 - [ ] The `scope_ladder_selected` event fires on the ladder action and is documented in `docs/operations/analytics.md`.
 - [ ] `openapi.yaml`, the synced handlers copy and `api-contract.md` agree for every touched field; remaining F-008 drift is listed.
 - [ ] `go vet ./...` and the Go suite pass (via `scripts/test-api.ps1` on the Windows host); `npm run lint`, `type-check`, `lint:styles`, `test` and `build` pass in `web/`.
 - [ ] New colours, if any, are tokens in `web/src/styles/tokens.css`.
 - [ ] The PR carries its own governance record under `openspec/changes/<id>/` or `openspec/proposals/`.
 - [ ] An independent review is recorded on the PR (a review comment or review from someone other than the author, or a recorded `sol-review` run, with its findings and their resolution).
-
-## Phase 2 — validation gate
-
-Not engineering. Recorded so the criteria are fixed before the results are known. Thresholds are the proposal's proposed values and need the maintainer's confirmation.
-
-- [ ] Five structured conversations requested; at least three held by 2027-03-31 (proposed), each written up the same day (how they learned of the last event, the location precision they needed, what they use today, their unprompted reaction, follow-up agreed or not).
-- [ ] Falsifier applied as written in the proposal (at least three of the conversations held, minimum three held, needing precision finer than state level means freeze).
-- [ ] The traffic read-out is recorded each time analytics is read, including when it is zero.
-- [ ] A dated go / hold / freeze decision **before Phase 3 starts**.
-
-## Phase 3 — continental coverage
-
-Specified in [`feature-continental-coverage`](../proposals/feature-continental-coverage.md); starts only on a *go* from Phase 2. Carried over from this change:
-
-- The ladder's top rung is defined as "all covered countries", so it needs no web change **for that rung**. The other rungs do: `SUPPORTED_COUNTRIES` and `COUNTRY_CENTERS` in `EventsDashboard.tsx` and the country-name matching in the context handler are hard-coded to two countries, and `countryCodeToName` in `api/internal/handlers/country.go` is a third list that must grow with them.
-- Its work item 7 (country picker for 54 countries) should reuse the ladder's country rung rather than introduce a second way to choose a country.
 
 ## Phase 4 — judge it in season
 
