@@ -11,7 +11,7 @@ The product's stated question is "what is happening near me?", answered with adm
 
 - **Ingestion** polls `status=open` plus `status=closed&days=30` per country (`api/internal/ingestor/eonet.go`, `runIngest`; `closedEventWindowDays = 30`). The 30 days is an ingest parameter only. A comment in that file says wildfires stay open for months.
 - **Reading is unwindowed.** `/v1/events` applies category, country, state and status filters only when the caller sends them (`buildEventFilterClause`, `api/internal/database/queries.go`); `api/internal/handlers/events.go` sets no default and accepts no date parameters (`DateFrom`/`DateTo` are set only by `api/internal/digest/digest.go:68-69`). `GetNearbyEvents` (`queries.go`) has no date or status predicate. No code prunes old events. The list is ordered `event_date DESC NULLS LAST, id DESC` (`queries.go:136`).
-- **So the list shows everything ingested**, including wildfires the feed still marks open that are many months old. The reviewer's uncommitted probe on 2026-11-17 found 42 open wildfires across the Nigeria and Ghana boxes dated October 2024 to March 2025 (not backed by a committed script; Phase 0 task 2 commits one). This is the subject of **D6**.
+- **So the list shows everything ingested**, including wildfires the feed still marks open that are many months old. `scripts/eonet-density/open-wildfire-ages.mjs` (2026-11-18) finds 42 open wildfires in the Nigeria and Ghana boxes, identical in the feed and the production API, dated 2024-10-24 to 2025-03-22; the youngest is 605 days old. This is the subject of **D6**.
 
 ### There is no near-me view today
 
