@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.6.5](https://github.com/didi-rare/vigilafrica/compare/v1.6.4...v1.6.5) (2026-11-18)
+
+
+### Bug Fixes
+
+* **ci:** allowlist the unpatched picomatch ReDoS advisory until 2026-12-31 ([1854e45](https://github.com/didi-rare/vigilafrica/commit/1854e451931ec65ae9b956d001e5499b1abd5732))
+* **ci:** bump Go to 1.26.11 and allowlist the unpatched picomatch advisory ([446b488](https://github.com/didi-rare/vigilafrica/commit/446b488d59fae600eb7b617fb6efabb7c9bb8035))
+* **ci:** bump Go toolchain to 1.26.11 for GO-2026-6859 ([57376dc](https://github.com/didi-rare/vigilafrica/commit/57376dcf101bfdda1cbb8c350e7069143043897a))
+
 ## [1.6.4](https://github.com/didi-rare/vigilafrica/compare/v1.6.3...v1.6.4) (2026-11-05)
 
 
