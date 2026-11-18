@@ -11,6 +11,20 @@
 // from api/internal/ingestor/eonet.go, applying the same withinBBox guard the
 // ingestor applies, so this measures what the pipeline would actually store.
 //
+// ⚠️ KNOWN LIMIT, found 2026-11-17: the FLOOD counts from this script are not
+// reliable. The Africa box below is a rectangle that also covers southern
+// Europe and the Middle East. And firstCoord() reads a polygon's first position
+// as [lon, lat], but flood polygons were delivered with latitude and longitude
+// transposed for a period; floods are Point geometry until late June 2026 and
+// Polygon after (floods-by-title.mjs prints the counts and the first Polygon
+// date). For the proposal's window this script originally reported 159 African
+// floods; counting by title country gives 90. Use floods-by-title.mjs for floods.
+// Wildfires are points, so transposition does not affect them, but the box still
+// admits non-African events, and counts for a closed historical window drift
+// upward as the feed back-fills. The wildfire and total-event figures here are
+// dated snapshots, not stable numbers, and are not an upper bound that a re-run
+// is guaranteed to respect.
+//
 // Run:  node scripts/eonet-density/measure.mjs
 
 const START = '2024-10-01'
