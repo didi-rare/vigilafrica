@@ -11,8 +11,9 @@
 //     category: bbox=<min_lon,min_lat,max_lon,max_lat> formatted %.4f,
 //     category=wildfires, status=open, no days parameter.
 //   - Each event is placed and dated by its MOST RECENT geometry, as
-//     normalizer.selectMostRecentGeometry does (ties and undated geometries fall
-//     back to the last one), and must pass the same inclusive withinBBox guard.
+//     normalizer.selectMostRecentGeometry does (ported line for line: the last
+//     geometry unless an earlier one has a strictly later RFC 3339 date), and
+//     must pass the same inclusive withinBBox guard.
 //   - An event in both boxes counts once, as the ingestor's source_id upsert
 //     would store it once.
 //   - Columns are by the country named in the title ("Wildfire in <country>
@@ -73,19 +74,26 @@ const WINDOWS = [7, 14, 30, 60, 90, 180, 365]
 const titleCountry = (t) => String(t ?? '').match(/^Wildfire in (.+?) \d+$/)?.[1] ?? 'unknown'
 const withinBBox = (b, lon, lat) => lon >= b[0] && lon <= b[2] && lat >= b[1] && lat <= b[3]
 
-// Same rule as normalizer.selectMostRecentGeometry: the latest parseable date
-// wins; if none parse, the last geometry.
+// Go's parseGeometryDate accepts RFC 3339 only; Date.parse alone accepts more.
+const RFC3339 = /^d{4}-d{2}-d{2}Td{2}:d{2}:d{2}(.d+)?(Z|[+-]d{2}:d{2})$/
+const geomTime = (d) => (typeof d === 'string' && RFC3339.test(d) ? Date.parse(d) : null)
+
+// A line-for-line port of normalizer.selectMostRecentGeometry: start from the
+// last geometry; an earlier one replaces it only if its date parses and is
+// strictly later (or the current pick has no parseable date).
 function mostRecentGeometry(geoms) {
-  let best = null
-  let bestT = -Infinity
-  for (const g of geoms) {
-    const t = Date.parse(g?.date ?? '')
-    if (!Number.isNaN(t) && t >= bestT) {
-      best = g
-      bestT = t
+  if (!geoms.length) return null
+  let selected = geoms[geoms.length - 1]
+  let selectedT = geomTime(selected?.date)
+  for (const g of geoms.slice(0, -1)) {
+    const t = geomTime(g?.date)
+    if (t === null) continue
+    if (selectedT === null || t > selectedT) {
+      selected = g
+      selectedT = t
     }
   }
-  return best ?? geoms[geoms.length - 1] ?? null
+  return selected
 }
 
 async function getJson(url) {
@@ -108,7 +116,9 @@ function report(label, rows) {
   console.log(`  open wildfires               : ${rows.length}${rows.length - dated.length ? `   (${rows.length - dated.length} with no usable date)` : ''}`)
   if (!dated.length) return
   console.log(`  oldest / newest event date   : ${sorted[0]} / ${sorted[sorted.length - 1]}`)
-  console.log(`  youngest / median / oldest age: ${ages[0]} / ${ages[Math.floor(ages.length / 2)]} / ${ages[ages.length - 1]} days`)
+  const mid = ages.length / 2
+  const median = ages.length % 2 ? ages[Math.floor(mid)] : (ages[mid - 1] + ages[mid]) / 2
+  console.log(`  youngest / median / oldest age: ${ages[0]} / ${median} / ${ages[ages.length - 1]} days`)
   console.log('\n  age band     Nigeria  Ghana  other    all')
   let lo = -1
   for (const [name, hi] of BANDS) {
@@ -150,7 +160,7 @@ for (const c of COUNTRIES) {
     if (seen.has(ev.id)) continue
     seen.add(ev.id)
     if (Number.isNaN(Date.parse(g.date ?? ''))) undated++
-    feedRows.push({ date: String(g.date ?? ''), country: titleCountry(ev.title) })
+    feedRows.push({ id: String(ev.id), date: String(g.date ?? ''), country: titleCountry(ev.title) })
   }
   await new Promise((r) => setTimeout(r, 250))
 }
@@ -164,8 +174,17 @@ if (apiBase) {
     const body = await getJson(`${apiBase}/v1/events?category=wildfires&status=open&limit=200&offset=${offset}`)
     const page = Array.isArray(body?.data) ? body.data : null
     if (!page) throw new Error('API response has no "data" array')
-    for (const e of page) apiRows.push({ date: String(e.event_date ?? ''), country: String(e.country_name ?? 'unknown') })
+    // source_id is the feed's own event id (e.g. "EONET_13123").
+    for (const e of page) apiRows.push({ id: String(e.source_id ?? ''), date: String(e.event_date ?? ''), country: String(e.country_name ?? 'unknown') })
     if (page.length < 200) break
   }
   report(`production API ${apiBase} (what visitors see)`, apiRows)
+
+  // Same events, not just the same counts: compare the id sets.
+  const feedIds = new Set(feedRows.map((r) => r.id))
+  const apiIds = new Set(apiRows.map((r) => r.id))
+  const onlyFeed = [...feedIds].filter((id) => !apiIds.has(id))
+  const onlyApi = [...apiIds].filter((id) => !feedIds.has(id))
+  console.log(`\n--- feed vs API, by event id ---`)
+  console.log(`  in both: ${[...feedIds].filter((id) => apiIds.has(id)).length}   feed only: ${onlyFeed.length}${onlyFeed.length ? ` (${onlyFeed.join(', ')})` : ''}   API only: ${onlyApi.length}${onlyApi.length ? ` (${onlyApi.join(', ')})` : ''}`)
 }

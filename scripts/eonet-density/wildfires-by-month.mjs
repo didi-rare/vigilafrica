@@ -64,17 +64,26 @@ const EONET = 'https://eonet.gsfc.nasa.gov/api/v3/events'
 
 const withinBBox = (b, lon, lat) => lon >= b[0] && lon <= b[2] && lat >= b[1] && lat <= b[3]
 
+// Go's parseGeometryDate accepts RFC 3339 only; Date.parse alone accepts more.
+const RFC3339 = /^d{4}-d{2}-d{2}Td{2}:d{2}:d{2}(.d+)?(Z|[+-]d{2}:d{2})$/
+const geomTime = (d) => (typeof d === 'string' && RFC3339.test(d) ? Date.parse(d) : null)
+
+// A line-for-line port of normalizer.selectMostRecentGeometry: start from the
+// last geometry; an earlier one replaces it only if its date parses and is
+// strictly later (or the current pick has no parseable date).
 function mostRecentGeometry(geoms) {
-  let best = null
-  let bestT = -Infinity
-  for (const g of geoms) {
-    const t = Date.parse(g?.date ?? '')
-    if (!Number.isNaN(t) && t >= bestT) {
-      best = g
-      bestT = t
+  if (!geoms.length) return null
+  let selected = geoms[geoms.length - 1]
+  let selectedT = geomTime(selected?.date)
+  for (const g of geoms.slice(0, -1)) {
+    const t = geomTime(g?.date)
+    if (t === null) continue
+    if (selectedT === null || t > selectedT) {
+      selected = g
+      selectedT = t
     }
   }
-  return best ?? geoms[geoms.length - 1] ?? null
+  return selected
 }
 
 // A point for the box test: a Point's coordinates, or a Polygon's first vertex.

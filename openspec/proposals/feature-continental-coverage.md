@@ -221,6 +221,8 @@ The flood payoff only arrives at full continental scale: ~~**9 → 159 floods, 1
 
 **Maintainer decision, 2026-08-04: floods remain the default view; wildfires become opt-in via filter.** Without it, widening the box converts a Nigeria *flood* product into an Africa *wildfire* map, and "VigilAfrica shows floods in your area" stops being true at a glance. Adds filter/default work to items 6–7.
 
+> **Reversed 2026-11-18** by `feature-place-first-direction` decision D2 and ADR-017 rule 3: all hazards are shown together by recency, with no default hazard. This decision was never implemented (the dashboard already defaults to "All Categories"), so the reversal removes the filter/default work from items 6–7 rather than adding any.
+
 ### ✅ Open question 4 answered — EONET publishes no rate limit
 
 The v3 API documentation states **no** rate limit, throttle, quota or usage policy. Decision 2's pacing therefore has no documented constraint to design against — pace conservatively by judgement and treat it as a politeness budget, not a compliance one.
@@ -306,7 +308,7 @@ Mobile TBT remains a separate and **currently unverified** question: the inherit
 3. **How many ADM1 units are there in Africa, exactly?** Still estimated at ~700–800, **unverified**. Requires counting features in the downloaded files. *(Partially de-risked: a 795-polygon fixture built from real geometry occupies ~13 MB, confirming geometry volume is not a constraint — but the true count remains unverified.)*
 4. ~~What are EONET's published rate limits?~~ **✅ ANSWERED 2026-08-04 — there are none published.** Pace by judgement; a politeness budget, not a compliance one.
 5. ~~Do we widen to all of Africa at once, or in tranches?~~ **✅ ANSWERED 2026-08-04 — do NOT tranche by region.** West Africa alone yields ~~17 floods/22 months~~ *(superseded 2026-11-17: 14 by title, about 2× Nigeria + Ghana)* for the full build cost; the flood payoff exists only at continental scale. **Tranche by engineering risk instead** — sequence South Africa (89 MB) and the 9 SHP-only countries late.
-6. Does "VigilAfrica" still position as Nigeria/Ghana-focused with continental data, or reposition entirely? Affects item 8 and the partnership narrative.
+6. ~~Does "VigilAfrica" still position as Nigeria/Ghana-focused with continental data, or reposition entirely?~~ **✅ ANSWERED 2026-11-18 — reposition as continental** (`feature-place-first-direction` decision D1; ADR-017). Item 8's copy changes ship with the first continental release. Partner material may still lead with floods in season (D4).
 
 ## Origin
 
