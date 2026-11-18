@@ -43,7 +43,25 @@ const AUDIT_DIR = resolve(dirFlag !== -1 ? process.argv[dirFlag + 1] : '.')
 // release) was removed on 2026-10-29: GitHub WITHDREW the advisory on
 // 2026-10-23, after which neither tree reported it and the gate flagged the
 // entry STALE in both. braces 3.0.3 is still installed; nothing about it changed.
-const ALLOWLIST = []
+const ALLOWLIST = [
+  {
+    ghsa: 'GHSA-fc5q-39xc-vjpf',
+    package: 'picomatch',
+    devOnly: true,
+    reviewBy: '2026-12-31',
+    reason:
+      'ReDoS through single-branch repeated extglobs needs an attacker-controlled glob ' +
+      'pattern. picomatch is installed only as dev tooling in both trees (the OpenSpec ' +
+      'CLI at the root; vite, tinyglobby, micromatch and stylelint in web/), where it ' +
+      'matches patterns written in this repository. It is not in the production web ' +
+      'bundle, and the API is Go. No untrusted input reaches it.',
+    whyNoBump:
+      'No patched release exists: GitHub lists every picomatch version up to 4.0.7, the ' +
+      'latest, as affected (first_patched_version null, checked 2026-11-18). Upgrading ' +
+      'the parents does not help: @fission-ai/openspec 1.17.0 depends on picomatch ' +
+      '^4.0.4 directly. Remove this entry once picomatch publishes a fix.',
+  },
+]
 
 const SEVERITY_RANK = { info: 1, low: 2, moderate: 3, high: 4, critical: 5 }
 const THRESHOLD = SEVERITY_RANK.moderate // mirror the previous --audit-level=moderate
