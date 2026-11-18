@@ -6,7 +6,7 @@ branch: docs/propose-place-first-direction
 
 # Proposal: Place-First Direction — "What Is Happening Near Me", for Any Hazard, Across Africa (feature-place-first-direction)
 
-> **Direction proposal.** It changes what the product says it is, records the evidence for that, and sequences the work that follows. Decisions D1 to D4 were made by the maintainer on 2026-11-17. **D5 is re-opened and D6 is open**, both awaiting a maintainer decision, because both were first framed on a wrong picture of what the product shows today. Phase 0 is documentation only.
+> **Direction proposal.** It changes what the product says it is, records the evidence for that, and sequences the work that follows. Decisions D1 to D4 were made by the maintainer on 2026-11-17. D5 was re-opened and D6 added the same day, because both were first framed on a wrong picture of what the product shows today; **the maintainer decided both on 2026-11-18**, as recommended. The size of the D6 display window is still to be set from Phase 0 evidence. Phase 0 is documentation only.
 >
 > Naming: this proposal's decisions are D1 to D6. The decisions inside `feature-continental-coverage` are referred to by their titles in that file, never by number.
 
@@ -103,7 +103,7 @@ The 2027 rains are the test; see *How we will know*.
 
 ## Decisions
 
-D1 to D4 were made on 2026-11-17 as recommended. D5 and D6 are open.
+D1 to D4 were made on 2026-11-17 and D5 and D6 on 2026-11-18, each as recommended. One parameter remains open: the length of the D6 window.
 
 | # | Question | Status |
 |---|---|---|
@@ -111,8 +111,8 @@ D1 to D4 were made on 2026-11-17 as recommended. D5 and D6 are open.
 | D2 | **Default view.** All hazards by recency, or floods first? | **Decided 2026-11-17: all hazards.** The dashboard already defaults to "All Categories", so this formally reverses the unimplemented 2026-08-04 decision. Note that an all-hazards view currently includes the stale-open wildfires; see D6. |
 | D3 | **More categories now?** The feed also carries severe storms (13 in the window, mostly Indian Ocean cyclones) and volcanoes (4). | **Decided 2026-11-17: not in this change.** Seventeen events in 26 months does not justify new category support yet. Revisit after Phase 3, when Mozambique and Madagascar are covered. The 13 and 4 are from a 2026-11-17 scratch run, **not backed by a committed script**. The wording was "the category registry"; the registry was never built (`roadmap.md`'s v1.3 note records it only as a deferred item, `chore-deferred-work-register` §C1), so read this as "the categories the product supports". |
 | D4 | **The flood digest and the partner offer.** `/v1/digest/today.json` and the partner page are flood-specific. | **Decided 2026-11-17: reword the partner page's lead; leave the digest endpoint alone.** The partner page must continue to describe the digest as flood-only. Partner material may lead with floods in season. Changing the digest's content is a contract change and deserves its own proposal once a partner exists to ask for it. |
-| D5 | **Build a near-me panel with a scope ladder** (Phase 1). | ⏸ **Re-opened 2026-11-17, awaiting maintainer decision.** The earlier "yes, smallest change" rested on there being an existing near-me view to patch. There is none. This is new interface plus an API change. Recommendation: yes, because it is the only change that answers the product's own question, but sequence it after the location marker and scope it honestly. |
-| D6 | **What "now" means.** (a) introduce a display window, or (b) keep showing everything and say so plainly. | ⏸ **Open, awaiting maintainer decision.** See below. |
+| D5 | **Build a near-me panel with a scope ladder** (Phase 1). | **Decided 2026-11-18: yes, after the location marker.** Re-opened on 2026-11-17 because the earlier "yes, smallest change" rested on there being an existing near-me view to patch; there is none. This is new interface plus an API change, built because it is the only change that answers the product's own question. `feature-current-location-marker` lands first, as its own frontend-only change. |
+| D6 | **What "now" means.** (a) introduce a display window, or (b) keep showing everything and say so plainly. | **Decided 2026-11-18: (a), a display window, applied to `/v1/context` first.** The window length is set from the Phase 0 age-of-open-wildfires script. See below. |
 
 ### D1 — reasoning
 
@@ -123,7 +123,7 @@ Alternatives considered:
 
 Continental is still recommended because the feed carries events across the continent in every season and a two-country frame is what produces the sparse view. **The evidence is about the supply of events, not demand.** It says nothing about whether anyone wants the product.
 
-### D6 — what "now" means (open)
+### D6 — what "now" means (decided 2026-11-18: option a)
 
 Options:
 
@@ -132,7 +132,7 @@ Options:
 
 Either way the stale-open wildfires are a named problem to handle: under (a) they fall outside the window; under (b) they need separate treatment in counts and wording.
 
-**Recommendation (not decided): (a), applied consistently to `/v1/context` first.** A near-me count that includes an old fire the feed never closed is wrong in a safety-adjacent product. Whether those old open fires are still burning or were simply never closed is not known (**assumption**: mostly never closed; if wrong, a window would hide real long burns). Phase 0 task 2 commits a script that reports the age of open wildfires so the maintainer decides on a number.
+**Decision (2026-11-18): (a), applied consistently to `/v1/context` first.** Whether `/v1/events` adopts the same window is decided in Phase 1, when its effect on the partner page's documented endpoints is known. A near-me count that includes an old fire the feed never closed is wrong in a safety-adjacent product. Whether those old open fires are still burning or were simply never closed is not known (**assumption**: mostly never closed; if wrong, a window would hide real long burns). Phase 0 task 2 commits a script that reports the age of open wildfires; the window length is set from its output, before Phase 1 starts.
 
 ## Non-goals
 

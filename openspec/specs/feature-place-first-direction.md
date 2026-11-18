@@ -1,6 +1,6 @@
 # Spec: Place-First Direction (feature-place-first-direction)
 
-**Status:** Proposed — nothing here is implemented. Decisions D1–D4 in the proposal were made on 2026-11-17, so Phase 0 may start. **D5 (near-me panel with a scope ladder) was re-opened on 2026-11-17 and D6 (what "now" means) is open; Phase 1 must not start until the maintainer decides both.**
+**Status:** Proposed — nothing here is implemented. Decisions D1–D4 in the proposal were made on 2026-11-17, so Phase 0 may start. D5 (build a near-me panel with a scope ladder, after the location marker) and D6 (option a: a display window, on `/v1/context` first) were decided on 2026-11-18. **Phase 1 must not start until the D6 window length is set from Phase 0 task 2.**
 **Companion:** [`openspec/proposals/feature-place-first-direction.md`](../proposals/feature-place-first-direction.md) (rationale, evidence, decisions, risks). Decisions here are D1–D6; decisions inside `feature-continental-coverage` are referred to by their titles.
 
 ## Context
@@ -58,7 +58,7 @@ No change under `api/internal/`, `api/cmd/` or `web/src/`. This PR touches `open
 
 ## Phase 1 — near-me panel with a scope ladder
 
-**Blocked on D5 and D6.** Touches `api/internal/` and `web/src/`, so the PR needs a governance record **in its own diff**. The sentinel (`api/cmd/sentinel/main.go`, `isGovernanceRecord`) accepts only a changed file under `openspec/proposals/` or `openspec/changes/` (archive paths excluded). **A file under `openspec/specs/`, including this spec, does not count, and neither does a record merged in an earlier PR.** The Phase 1 PR must add `openspec/changes/<id>/` (proposal, spec, tasks) or modify a file under `openspec/proposals/`.
+**D5 and D6 decided 2026-11-18; blocked only on the D6 window length (Phase 0 task 2) and on `feature-current-location-marker` landing.** Touches `api/internal/` and `web/src/`, so the PR needs a governance record **in its own diff**. The sentinel (`api/cmd/sentinel/main.go`, `isGovernanceRecord`) accepts only a changed file under `openspec/proposals/` or `openspec/changes/` (archive paths excluded). **A file under `openspec/specs/`, including this spec, does not count, and neither does a record merged in an earlier PR.** The Phase 1 PR must add `openspec/changes/<id>/` (proposal, spec, tasks) or modify a file under `openspec/proposals/`.
 
 Sequencing: `feature-current-location-marker` (frontend only, IP-derived location labelled approximate) should land first. Phase 1 reuses its approximate-location wording; if the marker has not landed, Phase 1 carries equivalent wording itself.
 
@@ -138,4 +138,4 @@ Not engineering. A dated go / hold / freeze decision at the end of the 2027 rain
 1. Should the nearby radius stay at 200 km once the country rung exists, or shrink so "near you" means something tighter?
 2. For a visitor whose IP resolves outside every covered country, which rung is the default — all covered countries, or a prompt to pick one? (This spec specifies the all-covered-countries fallback; the maintainer may prefer a prompt.)
 3. Does the coverage statement belong on the event detail page as well as the dashboard?
-4. Under D6(a), what is the window, and does it apply to `/v1/events` or only `/v1/context`?
+4. D6 is decided as option (a). Open: the window length (from Phase 0 task 2), and whether `/v1/events` adopts it or only `/v1/context`.
