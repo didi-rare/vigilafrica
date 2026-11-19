@@ -28,7 +28,7 @@
 | ADR-014 | Single-VPS Two-Stack Deployment Model     | ACCEPTED | 2026-04-24 |
 | ADR-015 | Visual Identity & Type System: Ground Truth | ACCEPTED | 2026-06-08 |
 | ADR-016 | Brand Mark: Epicenter Contours            | ACCEPTED | 2026-06-11 |
-| ADR-017 | Continental, Hazard-Neutral Scope; F-ID Rule Retired | ACCEPTED — SUPERSEDES ADR-004 | 2026-11-18 |
+| ADR-017 | Continental, Hazard-Neutral Scope; F-ID Rule Retired | ACCEPTED — SUPERSEDES ADR-004 | 2026-11-19 |
 
 ---
 
@@ -582,8 +582,8 @@ side-by-side at 16/32/120px with nav-context lockups and DFII scores.
 
 ## ADR-017 — Continental, Hazard-Neutral Scope; F-ID Rule Retired
 
-**Date**: 2026-11-18
-**Status**: ACCEPTED — SUPERSEDES ADR-004. Written under Phase 0 of `feature-place-first-direction`. The maintainer's sign-off is the merge of the pull request that adds it; if it merges on a later day, the date above and in the index is changed to that day.
+**Date**: 2026-11-19
+**Status**: ACCEPTED — SUPERSEDES ADR-004. Written under Phase 0 of `feature-place-first-direction`. Drafted 2026-11-18; the maintainer signed it off by merging #318 on 2026-11-19, the date above.
 
 ### Decision
 
