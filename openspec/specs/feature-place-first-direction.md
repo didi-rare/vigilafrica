@@ -1,6 +1,6 @@
 # Spec: Place-First Direction (feature-place-first-direction)
 
-**Status:** Proposed — nothing here is implemented. Decisions D1–D4 in the proposal were made on 2026-11-17, so Phase 0 may start. D5 (build a near-me panel with a scope ladder, after the location marker) and D6 (option a: a display window, on `/v1/context` first) were decided on 2026-11-18. Phase order changed on 2026-11-18: **continental coverage is Phase 1** and starts once ADR-017 (Phase 0 task 3) is merged; the near-me panel is **Phase 3**, after the Phase 2 gate, and must not start until the D6 window length is set from Phase 0 task 2.
+**Status:** Phase 0 (documentation) complete on branch `docs/place-first-phase-0`, 2026-11-19; no engineering phase is implemented. Decisions D1–D4 in the proposal were made on 2026-11-17, so Phase 0 may start. D5 (build a near-me panel with a scope ladder, after the location marker) and D6 (option a: a display window, on `/v1/context` first) were decided on 2026-11-18. Phase order changed on 2026-11-18: **continental coverage is Phase 1** and starts once ADR-017 (Phase 0 task 3) is merged; the near-me panel is **Phase 3**, after the Phase 2 gate, and must not start until the D6 window length is set from Phase 0 task 2.
 **Companion:** [`openspec/proposals/feature-place-first-direction.md`](../proposals/feature-place-first-direction.md) (rationale, evidence, decisions, risks). Decisions here are D1–D6; decisions inside `feature-continental-coverage` are referred to by their titles.
 
 ## Context
@@ -27,7 +27,7 @@ The product's stated question is "what is happening near me?", answered with adm
 - **Flood-first wording lives in copy, not logic:** `web/index.html:9,16,26`, `web/src/App.tsx:88,105,219–220`, and `web/src/pages/ForPartners.tsx` (lines 44, 48–49, 70, 74, 93, 98, 131–135, 247).
 - **Three hard-coded country lists exist**, which Phase 1 removes: `SUPPORTED_COUNTRIES` and `COUNTRY_CENTERS` in `EventsDashboard.tsx:22-25`, and `countryCodeToName` (NG, GH) in `api/internal/handlers/country.go:13`, which `/v1/events` uses to validate the `country` parameter.
 - **Governing documents.** `product.md` is LOCKED; its lock rule has three clauses (maintainer review; matching `roadmap.md` update; no feature without an F-ID in the registry) and §2.1 requires a new ADR in `decisions.md` to promote "Coverage beyond Nigeria" and "Event types beyond Floods and Wildfires". `decisions.md` indexes ADR-001 to ADR-016; **ADR-004 "Initial Country Scope: Nigeria First"** is ACCEPTED and its consequences (bounding box locked to Nigeria; only Nigerian boundaries; non-Nigeria boundary data out of scope before v0.6) conflict with `feature-continental-coverage` and with the shipped Ghana support.
-- **F-IDs in practice.** The registry in `product.md` holds F-001 to F-017 (last: F-017, `product.md:302`); no F-ID above F-017 exists anywhere under `openspec/` (an earlier draft's "F-101" was a substring of the example source id `WF-1012345`). Everything shipped since launch went through OpenSpec proposals and change records, not new F-IDs.
+- **F-IDs in practice.** The registry in `product.md` holds F-001 to F-017 (last: F-017, `product.md:325` as of 2026-11-19); no F-ID above F-017 exists anywhere under `openspec/` (an earlier draft's "F-101" was a substring of the example source id `WF-1012345`). Everything shipped since launch went through OpenSpec proposals and change records, not new F-IDs.
 - **The context contract documentation already disagrees with the implementation** (see Phase 3, *API*).
 
 ## Phase 0 — record the direction (documentation only)
@@ -50,11 +50,11 @@ No change under `api/internal/`, `api/cmd/` or `web/src/`. This PR touches `open
 
 ### Acceptance criteria
 
-- [ ] Every figure in the proposal's evidence section is reproducible from a script committed under `scripts/`, or is explicitly labelled as not backed by one.
-- [ ] `product.md` and `roadmap.md` agree with each other on **scope and milestone statements**. (They are not required to agree with production at feature-registry level while the registry is untouched; that is the registered drift above.)
-- [ ] The roadmap milestone index has no row marked *Proposed* for work that has shipped.
-- [ ] ADR-017 exists, supersedes ADR-004 in the ADR index, and states the F-ID outcome.
-- [ ] No file under a sentinel-gated path is touched.
+- [x] Every figure in the proposal's evidence section is reproducible from a script committed under `scripts/`, or is explicitly labelled as not backed by one. *(2026-11-18: `wildfires-by-month.mjs` and `open-wildfire-ages.mjs` added; every quoted figure re-run by an independent reviewer and reproduced.)*
+- [x] `product.md` and `roadmap.md` agree with each other on **scope and milestone statements**. *(2026-11-18: both mark coverage beyond Nigeria as promoted by ADR-017 and point to the "Next" milestone.)* (They are not required to agree with production at feature-registry level while the registry is untouched; that is the registered drift above.)
+- [x] The roadmap milestone index has no row marked *Proposed* for work that has shipped. *(2026-11-18: v1.3 marked complete; v1.4, v1.5 and v1.6 added from the changelog.)*
+- [x] ADR-017 exists, supersedes ADR-004 in the ADR index, and states the F-ID outcome. *(Rule 4: retired for new work.)*
+- [x] No file under a sentinel-gated path is touched. *(`git diff --name-only origin/development` lists only `openspec/` and `scripts/`.)*
 
 ## Phase 1 — continental coverage
 
@@ -62,7 +62,7 @@ Specified in [`feature-continental-coverage`](../proposals/feature-continental-c
 
 Carried over from this change:
 
-- **Decisions at the start:** that proposal's "Decision 1 — how are boundaries loaded?" and "Decision 2 — one Africa bbox, or 54 country bboxes?", and what to do with Madagascar's 2010 boundaries.
+- **Decisions at the start:** that proposal's "Decision 1 — how are boundaries loaded?" and "Decision 2 — one Africa bbox, or 54 country bboxes?", and what to do with Madagascar's 2010 boundaries. **Decided by the maintainer 2026-11-19:** a seed loader driven by a checked-in manifest; one box per country with pacing; Madagascar deferred to the shapefile tranche. Recorded in that proposal.
 - **Tranching:** the first release covers the 45 countries whose HDX boundaries are published as GeoJSON. The 9 shapefile-only countries (BWA, DJI, GAB, LSO, MDG, MUS, RWA, SYC, TZA) and South Africa's 89 MB file follow.
 - **Hard-coded country lists:** `SUPPORTED_COUNTRIES` and `COUNTRY_CENTERS` (`web/src/components/EventsDashboard.tsx:22-25`) and `countryCodeToName` (`api/internal/handlers/country.go:13`) are replaced by one list derived from the loaded boundaries, so Phase 3 is built once for every covered country.
 - **Country picker:** that proposal's work item 7. Phase 3's country rung reuses it rather than adding a second way to choose a country.

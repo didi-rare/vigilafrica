@@ -245,6 +245,8 @@ At 40 MB that is not reviewable, not diffable, and bloats every clone and CI che
 
 **Recommendation: (b).** Boundary data is reference data with its own release cadence, not schema. Bundling it into migrations conflates the two and is already uncomfortable at 2.3 MB.
 
+> **✅ DECIDED 2026-11-19 by the maintainer: (b), a seed loader, driven by a manifest checked into the repo.** The manifest has one entry per country: source URL, vintage, ADM1 name field and a checksum. The loader refuses a file whose checksum differs. Each country change is then a one-line reviewable diff, a deploy is reproducible, and the manifest is where work item 9's per-country source and vintage are recorded. Shapes are loaded at full resolution (open question 2).
+
 ## Decision 2 — one Africa bbox, or 54 country bboxes? (blocking)
 
 Today: 2 countries × 2 requests (open + closed) = **4 requests per tick**, iterated **sequentially with no inter-country pacing** (`scheduler.go:121`). There is retry/backoff and `RetryAfter` handling *within* a country fetch, but nothing between countries.
@@ -261,6 +263,8 @@ At 54 countries that becomes **108 sequential requests per tick**.
   - ✗ Ingestion cycle wall-time grows ~27×.
 
 **Recommendation: B, with pacing added.** The per-country ingestion-run records and the bbox guard are real quality controls that have already caught one production defect. Losing them to save requests is a bad trade for a data-integrity-sensitive product. But the pacing work is genuine and must be scoped in, not assumed.
+
+> **✅ DECIDED 2026-11-19 by the maintainer: B, one box per country, with a pause between countries.** For the 45-country first release that is about 90 requests per hourly tick (2 per country). Known limit, accepted: the boxes are rectangles that overlap neighbours (the Nigeria box already brings in fires from Cameroon, Benin and Niger), so per-country run counts measure a box rather than a country, and neighbouring boxes fetch some events twice; storage deduplicates by source id.
 
 ## Work items
 
@@ -303,7 +307,7 @@ Mobile TBT remains a separate and **currently unverified** question: the inherit
 
 ## Open questions
 
-1. ~~**Is HDX COD ADM1 available and current for all ~54 countries?**~~ **✅ ANSWERED 2026-08-02 — yes, 54/54.** See the survey section above. Residual sub-questions: what to do about **Madagascar (2010 boundaries)**, and whether to add SHP support to the generator or an `ogr2ogr` pre-step for the 9 non-GeoJSON countries.
+1. ~~**Is HDX COD ADM1 available and current for all ~54 countries?**~~ **✅ ANSWERED 2026-08-02 — yes, 54/54.** See the survey section above. Residual sub-questions: what to do about **Madagascar (2010 boundaries)** (**✅ DECIDED 2026-11-19 by the maintainer: deferred.** Madagascar is shapefile-only, so it is not in the 45-country first release. When the shapefile tranche starts: check HDX for a newer file first; otherwise use the 2010 file with a visible vintage warning. geoBoundaries' alternative, checked 2026-11-18, is 2017 with 22 units and ODbL-licensed), and whether to add SHP support to the generator or an `ogr2ogr` pre-step for the 9 non-GeoJSON countries.
 2. ~~**What simplification tolerance?**~~ **✅ ANSWERED — none. Do not simplify.** The sweep was re-run from a committed, **seeded** harness ([`scripts/bench-simplification/sweep.sql`](../../scripts/bench-simplification/sweep.sql)) and overturned the earlier `0.001°` recommendation: its headline "zero unassigned points" was an artefact of unseeded sampling, and the real figure is **0.038%**. Since geometry volume was separately measured as *not* a constraint (13 MB at 795 polygons), simplification buys ~440 kB in exchange for a non-zero rate of silent enrichment failure. Load at full resolution; revisit only if volume ever becomes a measured constraint.
 3. **How many ADM1 units are there in Africa, exactly?** Still estimated at ~700–800, **unverified**. Requires counting features in the downloaded files. *(Partially de-risked: a 795-polygon fixture built from real geometry occupies ~13 MB, confirming geometry volume is not a constraint — but the true count remains unverified.)*
 4. ~~What are EONET's published rate limits?~~ **✅ ANSWERED 2026-08-04 — there are none published.** Pace by judgement; a politeness budget, not a compliance one.
