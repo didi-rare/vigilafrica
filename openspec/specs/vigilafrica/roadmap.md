@@ -5,6 +5,8 @@
 **Maintained by**: @didi-rare
 
 > **Governance rule**: Milestone scope is locked. Adding a feature to a milestone, removing one, or changing milestone ordering requires explicit maintainer approval and an updated ADR if a technology decision is involved. Feature IDs reference `product.md` — all acceptance criteria live there.
+>
+> **Amended 2026-11-18 by ADR-017:** no new F-IDs are assigned (none has been since v0.5). New milestones name the OpenSpec records that hold their acceptance criteria; for v1.4 to v1.6 the records are the ones named in their CHANGELOG entries. F-001 to F-017 keep referring to `product.md`.
 
 ---
 
@@ -23,7 +25,11 @@
 | v1.0 | Credible public launch | Quality gate (no new F-IDs) | ✅ Complete |
 | v1.1 | Release automation activation | Release-please CI infrastructure (no new F-IDs) | ✅ Complete |
 | v1.2 | Post-launch quality sweep | HDX boundaries + chore-post-v11-quality-sweep roll-up | ✅ Complete |
-| v1.3 | Category expansion + design-system tokens | Impact categories, risk intelligence, type/spacing/z-index tokens, stylelint suppression audit | Proposed |
+| v1.3 | Category expansion + design-system tokens | Shipped with a different scope: daily flood digest (endpoint and scheduled email), self-hosted Umami with the feedback widget, Ground Truth rebrand, border-event enrichment, closed-event ingestion, web audit, enrichment `area_m2` speed-up. Categories archived unimplemented; tokens still open (see section) | ✅ Complete (v1.3.0–v1.3.7, 2026-07-17 to 2026-08-07) |
+| v1.4 | Paginated events + context contract | Events pagination with visible truncation; unified client-IP resolution and explicit `lat`/`lng` on `/v1/context`; OpenAPI repair and parse gate | ✅ Complete (v1.4.0, 2026-08-12) |
+| v1.5 | Deploy hardening | Forced-command deploy protocol and privilege boundary; pinned VPS host key | ✅ Complete (v1.5.0, 2026-08-16) |
+| v1.6 | Data integrity + security upkeep | lib/pq dropped for pgx; per-environment deploy accounts; GDACS geometry resolved from GDACS; maplibre-gl 6; GDACS outage reported as a degraded run; trusted-proxy CIDRs narrowed; Umami 3.4.0; Go and npm advisory fixes through Go 1.26.11 | ✅ Complete (v1.6.0–v1.6.5, 2026-09-04 to 2026-11-18) |
+| Next | Place-first, continental direction (`feature-place-first-direction`, ADR-017) | Phase 1 continental coverage · Phase 2 validation gate · Phase 3 near-me panel · Phase 4 judged in the 2027 rains (see section) | In progress: Phase 0 |
 
 
 > **Release-state note**: The milestone index above is the authoritative release-state source for milestone tracking. Historical checklist boxes below are preserved as delivery records and are not retroactively rewritten when a milestone is marked release-complete.
@@ -342,7 +348,8 @@ These are blockers that must be resolved before v0.1 development begins. They ar
 > - **What v1.3 actually delivered** across v1.3.0–v1.3.7: the Ground Truth rebrand and SPA
 >   rewrite, border-event enrichment, EONET closed-event ingestion, the web-audit batch
 >   (Accessibility 97→100, CLS 0.245→0), the enrichment `area_m2` optimisation, react-router 8
->   with the audit allowlist emptied, and events pagination.
+>   with the audit allowlist emptied. *(Corrected 2026-11-18: events pagination was listed
+>   here but first shipped in v1.4.0.)*
 >
 > **The acceptance criteria below are superseded** and are retained only as the record of
 > what was once intended. Do not treat them as a gate.
@@ -386,6 +393,25 @@ These are blockers that must be resolved before v0.1 development begins. They ar
 
 ---
 
+## Next — Place-First, Continental Direction
+
+**Governed by**: ADR-017 and [`feature-place-first-direction`](../../proposals/feature-place-first-direction.md) (proposal) with its [spec](../feature-place-first-direction.md), which holds the acceptance criteria for every phase.
+
+**Goal**: answer "what is happening near me?" with a place name, for any African country, whatever the hazard and the season.
+
+**Status**: Phase 0 (record the direction, documentation only) in progress, 2026-11-18. Phases run in this order, set by the maintainer on 2026-11-18:
+
+| Phase | Content | Gate |
+| --- | --- | --- |
+| 1 | Continental coverage ([`feature-continental-coverage`](../../proposals/feature-continental-coverage.md)): the 45 countries with GeoJSON boundaries first, then the 9 shapefile-only countries and South Africa; hazard-neutral copy | Starts once ADR-017 is merged. `feature-continental-coverage`'s "Decision 1" (seed loader with a checked-in manifest), "Decision 2" (one box per country, paced) and Madagascar (deferred) were decided 2026-11-19. Not released if the Phase 2 early stop check triggers |
+| 2 | Validation: five structured conversations and a traffic read-out, alongside Phases 0 and 1 | Early stop check before the Phase 1 release (proposed by 2026-12-15); go / hold / freeze decision before Phase 3 (proposed 2027-01-12, or 2027-03-31 if fewer than three conversations are held). Thresholds are proposed, not yet confirmed |
+| 3 | Near-me panel with a scope ladder (decision D5) and a display window on `/v1/context` (decision D6) | Only on a *go* from Phase 2, after `feature-current-location-marker` lands; the window length is set first |
+| 4 | Judged in the 2027 rainy season (proposed June to September 2027) | Dated go / hold / freeze decision at the end of the season |
+
+**What this milestone is not:** new hazard categories (D3), any change to `/v1/digest/today.json` (D4), new data sources, alerts, accounts or ADM2 naming.
+
+---
+
 ## Post-MVP Backlog (Not Before v1.0)
 
 The following items are explicitly deferred. They must not be built before v1.0 is tagged, unless a new ADR explicitly promotes them with maintainer sign-off:
@@ -396,7 +422,7 @@ The following items are explicitly deferred. They must not be built before v1.0 
 | Alert webhooks / subscriptions    | Requires auth, rate limiting, SLA — post-v1.0 complexity       |
 | LGA (ADM2) enrichment             | ADM1 proves value first; LGA boundary data quality varies       |
 | SMS / push notifications          | Out of scope for web-first MVP                                  |
-| Coverage beyond 1–3 countries     | Expansion model (v0.6) gates this                              |
+| ~~Coverage beyond 1–3 countries~~ | **Promoted 2026-11-18 by ADR-017**; now Phase 1 of the place-first direction (above) |
 | User accounts / authentication    | No user data collected in MVP                                  |
 | Parametric insurance data export  | Enterprise feature                                             |
 | Fundraising / sustainability UI   | Deferred (ADR-005) — post v1.0 launch                         |

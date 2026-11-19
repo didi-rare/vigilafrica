@@ -15,7 +15,7 @@
 | ADR-001 | Map Library: MapLibre GL JS               | ACCEPTED | 2026-04-12 |
 | ADR-002 | Frontend Deployment: Vercel               | ACCEPTED | 2026-04-12 |
 | ADR-003 | Backend Deployment: Single VPS            | ACCEPTED | 2026-04-12 |
-| ADR-004 | Initial Country Scope: Nigeria First      | ACCEPTED | 2026-04-12 |
+| ADR-004 | Initial Country Scope: Nigeria First      | SUPERSEDED by ADR-017 | 2026-04-12 |
 | ADR-005 | GoFundMe / Fundraising: Deferred          | ACCEPTED | 2026-04-12 |
 | ADR-006 | Contact / Community: GitHub Issues Only   | ACCEPTED | 2026-04-12 |
 | ADR-007 | Go Backend Package Structure              | ACCEPTED | 2026-04-12 |
@@ -28,6 +28,7 @@
 | ADR-014 | Single-VPS Two-Stack Deployment Model     | ACCEPTED | 2026-04-24 |
 | ADR-015 | Visual Identity & Type System: Ground Truth | ACCEPTED | 2026-06-08 |
 | ADR-016 | Brand Mark: Epicenter Contours            | ACCEPTED | 2026-06-11 |
+| ADR-017 | Continental, Hazard-Neutral Scope; F-ID Rule Retired | ACCEPTED — SUPERSEDES ADR-004 | 2026-11-18 |
 
 ---
 
@@ -122,7 +123,7 @@ When scale requires it: move PostgreSQL to a managed provider (Supabase, Neon, o
 ## ADR-004 — Initial Country Scope: Nigeria First
 
 **Date**: 2026-04-12
-**Status**: ACCEPTED
+**Status**: SUPERSEDED by [ADR-017](#adr-017--continental-hazard-neutral-scope-f-id-rule-retired), which lists which of the consequences below are void and which stand.
 
 ### Decision
 
@@ -576,3 +577,53 @@ side-by-side at 16/32/120px with nav-context lockups and DFII scores.
 - Favicon, OG image, README banner, and map-marker geometry must derive from
   this mark (Phase C of `feat-ground-truth-identity`).
 - Revisiting the mark requires a superseding ADR.
+
+---
+
+## ADR-017 — Continental, Hazard-Neutral Scope; F-ID Rule Retired
+
+**Date**: 2026-11-18
+**Status**: ACCEPTED — SUPERSEDES ADR-004. Written under Phase 0 of `feature-place-first-direction`. The maintainer's sign-off is the merge of the pull request that adds it; if it merges on a later day, the date above and in the index is changed to that day.
+
+### Decision
+
+1. **Scope is continental.** VigilAfrica covers African countries, not Nigeria first. Countries are added through `feature-continental-coverage`; its first release targets the 45 countries whose HDX COD boundaries are published as GeoJSON.
+2. **A country counts as covered only when its states can be named.** Its ADM1 boundaries are loaded, the enrichment trigger resolves events inside it to a state, and its boundary source and vintage are recorded where `feature-continental-coverage` work item 9 puts them. Nigeria and Ghana count as covered now; their source and vintage are recorded when that work item lands. Ingesting events from a country, or labelling border events with an ADM0 outline (migration `000012`), does not make it covered.
+3. **The product is hazard-neutral.** No hazard is the default or the lead. Every category the product supports is shown together, ordered by recency (`feature-place-first-direction` decision D2). The supported categories stay **floods and wildfires**. "Event types beyond Floods and Wildfires" stays out of scope (same proposal, decision D3) and still needs its own ADR to promote it.
+4. **The F-ID rule is retired for new work.** An OpenSpec record (a proposal under `openspec/proposals/` or a change record under `openspec/changes/<id>/`) is the unit of traceability. The Sentinel (ADR-010) requires a PR that touches a gated path to carry one, with the exemptions ADR-010 lists; it checks that a record is present, not what it says, so review still judges whether the record governs the change. The registry in `product.md` (F-001 to F-017) stays as the record of the MVP's features and is not extended. No new F-IDs are assigned. Features shipped since launch through OpenSpec records are compliant as they stand. The F-ID registry is not corrected here: an entry that disagrees with the code is recorded as **registered drift** (`feature-place-first-direction` spec, Phase 0) and fixed by the change that next touches that feature.
+
+### Context
+
+- ADR-004 limited the MVP to Nigeria until Nigeria worked end to end. That condition has been met, and its consequences were scoped to the MVP and to v0.6. Ghana was added at v0.6 as the proof of the onboarding template. Nigeria and Ghana both run in production (v1.6.5). HDX state polygons for both replaced rectangular approximations in v1.2.0 (migration `000010`), and ADM0 outlines for seven neighbours label border events (`000012`).
+- But Ghana is "coverage beyond Nigeria", which `product.md` §2.1 says must not be implemented "until explicitly promoted by a new ADR in `decisions.md`". No ADR promoted it. This ADR does, for Ghana and for the rest of the continent.
+- `feature-continental-coverage` cannot start without this ADR, for the same §2.1 reason.
+- The two-country frame produces a sparse product. Measured in `feature-place-first-direction` with scripts committed under `scripts/eonet-density/`:
+  - Nigeria and Ghana had no flood in nine consecutive months, September 2025 to May 2026 (`floods-by-title.mjs`). That rests on one dry season.
+  - 295 of the 333 wildfires in the two countries' ingestion boxes since October 2024 are dated November to February, and none June to September (`wildfires-by-month.mjs`). The boxes also cover parts of Benin, Niger and Cameroon.
+  - Through that dry season, floods continued elsewhere in Africa: between 5 and 10 in each month from November 2025 to March 2026 (`floods-by-title.mjs`).
+- What is true in every season and every country is the translation: an event with coordinates becomes an event with a place name. The hazard is a property of the event, not of the product.
+- The F-ID rule ("No feature may be implemented unless it has an F-ID in this registry") has not been followed since launch. The registry stops at F-017. The digest, pagination, `location_source` and every later feature went through OpenSpec records instead. A rule that the practice ignores and no check enforces is worse than no rule: it makes every recent change technically non-compliant and hides which rules are real.
+
+### Rationale
+
+- **Continental, because density is the constraint.** The feed carries events somewhere in Africa in every season. Two countries carry them for a few months a year. This rests on supply only; it says nothing about demand, which `feature-place-first-direction` Phase 2 tests separately.
+- **Coverage tied to named states keeps ADR-004's real point.** ADR-004 rejected "claim coverage of 54 countries with nothing behind it". Rule 2 keeps that standard: no country is advertised before its states can be named.
+- **Hazard-neutral, because the hazards peak in different seasons.** Floods follow the rains; wildfires in the two boxes follow the dry season. Leading with either one leaves the product empty for most of the year. Together they still leave some months empty in two countries (5 of 20 since April 2025), which is one more reason for continental coverage.
+- **Retire the F-ID rule rather than revive it.** OpenSpec records already carry what an F-ID was meant to carry (scope, acceptance criteria, rationale), and CI enforces them. Assigning F-IDs from now on would add a second, unenforced identifier for the same thing. It would also need a decision on who assigns them and a backfill for features shipped since launch. Nothing would read the IDs.
+
+### Consequences
+
+**ADR-004 consequences that become void:**
+- "EONET ingestion bounding box locked to Nigeria". Boxes follow the covered countries. Whether that is one Africa box or one box per country is `feature-continental-coverage` "Decision 2", not settled here.
+- "Only Nigeria ADM0 and ADM1 boundary GeoJSON is loaded". Boundaries are loaded for every covered country. How they are loaded is `feature-continental-coverage` "Decision 1", not settled here.
+- "Any agent adding non-Nigeria boundary data before v0.6 is out of scope". v0.6 has passed.
+
+**ADR-004 consequences that stand, adapted:**
+- "Country expansion follows the Country Onboarding Template process". `country-onboarding-template.md` stays in force until `feature-continental-coverage` replaces the per-country manual process. That proposal decides whether the template is retired or becomes the loader's checklist. Its checks (CRS, ADM1 name field, box overlap, acceptance on real events) must survive in one form or the other.
+
+**Elsewhere:**
+- `product.md`: a dated direction addendum to §1–§2 refers to this ADR. The "MVP Scope (Locked)" table is marked historical. In §2.1, "Coverage beyond Nigeria" is marked promoted by ADR-017, and "Event types beyond Floods and Wildfires" stays. The lock rule's F-ID clause is replaced by a pointer to rule 4. These are Phase 0 task 4 of `feature-place-first-direction`.
+- `roadmap.md` records this direction as a milestone (Phase 0 task 5).
+- `feature-continental-coverage` may start once this ADR is merged. Its 2026-08-04 "floods default, wildfires opt-in" decision is reversed by rule 3; a dated note in that proposal records the reversal in the same change as this ADR. Its "Decision 1", "Decision 2" and the treatment of Madagascar's 2010 boundaries remain open and are the maintainer's.
+- With the first continental release, copy and metadata that say "Nigeria and Ghana live" change in the same release. Nothing may claim local or real-time coverage.
+- Agents and contributors no longer cite or request F-IDs. A PR that touches a Sentinel-gated path carries an OpenSpec record, as ADR-010 already requires.
