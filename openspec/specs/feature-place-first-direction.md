@@ -1,6 +1,6 @@
 # Spec: Place-First Direction (feature-place-first-direction)
 
-**Status:** Phase 0 (documentation) complete on branch `docs/place-first-phase-0`, 2026-11-19; no engineering phase is implemented. Decisions D1–D4 in the proposal were made on 2026-11-17, so Phase 0 may start. D5 (build a near-me panel with a scope ladder, after the location marker) and D6 (option a: a display window, on `/v1/context` first) were decided on 2026-11-18. Phase order changed on 2026-11-18: **continental coverage is Phase 1** and starts once ADR-017 (Phase 0 task 3) is merged; the near-me panel is **Phase 3**, after the Phase 2 gate, and must not start until the D6 window length is set from Phase 0 task 2.
+**Status:** Phase 0 (documentation) complete on branch `docs/place-first-phase-0`, 2026-11-19; no engineering phase is implemented. Decisions D1–D4 in the proposal were made on 2026-11-17, so Phase 0 may start. D5 (build a near-me panel with a scope ladder, after the location marker) and D6 (option a: a display window, on `/v1/context` first) were decided on 2026-11-18. Phase order changed on 2026-11-18: **continental coverage is Phase 1** and starts once ADR-017 (Phase 0 task 3) is merged; the near-me panel is **Phase 3**, after the Phase 2 gate, D6 window length decided 2026-11-25: 30 days.
 **Companion:** [`openspec/proposals/feature-place-first-direction.md`](../proposals/feature-place-first-direction.md) (rationale, evidence, decisions, risks). Decisions here are D1–D6; decisions inside `feature-continental-coverage` are referred to by their titles.
 
 ## Context
@@ -90,7 +90,7 @@ Not engineering. Runs alongside Phase 0 and Phase 1. Recorded so the criteria ar
 
 ## Phase 3 — near-me panel with a scope ladder
 
-**D5 and D6 decided 2026-11-18. Blocked on a *go* from the Phase 2 gate, on the D6 window length (Phase 0 task 2) and on `feature-current-location-marker` landing.** Built after Phase 1, so every rung serves all covered countries. Touches `api/internal/` and `web/src/`, so the PR needs a governance record **in its own diff**. The sentinel (`api/cmd/sentinel/main.go`, `isGovernanceRecord`) accepts only a changed file under `openspec/proposals/` or `openspec/changes/` (archive paths excluded). **A file under `openspec/specs/`, including this spec, does not count, and neither does a record merged in an earlier PR.** The Phase 3 PR must add `openspec/changes/<id>/` (proposal, spec, tasks) or modify a file under `openspec/proposals/`.
+**D5 and D6 decided 2026-11-18. Blocked on a *go* from the Phase 2 gate and on `feature-current-location-marker` landing. The D6 window is 30 days (decided 2026-11-25).** Built after Phase 1, so every rung serves all covered countries. Touches `api/internal/` and `web/src/`, so the PR needs a governance record **in its own diff**. The sentinel (`api/cmd/sentinel/main.go`, `isGovernanceRecord`) accepts only a changed file under `openspec/proposals/` or `openspec/changes/` (archive paths excluded). **A file under `openspec/specs/`, including this spec, does not count, and neither does a record merged in an earlier PR.** The Phase 3 PR must add `openspec/changes/<id>/` (proposal, spec, tasks) or modify a file under `openspec/proposals/`.
 
 Sequencing: `feature-current-location-marker` (frontend only, IP-derived location labelled approximate) should land first. Phase 3 reuses its approximate-location wording; if the marker has not landed, Phase 3 carries equivalent wording itself.
 
@@ -152,4 +152,4 @@ Not engineering. A dated go / hold / freeze decision at the end of the 2027 rain
 1. Should the nearby radius stay at 200 km once the country rung exists, or shrink so "near you" means something tighter?
 2. For a visitor whose IP resolves outside every covered country, which rung is the default — all covered countries, or a prompt to pick one? (This spec specifies the all-covered-countries fallback; the maintainer may prefer a prompt.)
 3. Does the coverage statement belong on the event detail page as well as the dashboard?
-4. D6 is decided as option (a). Open: the window length (from Phase 0 task 2), and whether `/v1/events` adopts it or only `/v1/context`.
+4. D6 is decided as option (a). The window length is 30 days (decided 2026-11-25). Open: whether `/v1/events` adopts it or only `/v1/context`.
