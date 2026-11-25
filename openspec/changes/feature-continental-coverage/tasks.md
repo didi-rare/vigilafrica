@@ -4,10 +4,10 @@ Each implementation PR ticks its tasks here with evidence. Ticking this file in 
 
 ## 1. Decisions (maintainer)
 
-- [ ] 1.1 P1: where the loader runs (recommended: API startup, background, advisory lock)
-- [ ] 1.2 P2: when `/ready` answers 503 (recommended: only when every country's last run failed, or the query failed)
-- [ ] 1.3 P3: South Africa in the first release (recommended: only if its staging load check passes)
-- [ ] 1.4 P4: delete the legacy `api/cmd/seed` (recommended: yes)
+- [x] 1.1 P1: where the loader runs. Decided 2026-11-25: API startup, background, advisory lock
+- [x] 1.2 P2: when `/ready` answers 503. Decided 2026-11-25: only when every country's last run failed, or the query failed
+- [x] 1.3 P3: South Africa in the first release. Decided 2026-11-25: only if its staging load check passes
+- [x] 1.4 P4: delete the legacy `api/cmd/seed`. Decided 2026-11-25: yes
 
 ## 2. Manifest (PR: boundaries manifest and loader)
 

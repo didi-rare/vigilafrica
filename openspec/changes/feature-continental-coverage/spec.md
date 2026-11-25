@@ -36,7 +36,7 @@ Each entry:
 
 ## 2. Boundary loader
 
-**Where it runs: decision P1.** Recommended: inside the API process at startup, after migrations, in a background goroutine under a Postgres advisory lock, so a slow or failed HDX download never blocks boot. The alternative is a one-shot binary run by the host's deploy script, which is installed by hand (`deploy/vigil-deploy`).
+**Where it runs: decision P1, decided 2026-11-25:** inside the API process at startup, after migrations, in a background goroutine under a Postgres advisory lock, so a slow or failed HDX download never blocks boot. The alternative is a one-shot binary run by the host's deploy script, which is installed by hand (`deploy/vigil-deploy`).
 
 **New migration `000017_boundary_sources`:** one row per loaded country: `country_code` (PK), `country_name`, `source`, `source_url`, `vintage`, `sha256`, `adm1_count`, `loaded_at`.
 
@@ -50,7 +50,7 @@ Each entry:
 
 **Nigeria and Ghana are in the manifest from the first PR.** Loading them replaces the `000010` rows with the same HDX source and records provenance. Acceptance: unit counts unchanged (37, 16), and every stored NG/GH event's `country_name` and `state_name` unchanged (before/after diff committed as a script).
 
-**Memory and time:** files are parsed whole. Mean source size is about 22 MB (scoping proposal, 8-country sample); South Africa's 89 MB is decision P3. Record peak memory and wall time per country on staging.
+**Memory and time:** files are parsed whole. Mean source size is about 22 MB (scoping proposal, 8-country sample); South Africa's 89 MB is decision P3 (decided 2026-11-25: included only if its staging load check passes). Record peak memory and wall time per country on staging.
 
 **Observability:** `/health` gains a `boundaries` object: countries loaded, countries failed (with codes), manifest checksum. A failed country does not affect `/ready`.
 
@@ -61,7 +61,7 @@ Each entry:
 - **Lock renewal:** extend the scheduler lock periodically during the run (the "proper fix" the comment at `scheduler.go:81` names) instead of raising the 5-minute TTL. A crashed run still releases within one TTL.
 - **GDACS budget:** measure actual GDACS requests and wall time per run on staging for at least 24 hours at full country count, then set `maxGDACSRequestsPerRun` and `gdacsRunBudgetDuration` from the measurement, with the duration kept below the lock renewal interval. Rotate the starting country each tick so exhaustion does not always fall on the same countries.
 - **Alerts:** one failure or degraded alert per run, listing affected countries, instead of one per country. The existing per-streak deduplication (`alert_sent_at`) keeps working per country.
-- **Readiness: decision P2.** Recommended: `/ready` answers 503 only when every country's last run failed or the run query failed. `/health` still reports each country, and `degraded` overall when any failed. Both deploy smoke checks already accept `degraded`.
+- **Readiness: decision P2, decided 2026-11-25:** `/ready` answers 503 only when every country's last run failed or the run query failed. `/health` still reports each country, and `degraded` overall when any failed. Both deploy smoke checks already accept `degraded`.
 
 ## 4. API
 

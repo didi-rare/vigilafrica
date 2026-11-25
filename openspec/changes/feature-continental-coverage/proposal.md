@@ -1,6 +1,6 @@
 # Change: Continental Coverage, First Release (feature-continental-coverage)
 
-**Status:** Proposed (0/47 tasks). Phase 1 of [`feature-place-first-direction`](../../proposals/feature-place-first-direction.md).
+**Status:** Proposed (4/47 tasks: decisions made). Phase 1 of [`feature-place-first-direction`](../../proposals/feature-place-first-direction.md).
 **Scoping record:** [`openspec/proposals/feature-continental-coverage.md`](../../proposals/feature-continental-coverage.md) holds the measurements, the HDX survey and the two blocking decisions. This change record turns them into buildable work.
 
 ## Why
@@ -21,9 +21,9 @@ VigilAfrica names events in two countries. ADR-017 (2026-11-19) makes the produc
 - **Deferred to the shapefile tranche:** the 9 shapefile-only countries (BWA, DJI, GAB, LSO, MDG, MUS, RWA, SYC, TZA), including Madagascar (decided 2026-11-19).
 - Boundaries load at full resolution; no simplification (scoping proposal, open question 2).
 
-## Decisions still open
+## Decisions (made by the maintainer on 2026-11-25, each as recommended)
 
-| # | Question | Recommendation |
+| # | Question | Decision |
 |---|---|---|
 | P1 | Where does the loader run? | Inside the API process at startup, after migrations, in the background under a Postgres advisory lock. Boot never waits on HDX, and no change to the host's deploy script is needed. |
 | P2 | When does `/ready` answer 503? | Only when every country's last run failed, or the ingestion-run query failed. A single country's failure shows as `degraded` in `/health`. |
