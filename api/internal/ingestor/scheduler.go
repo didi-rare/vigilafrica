@@ -51,13 +51,21 @@ const lockReleaseTimeout = 10 * time.Second
 // Default interval: 60 minutes, configurable via INGEST_INTERVAL_MIN; 0 turns
 // the whole scheduler off, boundary loader included.
 // The goroutine exits cleanly when ctx is cancelled (SIGTERM/SIGINT).
-func StartScheduler(ctx context.Context, repo database.Repository, alertClient *alert.Client, boundaryLoader BoundaryLoader) {
+//
+// The returned channel is closed when the goroutine has returned, after the
+// run in progress has released the scheduler lease (already closed when the
+// scheduler is disabled). The caller must wait on it before closing the
+// repository: releasing the lease needs the pool, and a release on a closed
+// pool leaves the lease held until it expires (developers-go.md §7.1).
+func StartScheduler(ctx context.Context, repo database.Repository, alertClient *alert.Client, boundaryLoader BoundaryLoader) <-chan struct{} {
+	done := make(chan struct{})
 	intervalMin := 60
 	if v := os.Getenv("INGEST_INTERVAL_MIN"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
 			if n == 0 {
 				slog.Info("scheduler: disabled via INGEST_INTERVAL_MIN=0")
-				return
+				close(done)
+				return done
 			}
 			if n > 0 {
 				intervalMin = n
@@ -73,6 +81,7 @@ func StartScheduler(ctx context.Context, repo database.Repository, alertClient *
 	)
 
 	go func() {
+		defer close(done)
 		// Run once immediately on startup so there is data on first boot
 		slog.Info("scheduler: running initial ingestion on startup")
 		runAllCountriesWithLock(ctx, repo, alertClient, boundaryLoader)
@@ -91,6 +100,7 @@ func StartScheduler(ctx context.Context, repo database.Repository, alertClient *
 			}
 		}
 	}()
+	return done
 }
 
 // schedulerLockTTL bounds how long a crashed/disappeared scheduler holds the

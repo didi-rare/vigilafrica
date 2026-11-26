@@ -94,7 +94,7 @@ func main() {
 	}
 	boundaryStatus := boundaries.NewStatusReporter(manifest, boundaryRepo)
 
-	ingestor.StartScheduler(ctx, repo, alertClient, boundaryLoader)
+	schedulerDone := ingestor.StartScheduler(ctx, repo, alertClient, boundaryLoader)
 	alert.StartStalenessWatchdog(ctx, repo, alertClient, loadWatchdogConfigFromEnv(), slog.Default().With("component", "watchdog"))
 
 	// ── Daily flood digest (feature-daily-flood-digest) ───────────────────────
@@ -203,6 +203,16 @@ func main() {
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		slog.Error("graceful shutdown error", "err", err)
+	}
+	// The scheduler saw the same cancellation and has been unwinding meanwhile.
+	// Wait for it (within the same 15 s) before the deferred repo.Close(): the
+	// run in progress releases the scheduler lease through the pool, and a
+	// release on a closed pool leaves the lease held for a whole TTL.
+	select {
+	case <-schedulerDone:
+		slog.Info("scheduler stopped; lease released")
+	case <-shutdownCtx.Done():
+		slog.Warn("scheduler did not stop within the shutdown timeout; its lease will expire on its own")
 	}
 	slog.Info("server stopped cleanly")
 }
