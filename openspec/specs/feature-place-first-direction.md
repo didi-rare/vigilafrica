@@ -1,6 +1,6 @@
 # Spec: Place-First Direction (feature-place-first-direction)
 
-**Status:** Phase 0 (documentation) complete on branch `docs/place-first-phase-0`, 2026-11-19; no engineering phase is implemented. Decisions D1–D4 in the proposal were made on 2026-11-17, so Phase 0 may start. D5 (build a near-me panel with a scope ladder, after the location marker) and D6 (option a: a display window, on `/v1/context` first) were decided on 2026-11-18. Phase order changed on 2026-11-18: **continental coverage is Phase 1** and starts once ADR-017 (Phase 0 task 3) is merged; the near-me panel is **Phase 3**, after the Phase 2 gate, D6 window length decided 2026-11-25: 30 days.
+**Status:** Phase 0 (documentation) complete on branch `docs/place-first-phase-0`, 2026-11-19; no engineering phase is implemented. Decisions D1–D4 in the proposal were made on 2026-11-17, so Phase 0 may start. D5 (build a near-me panel with a scope ladder, after the location marker) and D6 (option a: a display window, on `/v1/context` first) were decided on 2026-11-18. Phase order changed on 2026-11-18: **continental coverage is Phase 1** and starts once ADR-017 (Phase 0 task 3) is merged; the near-me panel is **Phase 3**, after the Phase 2 gate. The D6 window length was decided on 2026-11-25: 30 days.
 **Companion:** [`openspec/proposals/feature-place-first-direction.md`](../proposals/feature-place-first-direction.md) (rationale, evidence, decisions, risks). Decisions here are D1–D6; decisions inside `feature-continental-coverage` are referred to by their titles.
 
 ## Context
