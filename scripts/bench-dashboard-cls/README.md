@@ -182,8 +182,23 @@ Stacking is read with `elementFromPoint` after temporarily giving the marker
 `pointer-events: auto`, since with its real `none` the probe would skip it; the
 same probe with `none` restored shows which element receives a click.
 
+The halo stands for a fixed 50 km ground radius. The script checks it at the
+fly-to zoom against an independent Web Mercator formula, then wheel-zooms with
+the cursor on the marker and checks that the halo keeps a constant ratio to the
+hazard pin's on-screen distance (which MapLibre scales with the zoom), down to
+its 56px floor.
+
 `measure-cls.mjs` takes `CONTEXT_LOCATION=lagos` to resolve a location (default:
-none) and `PW_CHANNEL=chrome`; the bundled headless shell has no WebGL2.
+none) and `PW_CHANNEL=chrome`; the bundled headless shell has no WebGL2. With a
+location set, the branch arm reads CLS only after `.dashboard-location-status__chip`
+has rendered (`BRANCH_CONTEXT_SELECTOR` overrides it), and the control arm after
+the `/v1/context` response has been served.
+
+`keyboard-walkthrough.mjs` presses Tab from the top of the page with the Lagos
+context and prints every element that takes focus; it fails if the marker or
+the status line takes focus, an element is focused twice, or focus never leaves
+the page. Run it on both builds with `OUT=<file>` and diff the orders. It checks
+order and reachability, not announcements or focus visibility.
 
 ### What it found (2026-11-26, branch `feat/current-location-marker` vs `53698c2`)
 
@@ -194,18 +209,25 @@ none) and `PW_CHANNEL=chrome`; the bundled headless shell has no WebGL2.
   and opens its popup.
 - Pulse `animation-name`: `map-user-marker-pulse` under no-preference, `none`
   under reduce; the dashed halo stays visible in both.
-- Contrast: floor over any background 4.38:1 (disc `#f8fafc`, ring `#050714`).
-  Sampled annulus next to the disc at Lagos: basemap only, worst pixel 7.41:1;
-  over the hazard pin, 4.95:1.
+- Contrast: floor over any background 4.38:1 (disc `#f8fafc`, ring `#050714`);
+  that floor is the evidence. Informational, since it cannot fail while the
+  floor holds: sampled pixels next to the disc at Lagos, worst 7.41:1 over the
+  basemap alone and 4.95:1 over the hazard pin.
+- Halo: 164.6px at zoom 7 (expected 164.6px, 100 km at 607.5 m/px); after wheel
+  zooms 233.3, 117.2 and 58.6px (expected 234.1, 117.0 and 58.5px), then held at
+  the 56.0px floor.
+- Keyboard: 21 tab stops, the same order on both builds; the marker and the
+  status line never take focus; focus leaves the page at the end.
 - Status line inside the visible map and clear of the attribution at 1350x940,
   1024x768, 900x800, 768x1024 and 375x812.
-- CLS with a Lagos context, 8 runs per cell:
+- CLS with a Lagos context, 8 runs per cell, branch read after the status chip
+  rendered:
 
   | viewport | control CLS | branch CLS |
   |---|---|---|
   | 1920x1600 | 0.0054 (8/8) | 0.0054 (8/8) |
   | 1350x940 | 0.0000 (0/8) | 0.0000 (0/8) |
-  | 375x812 | 0.0001 ×7, 0.0000 ×1 (0/8) | 0.0001 ×7, 0.0000 ×1 (0/8) |
+  | 375x812 | 0.0001 ×8 (0/8) | 0.0001 ×7, 0.0000 ×1 (0/8) |
 
   With no context location at 1920x1600: 0.0054 (8/8) on both arms. The
   1920x1600 residual is the pre-existing freshness banner, as above.

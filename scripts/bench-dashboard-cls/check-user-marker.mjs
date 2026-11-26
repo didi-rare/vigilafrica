@@ -176,6 +176,62 @@ async function screenshotPixels(page, clip) {
   }, png.toString('base64'))
 }
 
+// The halo stands for a fixed ground radius (APPROX_RADIUS_M = 50 km in
+// web/src/components/userLocationHalo.ts), with a 56px floor and a paint cap of
+// twice the map's longest side. Checked two ways that do not share the app's
+// code: at the fly-to zoom against an independent Web Mercator formula, and at
+// other zooms against the hazard pin's on-screen distance from the marker,
+// which MapLibre itself scales with the zoom (so halo / pin distance must stay
+// constant while the halo is between the floor and the cap).
+const APPROX_RADIUS_M = 50_000
+const MIN_HALO_PX = 56
+
+async function haloAcrossZooms(page, userSel, cx, cy) {
+  const read = () => page.evaluate((sel) => {
+    const el = document.querySelector(sel)
+    const halo = el.querySelector('.map-user-marker__halo').getBoundingClientRect()
+    const box = el.getBoundingClientRect()
+    const pin = document.querySelector('.map-marker').getBoundingClientRect()
+    const map = document.querySelector('.map-container').getBoundingClientRect()
+    const mx = box.x + box.width / 2; const my = box.y + box.height / 2
+    return {
+      halo: halo.width,
+      pinDist: Math.hypot(pin.x + pin.width / 2 - mx, pin.y + pin.height - my),
+      cap: 2 * Math.max(map.width, map.height),
+    }
+  }, userSel)
+  const settle = async () => {
+    let last = -1
+    for (let i = 0; i < 40; i++) {
+      await page.waitForTimeout(250)
+      const h = (await read()).halo
+      if (Math.abs(h - last) < 0.05) return
+      last = h
+    }
+  }
+
+  const z7 = await read()
+  const mpp = (40_075_016.686 * Math.cos((LAGOS.lat * Math.PI) / 180)) / (512 * 2 ** FLY_ZOOM)
+  const expected7 = (2 * APPROX_RADIUS_M) / mpp
+  const ratio = z7.halo / z7.pinDist
+  console.log(`  halo at zoom ${FLY_ZOOM}: ${z7.halo.toFixed(1)}px (expected ${expected7.toFixed(1)}px = 100 km at ${mpp.toFixed(1)} m/px); pin ${z7.pinDist.toFixed(1)}px away; halo/pin ${ratio.toFixed(3)}`)
+  Math.abs(z7.halo - expected7) <= 1 ? ok('halo is 100 km across at the fly-to zoom') : fail(`halo ${z7.halo.toFixed(1)}px, expected ${expected7.toFixed(1)}px`)
+  await page.screenshot({ path: join(OUT_DIR, `halo-zoom7.png`), clip: { x: Math.round(cx - 150), y: Math.round(cy - 150), width: 300, height: 300 } })
+
+  for (const [label, delta] of [['zoomed in', -400], ['zoomed out', 2400], ['far out', 6000], ['farther out', 6000]]) {
+    await page.mouse.move(cx, cy)
+    await page.mouse.wheel(0, delta)
+    await settle()
+    const z = await read()
+    const want = Math.max(MIN_HALO_PX, Math.min(z.cap, ratio * z.pinDist))
+    console.log(`  halo ${label}: ${z.halo.toFixed(1)}px; pin ${z.pinDist.toFixed(1)}px away (scale x${(z.pinDist / z7.pinDist).toFixed(2)}); expected ${want.toFixed(1)}px`)
+    Math.abs(z.halo - want) <= Math.max(1.5, want * 0.02)
+      ? ok(`${label}: halo keeps its ground size${want === MIN_HALO_PX ? ' (held at the 56px floor)' : ''}`)
+      : fail(`${label}: halo ${z.halo.toFixed(1)}px, expected ${want.toFixed(1)}px`)
+    await page.screenshot({ path: join(OUT_DIR, `halo-${label.replace(' ', '-')}.png`), clip: { x: Math.round(cx - 150), y: Math.round(cy - 150), width: 300, height: 300 } })
+  }
+}
+
 async function branchLagos(browser, reducedMotion) {
   console.log(`\n[lagos context, prefers-reduced-motion: ${reducedMotion}]`)
   const { page, tileCount } = await openDashboard(browser, { reducedMotion, location: LAGOS })
@@ -255,13 +311,16 @@ async function branchLagos(browser, reducedMotion) {
   const ring = parseRgb(info.dotRing)
   const floor = Math.sqrt((luminance(fill) + 0.05) / (luminance(ring) + 0.05))
   console.log(`  disc ${info.dotFill} / ring ${info.dotRing}: disc-vs-ring ${contrast(fill, ring).toFixed(2)}:1; floor over ANY background = ${floor.toFixed(2)}:1`)
+  // THE contrast evidence: with a floor of 3:1 or more, no background can put
+  // both the disc and its ring below 3:1.
   floor >= 3 ? ok('every background meets 3:1 against the disc or its ring') : fail(`floor ${floor.toFixed(2)} < 3`)
 
-  // Colours actually adjacent to the dot: hide the dot and the pulse, keep the
-  // halo (it composites over the basemap right next to the ring), and sample
-  // the annulus just outside the dot's edge. Twice: over the basemap alone
-  // (hazard pins hidden), and over the hazard pin this fixture puts under the
-  // marker, which is the overlap case.
+  // INFORMATIONAL ONLY. The colours actually adjacent to the dot: hide the dot
+  // and the pulse, keep the halo (it composites over the basemap right next to
+  // the ring), and sample the annulus just outside the dot's edge. Twice: over
+  // the basemap alone (hazard pins hidden), and over the hazard pin this
+  // fixture puts under the marker. These samples cannot fail while the floor
+  // above holds, so they never fail the run; they show where real pixels sit.
   if (tag === 'reduce') {
     const setVis = (v, alsoHazards) => page.evaluate(([sel, vis, hz]) => {
       const el = document.querySelector(sel)
@@ -289,8 +348,8 @@ async function branchLagos(browser, reducedMotion) {
         }
       }
       console.log(`  ${what}: annulus ${n} px (tiles loaded=${tileCount()}), bg luminance ${minL.toFixed(3)}-${maxL.toFixed(3)}; min ring-vs-bg ${minRing.toFixed(2)}:1, min disc-vs-bg ${minFill.toFixed(2)}:1, min best-of-two ${minBest.toFixed(2)}:1`)
-      if (n === 0 || tileCount() === 0) fail(`${what}: no sample (tiles did not load?)`)
-      else minBest >= 3 ? ok(`${what}: every adjacent pixel is >= 3:1 against the disc or the ring`) : fail(`${what}: a pixel at ${minBest.toFixed(2)}:1`)
+      if (n === 0 || tileCount() === 0) console.log(`  info ${what}: no sample (tiles did not load?)`)
+      else console.log(`  info ${what}: worst adjacent pixel ${minBest.toFixed(2)}:1 against the better of disc and ring`)
     }
   }
 
@@ -342,6 +401,14 @@ async function branchLagos(browser, reducedMotion) {
   await page.screenshot({ path: join(OUT_DIR, `popup-over-marker-${tag}.png`), clip: { x: Math.round(cx - 140), y: Math.round(cy - 150), width: 280, height: 220 } })
 
   console.log(`  geometry ${JSON.stringify(await geometry(page))}`)
+
+  // ── Halo size against zoom (last: it moves the camera) ─────────────────────
+  // Close the popup first: it takes wheel events over the marker. Zooming with
+  // the cursor on the marker keeps the marker where it is.
+  if (tag === 'motion') {
+    await page.evaluate(() => document.querySelectorAll('.maplibregl-popup').forEach((p) => p.remove()))
+    await haloAcrossZooms(page, userSel, cx, cy)
+  }
   await page.close()
 }
 
