@@ -80,6 +80,9 @@ const maplibreMock = vi.hoisted(() => {
     readonly queryRenderedFeatures = vi.fn(() => this.sourceFeatures)
     readonly getCanvas = vi.fn(() => ({ style: this.canvasStyle } as HTMLCanvasElement))
     readonly flyTo = vi.fn()
+    zoom = 7
+    readonly getZoom = vi.fn(() => this.zoom)
+    readonly getContainer = vi.fn(() => (this.options as { container: HTMLElement }).container)
     readonly easeTo = vi.fn()
     readonly remove = vi.fn()
 
@@ -178,6 +181,7 @@ const maplibreMock = vi.hoisted(() => {
     })
     readonly options: { element: HTMLElement; anchor: string }
     lngLat: [number, number] | null = null
+    readonly getElement = vi.fn(() => this.options.element)
     popup: MockPopup | null = null
     map: MockMap | null = null
 
@@ -670,6 +674,45 @@ describe('Map', () => {
       expect(screen.queryByLabelText(USER_LABEL)).toBeNull()
     })
 
+    it('sizes the halo to a ground radius: it grows as the map zooms in and never drops below the marker box', async () => {
+      render(<Map events={[]} userLocation={LAGOS} />)
+      const map = maplibreMock.instances.maps[0]
+      map.zoom = 7
+      await loadMap()
+      const marker = screen.getByRole('img', { name: USER_LABEL })
+      const size = () => Number.parseFloat(marker.style.getPropertyValue('--map-user-halo-size'))
+
+      // 100 km across at Lagos, zoom 7: about 165px (userLocationHalo.ts).
+      const atZoom7 = size()
+      expect(atZoom7).toBeGreaterThan(160)
+      expect(atZoom7).toBeLessThan(170)
+
+      map.zoom = 9
+      await act(async () => {
+        map.trigger('zoom')
+      })
+      expect(size()).toBeCloseTo(atZoom7 * 4, 0)
+
+      map.zoom = 3
+      await act(async () => {
+        map.trigger('zoom')
+      })
+      expect(size()).toBe(56)
+    })
+
+    it('stops resizing the halo once the location is gone', async () => {
+      const { rerender } = render(<Map events={[]} userLocation={LAGOS} />)
+      const map = await loadMap()
+      rerender(<Map events={[]} userLocation={null} />)
+
+      map.getZoom.mockClear()
+      map.zoom = 10
+      await act(async () => {
+        map.trigger('zoom')
+      })
+      expect(map.getZoom).not.toHaveBeenCalled()
+    })
+
     it('has no axe violations with the user marker and event markers on the map', async () => {
       const { container } = render(<Map events={events} userLocation={LAGOS} />)
       const map = await loadMap()
@@ -683,6 +726,28 @@ describe('Map', () => {
       const results = await axe(container)
       expect(results.violations).toHaveLength(0)
     })
+  })
+
+  it('draws exactly one user marker across the StrictMode effect cleanup cycle', async () => {
+    render(
+      <StrictMode>
+        <Map events={[]} userLocation={[3.3792, 6.5244]} />
+      </StrictMode>,
+    )
+
+    // StrictMode mounts, cleans up and re-mounts: the first map is removed
+    // before it loads, the second is the live one.
+    expect(maplibreMock.instances.maps).toHaveLength(2)
+    await act(async () => {
+      maplibreMock.instances.maps[1].trigger('load')
+    })
+
+    expect(screen.getAllByLabelText(/your approximate location/i)).toHaveLength(1)
+    const userMarkers = maplibreMock.instances.markers.filter(
+      (m) => m.options.element.getAttribute('role') === 'img',
+    )
+    expect(userMarkers).toHaveLength(1)
+    expect(userMarkers[0].addTo).toHaveBeenCalledWith(maplibreMock.instances.maps[1])
   })
 
   it('reinitializes cleanly across the StrictMode effect cleanup cycle', () => {

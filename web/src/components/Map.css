@@ -159,6 +159,7 @@
      would override it and put the marker into normal flow. */
   position: absolute;
   display: inline-flex;
+  /* Equal to MIN_HALO_DIAMETER_PX in userLocationHalo.ts. */
   width: 56px;
   height: 56px;
   align-items: center;
@@ -169,19 +170,27 @@
   z-index: var(--z-map-user-marker);
 }
 
-.map-user-marker__halo,
-.map-user-marker__pulse {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-}
-
+/* The halo stands for a fixed ground radius (APPROX_RADIUS_M in
+   userLocationHalo.ts); Map.tsx sets its diameter on zoom. It is centred on the
+   dot and may be far larger than the 56px marker box. The fallback equals
+   MIN_HALO_DIAMETER_PX. */
 .map-user-marker__halo {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--map-user-halo-size, 56px);
+  height: var(--map-user-halo-size, 56px);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
   background: var(--marker-user-halo-fill);
   border: 1.5px dashed var(--marker-user-halo-border);
 }
 
+/* The pulse is an attention cue around the dot, not the area: pixel-sized. */
 .map-user-marker__pulse {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
   border: 2px solid var(--marker-user-pulse);
   opacity: 0;
 }

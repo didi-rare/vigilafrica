@@ -33,6 +33,7 @@ import * as maplibregl from 'maplibre-gl'
 import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { track } from '../analytics'
+import { haloDiameterPx } from './userLocationHalo'
 import './Map.css'
 
 maplibregl.setWorkerUrl(maplibreWorkerUrl)
@@ -141,8 +142,9 @@ function createUserLocationElement(): HTMLDivElement {
   root.setAttribute('role', 'img')
   root.setAttribute('aria-label', USER_LOCATION_LABEL)
 
-  // Static "approximate area" halo. It stays visible under reduced motion; only
-  // the pulse ring below is animated.
+  // Static "approximate area" halo, sized to a ground radius by the halo
+  // effect in Map. It stays visible under reduced motion; only the pulse ring
+  // below, a pixel-sized attention cue around the dot, is animated.
   const halo = createHiddenSpan('map-user-marker__halo')
   const pulse = createHiddenSpan('map-user-marker__pulse')
   const dot = createHiddenSpan('map-user-marker__dot')
@@ -394,6 +396,37 @@ export function Map({ events, center = [8.6753, 9.082], zoom = 5, userLocation =
       .setLngLat(lngLat)
       .addTo(instance)
   }, [userLng, userLat, isLoaded])
+
+  // Size the approximate-area halo to a fixed ground radius (userLocationHalo.ts)
+  // rather than a fixed pixel size, so zooming in widens it instead of shrinking
+  // it into something that reads like a GPS accuracy circle. Ground resolution
+  // depends only on the zoom and the MARKER's latitude, so it is recomputed on
+  // `zoom` (which fires every frame of a zoom or fly-to) and on `resize` (the
+  // paint cap follows the map's size); a pan does not change it. A new latitude
+  // re-runs this effect. Written as a CSS custom property on the marker element:
+  // a truly dynamic value (§7.4).
+  useEffect(() => {
+    const instance = mapInstance.current
+    if (!instance || !isLoaded || userLat === null) return
+
+    const lat = userLat
+    const update = () => {
+      const element = userMarker.current?.getElement()
+      if (!element) return
+      const container = instance.getContainer()
+      const longestSide = Math.max(container.clientWidth, container.clientHeight)
+      const diameter = haloDiameterPx({ zoom: instance.getZoom(), lat, maxPx: 2 * longestSide })
+      element.style.setProperty('--map-user-halo-size', `${diameter.toFixed(1)}px`)
+    }
+
+    update()
+    instance.on('zoom', update)
+    instance.on('resize', update)
+    return () => {
+      instance.off('zoom', update)
+      instance.off('resize', update)
+    }
+  }, [userLat, isLoaded])
 
   // Feed data into the clustering source + keep DOM markers in sync with
   // unclustered, in-viewport points (§12.7).

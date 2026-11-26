@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { formatLocation } from '../formatLocation'
 import { Link, useSearchParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
@@ -351,27 +351,24 @@ export function EventsDashboard() {
         : COUNTRY_CENTERS['Nigeria']
 
   // "You are here" (feature-current-location-marker): the same IP-resolved
-  // point the camera flies to, drawn as a marker. Memoised on the primitives so
-  // the prop keeps its identity across renders (§8.8); null when /v1/context
-  // resolved no location (localhost, lookup failure), which draws no marker.
-  const userLng = contextData?.location?.lng
-  const userLat = contextData?.location?.lat
-  const userLocation = useMemo<[number, number] | null>(
-    () => (typeof userLng === 'number' && typeof userLat === 'number' ? [userLng, userLat] : null),
-    [userLng, userLat],
-  )
+  // point the camera flies to, drawn as a marker. Not memoised: Map's marker
+  // effect depends on the two numbers, not on this array's identity.
+  //
+  // Drawn only when GeoIP named a state. A country-only lookup usually carries
+  // the country's centroid, which can be hundreds of kilometres from the
+  // visitor; a marker there would claim far more than the data supports. The
+  // status line below still names the country.
+  const userGeo = contextData?.location ?? null
+  const userLocation: [number, number] | null =
+    userGeo && userGeo.state && typeof userGeo.lng === 'number' && typeof userGeo.lat === 'number'
+      ? [userGeo.lng, userGeo.lat]
+      : null
   // The marker's text alternative (§12.11), and its visible legend: the marker
   // itself has no popup, so this line is where a sighted user reads that the
-  // point is approximate and network-derived. GeoIP may return a country with
-  // no subdivision, so either part can be empty.
-  const userPlace = userLocation
-    ? [contextData?.location?.state, contextData?.location?.country].filter(Boolean).join(', ')
-    : ''
-  const userLocationText = userLocation
-    ? userPlace
-      ? `Your approximate location: ${userPlace} (based on your network)`
-      : 'Your approximate location is marked on the map (based on your network)'
-    : ''
+  // point is approximate and network-derived. Either name can be empty; with
+  // neither there is nothing true to say, and no marker either.
+  const userPlace = userGeo ? [userGeo.state, userGeo.country].filter(Boolean).join(', ') : ''
+  const userLocationText = userPlace ? `Your approximate location: ${userPlace} (based on your network)` : ''
 
   // ── Pagination arithmetic ──────────────────────────────────────────────────
   // EVERY value here derives from `meta` as the server applied it to the rows
@@ -650,11 +647,13 @@ export function EventsDashboard() {
             </Suspense>
             {/*
               Rendered here, outside the lazily-loaded map, so the location is
-              conveyed even if the map chunk or WebGL fails. The region is always
-              mounted, empty until a location resolves, because a live region
-              that appears together with its text is often not announced.
-              Absolutely positioned over the map, so it reserves no layout space
-              and cannot shift the page when context lands.
+              announced and shown while the map chunk is still loading. (It does
+              NOT survive a map failure: a chunk or WebGL error reaches the
+              app-level error boundary, which replaces the whole page.) The
+              region is always mounted, empty until a location resolves, because
+              a live region that appears together with its text is often not
+              announced. Absolutely positioned over the map, so it reserves no
+              layout space and cannot shift the page when context lands.
             */}
             <div
               className="dashboard-location-status"
@@ -662,12 +661,15 @@ export function EventsDashboard() {
               aria-live="polite"
               aria-label="Approximate location"
             >
-              {userLocationText && (
+              {userLocationText ? (
                 <span className="dashboard-location-status__chip">
-                  <span className="dashboard-location-status__swatch" aria-hidden="true" />
+                  {/* The marker's legend swatch, only when a marker is drawn. */}
+                  {userLocation ? (
+                    <span className="dashboard-location-status__swatch" aria-hidden="true" />
+                  ) : null}
                   {userLocationText}
                 </span>
-              )}
+              ) : null}
             </div>
           </div>
         </div>
