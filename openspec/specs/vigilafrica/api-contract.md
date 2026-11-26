@@ -122,6 +122,11 @@ No query parameters. No request body.
       "events_stored": null,
       "error": null
     }
+  },
+  "boundaries": {
+    "loaded": 2,
+    "failed": [],
+    "manifest_sha256": "<64 hex characters>"
   }
 }
 ```
@@ -131,7 +136,7 @@ Every key of a run record except `country_code` (omitted when empty) is always p
 `api/internal/handlers/health.go`; nothing in the server enables the unredacted form today), so
 only `status`, `completed_at` and `country_code` carry values. `status` is never `null`.
 
-Before the first completed run, or when the database is unreachable, the same request returns `{"status": "ok", "version": "1.6.1", "last_ingestion": null}`.
+Before the first completed run, the same request returns `{"status": "ok", "version": "1.6.1", "last_ingestion": null, "boundaries": {...}}`; when the database is unreachable, `boundaries` is `null` too.
 
 | Field     | Type   | Description                                         |
 |-----------|--------|-----------------------------------------------------|
@@ -142,10 +147,14 @@ Before the first completed run, or when the database is unreachable, the same re
 | `last_ingestion.status` | string | `success`, `failure`, `degraded` (`running` stays in the enum but is never reported) — never `null` |
 | `last_ingestion.completed_at` | string\|null | RFC 3339; the only timestamp exposed publicly |
 | `last_ingestion.started_at`, `events_fetched`, `events_stored`, `error` | null | Always `null` on the public API (redacted); keys are present so the shape is stable |
+| `boundaries` | object\|null | Always present. The boundary loader's state (`feature-continental-coverage`); `null` when it cannot be read |
+| `boundaries.loaded` | integer | Manifest countries whose boundaries are loaded and whose stored events were re-named against them |
+| `boundaries.failed` | string[] | Alpha-2 codes of manifest countries whose **current** manifest entry failed its last load attempt (for example a checksum mismatch); `[]` when none. A country can be loaded on an earlier entry and failed on the current one |
+| `boundaries.manifest_sha256` | string | SHA-256 of the canonicalised boundary manifest compiled into the server |
 
 Run `status` is one of `running`, `success`, `failure`, `degraded`. **`degraded`**: the run completed, but GDACS returned no usable answer for at least one flood polygon (unreachable, erroring, rate-limited, or the per-run request budget ran out); new flood areas among them were not stored and existing ones kept their last verified outline. It counts as a completed run for staleness alerting; `failure` does not.
 
-**`GET /ready`** uses the same body but returns **`503`** when any country's last run is `failure` or the database cannot be queried. A `degraded` run does **not** make `/ready` fail: an upstream data provider being down does not stop this API serving.
+**`GET /ready`** uses the same body but returns **`503`** when any country's last run is `failure` or the database cannot be queried. A `degraded` run does **not** make `/ready` fail: an upstream data provider being down does not stop this API serving. Nor does a country in `boundaries.failed`.
 
 ### Performance Contract
 

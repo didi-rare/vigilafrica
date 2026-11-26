@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -27,14 +28,31 @@ type HealthResponse struct {
 	Version                string                            `json:"version"`
 	LastIngestion          *lastIngestionResponse            `json:"last_ingestion"`
 	LastIngestionByCountry map[string]*lastIngestionResponse `json:"last_ingestion_by_country,omitempty"`
+	// Boundaries is the boundary loader's state (feature-continental-coverage
+	// §2); null when it cannot be read. It never affects /ready: a country whose
+	// boundaries failed to load does not stop the API serving the others.
+	Boundaries *models.BoundaryStatus `json:"boundaries"`
+}
+
+// BoundaryStatusSource supplies the /health `boundaries` object.
+// Implemented by boundaries.StatusReporter.
+type BoundaryStatusSource interface {
+	BoundaryStatus(ctx context.Context) (*models.BoundaryStatus, error)
 }
 
 // HealthHandler encapsulates the health check logic.
 type HealthHandler struct {
 	Version       string
 	repo          database.Repository
+	boundaries    BoundaryStatusSource
 	includeErrors bool
 	readiness     bool
+}
+
+// WithBoundaryStatus adds the `boundaries` object to the response.
+func (h *HealthHandler) WithBoundaryStatus(src BoundaryStatusSource) *HealthHandler {
+	h.boundaries = src
+	return h
 }
 
 // NewHealthHandler creates a new HealthHandler.
@@ -122,6 +140,15 @@ func (h *HealthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				resp.LastIngestionByCountry[code] = runToResponse(cr, h.includeErrors)
 				note(cr.Status)
 			}
+		}
+	}
+
+	// Deliberately outside the readiness decision (spec §2, Observability).
+	if h.boundaries != nil {
+		if st, err := h.boundaries.BoundaryStatus(r.Context()); err != nil {
+			slog.Error("health: failed to read boundary status", "err", err)
+		} else {
+			resp.Boundaries = st
 		}
 	}
 

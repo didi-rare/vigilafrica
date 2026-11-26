@@ -1,6 +1,6 @@
 # Change: Continental Coverage, First Release (feature-continental-coverage)
 
-**Status:** Proposed (9/62 tasks: decisions and two reviews done). Phase 1 of [`feature-place-first-direction`](../../proposals/feature-place-first-direction.md).
+**Status:** Proposed (20/62 tasks: decisions, two reviews, and the manifest and loader PR's tasks 2.2–2.5, 3.1–3.6 and 3.8). Phase 1 of [`feature-place-first-direction`](../../proposals/feature-place-first-direction.md).
 **Scoping record:** [`openspec/proposals/feature-continental-coverage.md`](../../proposals/feature-continental-coverage.md) holds the measurements, the HDX survey and the two blocking decisions. This change record turns them into buildable work.
 
 ## Why
