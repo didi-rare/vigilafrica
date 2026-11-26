@@ -19,11 +19,12 @@
   - a location and no marker: `new Marker({ element: createUserLocationElement(), anchor: 'center' }).setLngLat(…).addTo(map)`.
 - The initialization effect's cleanup removes the user marker and clears the ref before it removes the map.
 - `createUserLocationElement()`: `<div class="map-user-marker" role="img" aria-label="Your approximate location (based on your network)">` holding three `aria-hidden` spans: `__halo` (static dashed circle), `__pulse` (animated ring) and `__dot` (light disc, dark ring, person glyph as an `aria-hidden`, non-focusable SVG). No popup, no `tabindex`, no listeners.
+- **Halo size** (`web/src/components/userLocationHalo.ts`): diameter = 2 × `APPROX_RADIUS_M` (50 km, an assumption; see proposal B8) ÷ metres per pixel, where metres per pixel = 40,075,016.686 × cos(lat) ÷ (512 × 2^zoom), MapLibre's 512px-tile Web Mercator resolution at the marker's latitude. Floor `MIN_HALO_DIAMETER_PX` = 56 (the marker box); cap twice the map container's longest side, skipped when the container measures 0. A second effect in `Map`, keyed on `[userLat, isLoaded]`, writes it as `--map-user-halo-size` on the marker element, now and on every `zoom` and `resize` event, and removes those listeners on cleanup. A pan does not change ground resolution at the marker, so `move` is not listened to.
 
 ## 2. Styles
 
 - `.map-user-marker`: `position: absolute` (Map.css loads after maplibre-gl.css with equal specificity, so any other value would override MapLibre's), 56×56px, `pointer-events: none`, `z-index: var(--z-map-user-marker)`.
-- Halo: `--marker-user-halo-fill` and a 1.5px dashed `--marker-user-halo-border`. Dot: 22px, `--marker-user-fill`, 2px `--marker-user-ring` border, glyph in `--marker-user-glyph`.
+- Halo: centred on the dot, `width`/`height: var(--map-user-halo-size, 56px)`, `--marker-user-halo-fill` and a 1.5px dashed `--marker-user-halo-border`. Dot: 22px, `--marker-user-fill`, 2px `--marker-user-ring` border, glyph in `--marker-user-glyph`.
 - Pulse: `animation: map-user-marker-pulse` declared only inside `@media (prefers-reduced-motion: no-preference)`; under `reduce` the computed `animation-name` is `none` and the halo stays.
 - `.maplibregl-popup { z-index: var(--z-map-popup) }`.
 - `index.css`: `--z-map-user-marker: 1; --z-map-popup: var(--z-map-user-marker);` with the ordering reason in a comment.
@@ -32,11 +33,12 @@
 
 ## 3. Dashboard
 
-- `userLocation = useMemo(() => numbers ? [lng, lat] : null, [lng, lat])` from `contextData.location`, passed to `<Map>`.
+- `userLocation = [lng, lat]` from `contextData.location` **only when `state` is non-empty**, otherwise `null`; passed to `<Map>`. Not memoised: `Map` depends on the numbers (§8.4).
 - A `role="status"`, `aria-live="polite"`, `aria-label="Approximate location"` element inside `.dashboard-map-container`, after the `Suspense`, **always mounted**; its content, only when there is a location:
   - state and country: `Your approximate location: {state}, {country} (based on your network)`;
-  - one of them: that one alone;
-  - neither: `Your approximate location is marked on the map (based on your network)`.
+  - one of them: that one alone (country alone means no marker);
+  - neither: no text, and no marker.
+  The legend swatch is shown only when a marker is drawn.
 - `.dashboard-map-container` becomes `position: relative` (no layout change). `.dashboard-location-status` is absolute at `left: 0.75rem`, `bottom: max(2.75rem, calc(100% - var(--map-height) + 2.75rem))` (the higher of the map's and the container's bottom edges, clear of MapLibre's attribution row), `z-index: var(--z-map-hud)`, `pointer-events: none`. The chip inside uses existing HUD tokens plus a miniature of the marker as an `aria-hidden` swatch.
 
 ## 4. Unchanged
@@ -51,10 +53,10 @@ With `DEV_FORCE_LAGOS=true` or `DEV_OVERRIDE_IP` set, every visitor gets the ove
 
 From the proposal, restated where its facts went stale.
 
-1. When `/v1/context` returns a non-null `location`, exactly one marker renders at `[location.lng, location.lat]`, distinct from the fire and flood markers.
+1. When `/v1/context` returns a non-null `location` with a non-empty `state`, exactly one marker renders at `[location.lng, location.lat]`, distinct from the fire and flood markers. With an empty `state` no marker renders; the status line names the country.
 2. When `location` is null, no user marker renders, the status region is empty, and the map behaves exactly as it did without this change. (The proposal said "centers on Nigeria default"; that fallback is still the web app's today but is due to change under `feature-continental-coverage`, so the criterion is stated relative to the current behaviour.)
 3. The user marker is not clustered with, or culled alongside, event markers: it is not in `events-map-source` and `syncMarkers` never touches it.
-4. The marker's accessible name says the location is approximate and network-derived; nothing implies GPS precision. There is no popup or tooltip; the visible status line says the same.
+4. The marker's accessible name says the location is approximate and network-derived; nothing implies GPS precision. There is no popup or tooltip; the visible status line says the same. The approximate-area halo covers a fixed 50 km ground radius at every zoom (never below 56px on screen), so it cannot shrink into an accuracy-circle look.
 5. The marker is non-interactive: `role="img"`, not a `<button>`, no `tabindex`, `pointer-events: none`.
 6. It is told apart from the hazard markers by shape and glyph, not colour alone, and meets 3:1 against the basemap.
 7. The resolved state/country is conveyed in accessible text outside the map (`role="status"`).
