@@ -8,6 +8,8 @@ branch: tbd
 
 > **This is a decision note, not an implementation-ready proposal.** It records a product question surfaced on 2026-07-20 so it is not lost, and states the recommendation and the evidence behind it. It needs the maintainer's call before it becomes a spec. It is a prerequisite for setting `DIGEST_TO`.
 
+> **2026-11-18:** its premise, a flood-led product for Nigeria and Ghana, is affected by [`feature-place-first-direction`](feature-place-first-direction.md) and ADR-017 (continental, hazard-neutral). The flood digest endpoint itself is unchanged (that proposal's decision D4). Re-read this note against that direction before acting on it.
+
 ## The question
 
 [feature-daily-flood-digest](openspec/proposals/feature-daily-flood-digest.md) specifies a **daily** email of the day's flood events, by admin name, as the NRCS pilot deliverable. Should it stay daily?

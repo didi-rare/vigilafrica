@@ -350,6 +350,26 @@ export function EventsDashboard() {
         ? [contextData.location.lng, contextData.location.lat]
         : COUNTRY_CENTERS['Nigeria']
 
+  // "You are here" (feature-current-location-marker): the same IP-resolved
+  // point the camera flies to, drawn as a marker. Not memoised: Map's marker
+  // effect depends on the two numbers, not on this array's identity.
+  //
+  // Drawn only when GeoIP named a state. A country-only lookup usually carries
+  // the country's centroid, which can be hundreds of kilometres from the
+  // visitor; a marker there would claim far more than the data supports. The
+  // status line below still names the country.
+  const userGeo = contextData?.location ?? null
+  const userLocation: [number, number] | null =
+    userGeo && userGeo.state && typeof userGeo.lng === 'number' && typeof userGeo.lat === 'number'
+      ? [userGeo.lng, userGeo.lat]
+      : null
+  // The marker's text alternative (§12.11), and its visible legend: the marker
+  // itself has no popup, so this line is where a sighted user reads that the
+  // point is approximate and network-derived. Either name can be empty; with
+  // neither there is nothing true to say, and no marker either.
+  const userPlace = userGeo ? [userGeo.state, userGeo.country].filter(Boolean).join(', ') : ''
+  const userLocationText = userPlace ? `Your approximate location: ${userPlace} (based on your network)` : ''
+
   // ── Pagination arithmetic ──────────────────────────────────────────────────
   // EVERY value here derives from `meta` as the server applied it to the rows
   // currently rendered — never from the offset the URL is asking for.
@@ -623,8 +643,34 @@ export function EventsDashboard() {
             {/* announce={false}: this mounts alongside the data-fetch status
                 region; one wait, one announcement. The visible text stays. */}
             <Suspense fallback={<LoadingState message="Loading map telemetry..." announce={false} />}>
-              <Map events={mapEvents} center={mapCenter} />
+              <Map events={mapEvents} center={mapCenter} userLocation={userLocation} />
             </Suspense>
+            {/*
+              Rendered here, outside the lazily-loaded map, so the location is
+              announced and shown while the map chunk is still loading. (It does
+              NOT survive a map failure: a chunk or WebGL error reaches the
+              app-level error boundary, which replaces the whole page.) The
+              region is always mounted, empty until a location resolves, because
+              a live region that appears together with its text is often not
+              announced. Absolutely positioned over the map, so it reserves no
+              layout space and cannot shift the page when context lands.
+            */}
+            <div
+              className="dashboard-location-status"
+              role="status"
+              aria-live="polite"
+              aria-label="Approximate location"
+            >
+              {userLocationText ? (
+                <span className="dashboard-location-status__chip">
+                  {/* The marker's legend swatch, only when a marker is drawn. */}
+                  {userLocation ? (
+                    <span className="dashboard-location-status__swatch" aria-hidden="true" />
+                  ) : null}
+                  {userLocationText}
+                </span>
+              ) : null}
+            </div>
           </div>
         </div>
       </div>

@@ -33,6 +33,7 @@ import * as maplibregl from 'maplibre-gl'
 import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { track } from '../analytics'
+import { haloDiameterPx } from './userLocationHalo'
 import './Map.css'
 
 maplibregl.setWorkerUrl(maplibreWorkerUrl)
@@ -54,6 +55,12 @@ interface MapProps {
   events: EventMarker[]
   center?: [number, number]
   zoom?: number
+  /**
+   * The visitor's IP-resolved location from `/v1/context`, as `[lng, lat]`
+   * (MapLibre order, same as `center`). `null`/omitted means no location was
+   * resolved, and no "you are here" marker is drawn.
+   */
+  userLocation?: readonly [number, number] | null
 }
 
 type EventsGeoJSON = FeatureCollection<Point, { id: string; title: string; category: string }>
@@ -115,6 +122,47 @@ function createMarkerElement(event: EventMarker): HTMLButtonElement {
   return button
 }
 
+// The accessible name of the "you are here" marker. It says "approximate" and
+// names the source on purpose: the position comes from IP geolocation, which is
+// city- or region-level at best, and nothing here may imply GPS precision
+// (feature-current-location-marker R1).
+const USER_LOCATION_LABEL = 'Your approximate location (based on your network)'
+
+// A person silhouette (head + shoulders): the shape, not the colour, is what
+// separates this marker from the flame and wave hazard glyphs (§9.4).
+const USER_GLYPH_PATH = 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z'
+
+// The user marker is NOT a <button> (§9.1): it opens no popup and does nothing
+// on click, so an interactive role would be a lie. It is a labelled image. Its
+// children are decorative and hidden; the label on the root is the whole
+// accessible surface.
+function createUserLocationElement(): HTMLDivElement {
+  const root = document.createElement('div')
+  root.className = 'map-user-marker'
+  root.setAttribute('role', 'img')
+  root.setAttribute('aria-label', USER_LOCATION_LABEL)
+
+  // Static "approximate area" halo, sized to a ground radius by the halo
+  // effect in Map. It stays visible under reduced motion; only the pulse ring
+  // below, a pixel-sized attention cue around the dot, is animated.
+  const halo = createHiddenSpan('map-user-marker__halo')
+  const pulse = createHiddenSpan('map-user-marker__pulse')
+  const dot = createHiddenSpan('map-user-marker__dot')
+
+  const svg = document.createElementNS(SVG_NS, 'svg')
+  svg.setAttribute('viewBox', '0 0 24 24')
+  svg.setAttribute('aria-hidden', 'true')
+  svg.setAttribute('focusable', 'false')
+  const path = document.createElementNS(SVG_NS, 'path')
+  path.setAttribute('d', USER_GLYPH_PATH)
+  path.setAttribute('fill', 'currentColor')
+  svg.appendChild(path)
+  dot.appendChild(svg)
+
+  root.append(halo, pulse, dot)
+  return root
+}
+
 function buildEventsGeoJSON(events: readonly EventMarker[]): EventsGeoJSON {
   return {
     type: 'FeatureCollection',
@@ -133,10 +181,19 @@ function markerMatchesEvent(record: MarkerRecord, event: EventMarker): boolean {
     record.event.title === event.title
 }
 
-export function Map({ events, center = [8.6753, 9.082], zoom = 5 }: MapProps) {
+export function Map({ events, center = [8.6753, 9.082], zoom = 5, userLocation = null }: MapProps) {
   const mapContainer = useRef<HTMLDivElement>(null)
   const mapInstance = useRef<maplibregl.Map | null>(null)
   const markers = useRef<globalThis.Map<string, MarkerRecord>>(new globalThis.Map())
+  // The single "you are here" marker. Held apart from `markers` on purpose: it
+  // is not an event, is not in the clustered source, and must never be culled
+  // by syncMarkers (feature-current-location-marker §2).
+  const userMarker = useRef<maplibregl.Marker | null>(null)
+  // The marker effect depends on these primitives, not on the `userLocation`
+  // array, so a caller passing a fresh `[lng, lat]` literal each render does not
+  // churn the DOM marker (§8.8).
+  const userLng = userLocation && Number.isFinite(userLocation[0]) ? userLocation[0] : null
+  const userLat = userLocation && Number.isFinite(userLocation[1]) ? userLocation[1] : null
   const [isLoaded, setIsLoaded] = useState(false)
   const initialCenter = useRef(center)
   const initialZoom = useRef(zoom)
@@ -287,6 +344,10 @@ export function Map({ events, center = [8.6753, 9.082], zoom = 5 }: MapProps) {
     return () => {
       markersMap.forEach((record) => record.marker.remove())
       markersMap.clear()
+      // Read at cleanup time on purpose: the marker is created by a later
+      // effect, after this one has run, so there is nothing to capture here.
+      userMarker.current?.remove()
+      userMarker.current = null
 
       if (instance.getLayer(CLUSTER_COUNT_LAYER_ID)) instance.removeLayer(CLUSTER_COUNT_LAYER_ID)
       if (instance.getLayer(CLUSTERS_LAYER_ID)) instance.removeLayer(CLUSTERS_LAYER_ID)
@@ -305,6 +366,67 @@ export function Map({ events, center = [8.6753, 9.082], zoom = 5 }: MapProps) {
     if (typeof center[0] !== 'number' || typeof center[1] !== 'number') return
     instance.flyTo({ center, zoom: 7, speed: 0.8 })
   }, [center, isLoaded])
+
+  // "You are here" marker: create it once the map has loaded and a location is
+  // known, move it when the location changes, remove it when the location goes
+  // away. There is never more than one (feature-current-location-marker R2).
+  // Unmount is handled by the initialization effect's cleanup.
+  useEffect(() => {
+    const instance = mapInstance.current
+    if (!instance || !isLoaded) return
+
+    if (userLng === null || userLat === null) {
+      userMarker.current?.remove()
+      userMarker.current = null
+      return
+    }
+
+    const lngLat: [number, number] = [userLng, userLat]
+    if (userMarker.current) {
+      userMarker.current.setLngLat(lngLat)
+      return
+    }
+
+    userMarker.current = new maplibregl.Marker({
+      element: createUserLocationElement(),
+      // Centre-anchored: the dot sits ON the point, unlike the bottom-anchored
+      // hazard pins, which is one more non-colour difference between them.
+      anchor: 'center',
+    })
+      .setLngLat(lngLat)
+      .addTo(instance)
+  }, [userLng, userLat, isLoaded])
+
+  // Size the approximate-area halo to a fixed ground radius (userLocationHalo.ts)
+  // rather than a fixed pixel size, so zooming in widens it instead of shrinking
+  // it into something that reads like a GPS accuracy circle. Ground resolution
+  // depends only on the zoom and the MARKER's latitude, so it is recomputed on
+  // `zoom` (which fires every frame of a zoom or fly-to) and on `resize` (the
+  // paint cap follows the map's size); a pan does not change it. A new latitude
+  // re-runs this effect. Written as a CSS custom property on the marker element:
+  // a truly dynamic value (§7.4).
+  useEffect(() => {
+    const instance = mapInstance.current
+    if (!instance || !isLoaded || userLat === null) return
+
+    const lat = userLat
+    const update = () => {
+      const element = userMarker.current?.getElement()
+      if (!element) return
+      const container = instance.getContainer()
+      const longestSide = Math.max(container.clientWidth, container.clientHeight)
+      const diameter = haloDiameterPx({ zoom: instance.getZoom(), lat, maxPx: 2 * longestSide })
+      element.style.setProperty('--map-user-halo-size', `${diameter.toFixed(1)}px`)
+    }
+
+    update()
+    instance.on('zoom', update)
+    instance.on('resize', update)
+    return () => {
+      instance.off('zoom', update)
+      instance.off('resize', update)
+    }
+  }, [userLat, isLoaded])
 
   // Feed data into the clustering source + keep DOM markers in sync with
   // unclustered, in-viewport points (§12.7).

@@ -4,7 +4,9 @@
 **Status**: LOCKED — Approved 2026-04-12
 **Maintained by**: @didi-rare
 
-> **Governance rule**: Any change to this document requires explicit maintainer review and a corresponding update to `roadmap.md`. No feature may be implemented unless it has an F-ID in this registry. Any implementation diverging from acceptance criteria here is drift.
+> **Governance rule**: Any change to this document requires explicit maintainer review and a corresponding update to `roadmap.md`. ~~No feature may be implemented unless it has an F-ID in this registry.~~ Any implementation diverging from acceptance criteria here is drift.
+>
+> **Amended 2026-11-18 by ADR-017 (rule 4):** the struck F-ID clause no longer applies to new work. No new F-IDs are assigned; an OpenSpec record (a proposal or a change record) is the unit of traceability, as ADR-010 already requires for gated paths. The registry in §4 stays as the record of the MVP's features. The other two clauses stand.
 
 ---
 
@@ -14,9 +16,21 @@ Natural event data (floods, wildfires, storms) is globally available via sources
 
 VigilAfrica translates raw geospatial event signals into familiar African administrative names — countries, states, and local government areas — answering the question: **"What is happening near me?"**
 
+### 1.1 Direction addendum (2026-11-18, ADR-017)
+
+The question is unchanged. What changes is the frame around it:
+
+- **Continental.** VigilAfrica covers African countries, added through `feature-continental-coverage`. A country counts as covered only when its states can be named.
+- **Hazard-neutral.** No hazard is the default or the lead. The categories the product supports, floods and wildfires, are shown together by recency.
+- **The product is the translation.** An event with coordinates becomes an event with a place name. The hazard is a property of the event, not of the product.
+
+Rationale and evidence: ADR-017 in `decisions.md`, and [`feature-place-first-direction`](../../proposals/feature-place-first-direction.md). Sequencing: `roadmap.md`, "Next — Place-First, Continental Direction".
+
 ---
 
 ## 2. MVP Scope (Locked)
+
+> **Historical (2026-11-18): the table below.** It records the MVP as approved on 2026-04-12 and is kept unchanged as that record; current scope is §1.1 and ADR-017. **§2.1 remains in force as amended**: one item is promoted by ADR-017, and every other exclusion still stands.
 
 The MVP is intentionally narrow. It proves the core value proposition with the smallest credible implementation before any expansion.
 
@@ -36,8 +50,8 @@ The following are **not in scope** and must not be implemented until explicitly 
 - Alert webhooks / third-party subscriptions
 - SMS or push notifications
 - Parametric insurance data exports
-- Coverage beyond Nigeria (v0.6+ expansion model)
-- Event types beyond Floods and Wildfires
+- ~~Coverage beyond Nigeria (v0.6+ expansion model)~~ **Promoted 2026-11-18 by ADR-017.**
+- Event types beyond Floods and Wildfires (kept out of scope by ADR-017 rule 3)
 - LGA (ADM2) enrichment
 - User accounts or authentication
 - GoFundMe or any fundraising UI (ADR-005)
@@ -65,6 +79,15 @@ Needs a clear local dev setup that works in under 30 minutes. Needs to understan
 ## 4. Feature Registry
 
 > **Rules**: Every implementation task must reference an F-ID. Any code not traceable to a feature here is out of scope. Acceptance criteria are the definition of done — all checkboxes must pass for a feature to be considered complete.
+>
+> **Since 2026-11-18 (ADR-017):** this registry is the record of the MVP's features and is not extended. New work is traced to OpenSpec records instead.
+
+### Registered drift (recorded 2026-11-18)
+
+Entries below are known to disagree with the code. They are recorded, not corrected here; the change that next touches each feature brings its entry into line or says what remains. This list is what was verified while writing ADR-017, not a full audit of the registry.
+
+- **F-005**: says countries other than Nigeria are out of scope. Ghana's states have been enriched since v0.6 (migration `000005`, rectangular approximations; HDX polygons since v1.2.0, `000010`), and seven neighbours' ADM0 outlines label border events (`000012`).
+- **F-008 (`GET /v1/context`)**, together with `api-contract.md`: describes a list `events` in the caller's country or state, location fields `country_code`/`country_name`/`state_name`, no query parameters, `X-Forwarded-For` read directly, and "always 200". The endpoint returns `nearby_events` (within 200 km, at most five), a location with `country`/`state`/`lat`/`lng`, a `location_source` field; it accepts `lat` and `lng`, honours forwarded headers only from a trusted proxy, and returns 400 on malformed coordinates and 500 on a database failure (`api/internal/handlers/context.go`). Its "Out of Scope" lists lat/long radius search, which is implemented. Phase 3 of `feature-place-first-direction` brings the fields it touches into line.
 
 ---
 

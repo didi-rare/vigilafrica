@@ -33,6 +33,9 @@ services:
       - DATABASE_URL=postgres://vigilafrica:vigilafrica@postgres:5432/vigilafrica?sslmode=disable
       - GEOIP_DB_PATH=/usr/share/GeoIP/GeoLite2-City.mmdb
       - APP_ENV=${APP_ENV:-local}
+      # Local dev runs on the migration-seeded NG/GH boundaries; set true in .env
+      # to exercise the boundary loader against HDX (feature-continental-coverage).
+      - BOUNDARY_LOADER_ENABLED=${BOUNDARY_LOADER_ENABLED:-false}
     ports:
       - "8080:8080"
     volumes:

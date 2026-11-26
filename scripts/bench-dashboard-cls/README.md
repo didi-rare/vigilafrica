@@ -15,6 +15,7 @@ decision ships with a runnable script, or it is an assertion, not evidence.
 | `measure-cls.mjs` | does the change alter CLS, measured **against a control build** rather than alone? |
 | `capture-fallback.mjs` | while the dashboard chunk is held back, is a loading affordance inside the viewport, and where exactly do the bar, card and spinner sit relative to the fold? (`chore-web-audit-leftovers` item 4) |
 | `check-reduced-motion.mjs` | under `prefers-reduced-motion: reduce`, is the **computed** animation on each pseudo-element actually `none`? Run it against a **staging** build, the only one with the banner. (the #191 near-miss, re-checked for the staging-banner glow) |
+| `check-user-marker.mjs` | is the "you are here" marker drawn at the context location, above a hazard pin but below an open popup and transparent to clicks, with its pulse stopped under `reduce`, at 3:1 against the real basemap, and is its status line on the visible map and clear of the attribution? (`feature-current-location-marker`) |
 
 ## Prerequisites
 
@@ -159,6 +160,85 @@ element is missing (run against a production build, the banner rows are
 absent and the script fails — by design). The staging glow must read
 `animation=none … opacity=0` under `reduce`; the progress segment must read
 `animation=none … width=<viewport>` (static full-width bar).
+
+## Checking the "you are here" marker
+
+```sh
+cd web && npm run build && npx vite preview --port 4273
+# in another shell, from the repository root:
+TARGET_URL=http://localhost:4273/ OUT_DIR=/tmp/marker PW_CHANNEL=chrome \
+  node scripts/bench-dashboard-cls/check-user-marker.mjs
+# control arm (a build without the feature): add EXPECT=none
+```
+
+`/v1/context` cannot resolve a location on localhost, so the script mocks it
+with a Lagos fixture and places one flood pin 45px south of it (at the map's
+zoom 7), so the pin's badge and its popup both cover the marker. Basemap tiles
+are real (ESRI), so the contrast samples need network access; the output says
+how many tiles loaded. It writes screenshots to `OUT_DIR` and exits non-zero on
+any failed expectation.
+
+Stacking is read with `elementFromPoint` after temporarily giving the marker
+`pointer-events: auto`, since with its real `none` the probe would skip it; the
+same probe with `none` restored shows which element receives a click.
+
+The halo stands for a fixed 50 km ground radius. The script checks it at the
+fly-to zoom against an independent Web Mercator formula, then wheel-zooms with
+the cursor on the marker and checks that the halo keeps a constant ratio to the
+hazard pin's on-screen distance (which MapLibre scales with the zoom), down to
+its 56px floor.
+
+`measure-cls.mjs` takes `CONTEXT_LOCATION=lagos` to resolve a location (default:
+none) and `PW_CHANNEL=chrome`; the bundled headless shell has no WebGL2. With a
+location set, the branch arm reads CLS only after `.dashboard-location-status__chip`
+has rendered (`BRANCH_CONTEXT_SELECTOR` overrides it), and the control arm after
+the `/v1/context` response has been served.
+
+`keyboard-walkthrough.mjs` presses Tab from the top of the page with the Lagos
+context and prints every element that takes focus; it fails if the marker or
+the status line takes focus, an element is focused twice, or focus never leaves
+the page. Run it on both builds with `OUT=<file>` and diff the orders. It checks
+order and reachability, not announcements or focus visibility.
+
+### What it found (2026-11-26, branch `feat/current-location-marker` vs `53698c2`)
+
+- Marker centre = map centre after the fly-to, to 0.0px; one marker; computed
+  `position: absolute`, `pointer-events: none`, `z-index: 1`.
+- Painted on top at the marker centre: the user marker over the hazard pin; the
+  popup over the user marker once open. A click there reaches the hazard pin
+  and opens its popup.
+- Pulse `animation-name`: `map-user-marker-pulse` under no-preference, `none`
+  under reduce; the dashed halo stays visible in both.
+- Contrast: floor over any background 4.38:1 (disc `#f8fafc`, ring `#050714`);
+  that floor is the evidence. Informational, since it cannot fail while the
+  floor holds: sampled pixels next to the disc at Lagos, worst 7.41:1 over the
+  basemap alone and 4.95:1 over the hazard pin.
+- Halo: 164.6px at zoom 7 (expected 164.6px, 100 km at 607.5 m/px); after wheel
+  zooms 233.3, 117.2 and 58.6px (expected 234.1, 117.0 and 58.5px), then held at
+  the 56.0px floor.
+- Keyboard: 21 tab stops, the same order on both builds; the marker and the
+  status line never take focus; focus leaves the page at the end.
+- Status line inside the visible map and clear of the attribution at 1350x940,
+  1024x768, 900x800, 768x1024 and 375x812.
+- CLS with a Lagos context, 8 runs per cell, branch read after the status chip
+  rendered:
+
+  | viewport | control CLS | branch CLS |
+  |---|---|---|
+  | 1920x1600 | 0.0054 (8/8) | 0.0054 (8/8) |
+  | 1350x940 | 0.0000 (0/8) | 0.0000 (0/8) |
+  | 375x812 | 0.0001 ×8 (0/8) | 0.0001 ×7, 0.0000 ×1 (0/8) |
+
+  With no context location at 1920x1600: 0.0054 (8/8) on both arms. The
+  1920x1600 residual is the pre-existing freshness banner, as above.
+- Dashboard and map boxes are identical on both arms (`#dashboard` 1523px tall
+  at 1350x940, map container 680x800, map 680x600).
+
+⚠️ It also showed two pre-existing defects, on the control as well as the
+branch, recorded in the change record: hazard pins after the first are drawn
+displaced (`.map-marker { position: relative }` overrides MapLibre's
+`absolute`; the second of two pins was 39.9px off its point), and any dashboard
+re-render, such as a page change, flies the camera back to the context location.
 
 ## Notes
 

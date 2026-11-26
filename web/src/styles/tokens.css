@@ -120,6 +120,11 @@
   --radius-xl: 18px;
   --radius-pill: 999px;
 
+  /* Map canvas height. Shared because the dashboard's location status line is
+     positioned against the map's bottom edge from outside the lazily-loaded
+     Map component (feature-current-location-marker). */
+  --map-height: 600px;
+
   /* Borders — neutral */
   --border: rgba(255, 255, 255, 0.1);
   --border-subtle: rgba(255, 255, 255, 0.08);
@@ -207,6 +212,19 @@
   --marker-flood-bottom: var(--sky-400);
   --marker-flood-glow: var(--sky-300);
   --marker-online: var(--emerald-500);
+
+  /* "You are here" marker (feature-current-location-marker). A light disc
+     inside a near-black ring: against any basemap pixel at least one of the
+     two meets 3:1 (§9.5) — the light core on dark ground, the dark ring on
+     bright ground (cloud, sand). Neutral on purpose, so it reads as neither
+     hazard hue (lime, sky) nor a cluster (amber, orange, red). */
+  --marker-user-fill: var(--slate-50);
+  --marker-user-ring: var(--navy-950);
+  --marker-user-glyph: var(--navy-950);
+  /* The halo is the "approximate area" cue: soft and dashed, not a crisp pin. */
+  --marker-user-halo-fill: rgba(248, 250, 252, 0.1);
+  --marker-user-halo-border: rgba(248, 250, 252, 0.75);
+  --marker-user-pulse: rgba(248, 250, 252, 0.45);
 
   /* ──────────────────────────────────────────────
      Legacy aliases — reconcile orphan references in

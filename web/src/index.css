@@ -11,6 +11,21 @@ html, body, #root {
 
 :root {
   --z-map-hud: 10;
+  /*
+    Map overlay order (feature-current-location-marker R3). Markers live in
+    MapLibre's canvas container and popups in the map container after it, all
+    `position: absolute` with no z-index by default, so they stack in DOM order.
+    - The "you are here" marker is raised above the hazard markers so a hazard
+      at the same spot cannot hide it. It has `pointer-events: none`, so the
+      hazard underneath stays clickable.
+    - Popups take the same value. On a tie the later element wins, and a popup
+      is always later in the DOM than the canvas container holding the marker,
+      so an open popup stays above it. Keeping popups at 1, below MapLibre's
+      control corners (2), leaves the existing popup-versus-attribution order as
+      it was.
+  */
+  --z-map-user-marker: 1;
+  --z-map-popup: var(--z-map-user-marker);
 }
 
 body {

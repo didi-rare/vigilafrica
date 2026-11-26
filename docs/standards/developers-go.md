@@ -36,7 +36,7 @@ Cross-references:
 
 **§1.1 — Binaries live under `cmd/<name>/`; each has one `main.go`.**
 *Why:* Multiple binaries (API server, one-shot ingestor) share internal packages without circular imports. Matches Go community convention.
-Current binaries: `cmd/server/`, `cmd/ingest/`, `cmd/seed/`, `cmd/sentinel/` — each with one `main.go`. New binaries follow the same shape.
+Current binaries: `cmd/server/`, `cmd/ingest/`, `cmd/sentinel/` — each with one `main.go`. (`cmd/seed/` was deleted by `feature-continental-coverage`, decision P4: boundaries now load from the manifest, `internal/boundaries`.) New binaries follow the same shape.
 
 **§1.2 — All non-`main` code lives under `internal/`.**
 *Why:* Go's compiler enforces `internal/` as import-private to the module. Prevents external consumers from depending on implementation details and keeps the public surface at zero.
@@ -45,7 +45,7 @@ Current binaries: `cmd/server/`, `cmd/ingest/`, `cmd/seed/`, `cmd/sentinel/` —
 
 **§1.3 — One concern per package. Package name matches directory name and is a single lowercase noun.**
 *Why:* `handlers`, `database`, `ingestor`, `normalizer` — readable at import sites (`database.NewRepository`, not `db.NewDB`).
-Current `internal/` packages: `alert` (Resend client + staleness watchdog), `database`, `digest` (daily digest + scheduler), `geoip` (MaxMind reader), `handlers`, `ingestor`, `models`, `normalizer`.
+Current `internal/` packages: `alert` (Resend client + staleness watchdog), `boundaries` (country manifest + boundary loader), `database`, `digest` (daily digest + scheduler), `geoip` (MaxMind reader), `handlers`, `ingestor`, `models`, `normalizer`.
 ❌ `package utils` / `package helpers` / `package common` — grab-bags rot fast.
 ✅ `package normalizer` — one job: EONET → internal model.
 
@@ -63,7 +63,7 @@ Current `internal/` packages: `alert` (Resend client + staleness watchdog), `dat
 *Why:* 12-factor. Works identically in local dev, Docker, and the VPS deployment. Env vars are the only surface ops needs to manage.
 
 **§2.2 — Required env vars must fail fast at startup. Never fall back to a default for secrets or DB URLs.**
-*Mechanism differs by binary:* `cmd/server/` uses `slog.Error(...)` + `os.Exit(1)` (structured, per §8.1); `cmd/ingest/` and `cmd/seed/` use `log.Fatal` (grandfathered, §8.1). New binaries use the slog form. (`cmd/sentinel/` is a governance CLI — it reads no env vars, so this rule doesn't apply to it; see §8.1.)
+*Mechanism differs by binary:* `cmd/server/` uses `slog.Error(...)` + `os.Exit(1)` (structured, per §8.1); `cmd/ingest/` uses `log.Fatal` (grandfathered, §8.1). New binaries use the slog form. (`cmd/sentinel/` is a governance CLI — it reads no env vars, so this rule doesn't apply to it; see §8.1.)
 *Why:* A silent default means the wrong database or a missing API key ships to prod unnoticed.
 ❌
 ```go
@@ -94,7 +94,7 @@ if port == "" {
 
 **§2.5 — Env var names are `SCREAMING_SNAKE_CASE` and scoped by feature prefix where ambiguous.**
 *Why:* Prefix disambiguates when multiple subsystems have similar concepts.
-Current server-side vars (read via `os.Getenv` or the `envOrDefault` helper): `DATABASE_URL`, `API_PORT`, `CORS_ORIGIN`, `TRUSTED_PROXY_CIDRS`, `API_DOCS_ENABLED`, `LOG_LEVEL`, `GEOIP_DB_PATH`, `INGEST_INTERVAL_MIN`, `RESEND_API_KEY`, `ALERT_EMAIL_TO`, `ALERT_FROM_EMAIL`, `DIGEST_TO`, `DIGEST_FROM`, plus the dev-only `DEV_FORCE_LAGOS` / `DEV_OVERRIDE_IP`. `.env.example` is the canonical list — update it in the same PR that adds a var.
+Current server-side vars (read via `os.Getenv` or the `envOrDefault` helper): `DATABASE_URL`, `API_PORT`, `CORS_ORIGIN`, `TRUSTED_PROXY_CIDRS`, `API_DOCS_ENABLED`, `LOG_LEVEL`, `GEOIP_DB_PATH`, `INGEST_INTERVAL_MIN`, `BOUNDARY_LOADER_ENABLED`, `BOUNDARY_RETRY_HOURS`, `BOUNDARY_MAX_ARCHIVE_BYTES`, `BOUNDARY_TX_TIMEOUT`, `BOUNDARY_COUNTRY_PAUSE_MS`, `RESEND_API_KEY`, `ALERT_EMAIL_TO`, `ALERT_FROM_EMAIL`, `DIGEST_TO`, `DIGEST_FROM`, plus the dev-only `DEV_FORCE_LAGOS` / `DEV_OVERRIDE_IP`. `.env.example` is the canonical list — update it in the same PR that adds a var.
 
 **§2.6 — Read env vars once at startup into a typed config struct or local vars in `main`. Do not call `os.Getenv` from deep in the call stack.**
 *Why:* Makes dependencies explicit, testable, and auditable. Handlers and the repository should receive their config via constructor args, not read env directly.
@@ -388,7 +388,7 @@ defer m.mu.Unlock()
 ## 8. Logging & Observability
 
 **§8.1 — Use `log/slog` for all new logging. Do not use `log.Printf` or `fmt.Println` in `internal/`.**
-*Why:* Structured logs are queryable; unstructured strings aren't. Legacy `log.Printf` / `log.Println` / `log.Fatal` in the one-shot binaries `cmd/ingest/` and `cmd/seed/` is grandfathered — new code uses slog. `internal/` and `cmd/server/` are slog-only. Exception: `cmd/sentinel/` is a git-diff governance CLI whose stdout/stderr **is** its product (human-facing audit output) — it uses `fmt.Println` / `fmt.Fprintf` deliberately and imports neither `log` nor `slog`; structured logging does not apply to it.
+*Why:* Structured logs are queryable; unstructured strings aren't. Legacy `log.Printf` / `log.Println` / `log.Fatal` in the one-shot binary `cmd/ingest/` is grandfathered — new code uses slog. `internal/` and `cmd/server/` are slog-only. Exception: `cmd/sentinel/` is a git-diff governance CLI whose stdout/stderr **is** its product (human-facing audit output) — it uses `fmt.Println` / `fmt.Fprintf` deliberately and imports neither `log` nor `slog`; structured logging does not apply to it.
 
 **§8.2 — Log as key-value pairs, not formatted strings.**
 *Why:* `slog` fields become JSON keys; grep becomes filter.
