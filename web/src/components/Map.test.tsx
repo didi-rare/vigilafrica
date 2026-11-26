@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
-import { act, render, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { axe } from 'vitest-axe'
 import type { FeatureCollection, Point } from 'geojson'
 
 import { Map } from './Map'
@@ -161,11 +162,20 @@ const maplibreMock = vi.hoisted(() => {
       this.popup = popup
       return this
     })
+    // Like MapLibre, attach the element under the map's container on addTo and
+    // detach it on remove, so tests can find markers in the DOM by accessible
+    // name (§13.3) and a leaked marker shows up as a duplicate node.
     readonly addTo = vi.fn((map: MockMap) => {
       this.map = map
+      const { container } = map.options as { container: HTMLElement }
+      container.appendChild(this.options.element)
       return this
     })
-    readonly remove = vi.fn()
+    readonly remove = vi.fn(() => {
+      this.options.element.remove()
+      this.map = null
+      return this
+    })
     readonly options: { element: HTMLElement; anchor: string }
     lngLat: [number, number] | null = null
     popup: MockPopup | null = null
@@ -511,6 +521,168 @@ describe('Map', () => {
     expect(map.removeLayer).toHaveBeenCalledWith(CLUSTERS_LAYER_ID)
     expect(map.removeSource).toHaveBeenCalledWith(SOURCE_ID)
     expect(map.remove).toHaveBeenCalledTimes(1)
+  })
+
+  describe('user location marker', () => {
+    const LAGOS: [number, number] = [3.3792, 6.5244]
+    const ABUJA: [number, number] = [7.4951, 9.0579]
+    const USER_LABEL = /your approximate location \(based on your network\)/i
+
+    function userMarkers() {
+      return maplibreMock.instances.markers.filter(
+        (m) => USER_LABEL.test(m.options.element.getAttribute('aria-label') ?? ''),
+      )
+    }
+
+    async function loadMap() {
+      const map = maplibreMock.instances.maps[0]
+      await act(async () => {
+        map.trigger('load')
+      })
+      return map
+    }
+
+    it('renders one non-interactive, labelled marker at the location once the map loads', async () => {
+      render(<Map events={[]} userLocation={LAGOS} />)
+
+      // Not before load: the marker is only added to a ready map.
+      expect(screen.queryByLabelText(USER_LABEL)).toBeNull()
+
+      const map = await loadMap()
+
+      const marker = screen.getByRole('img', { name: USER_LABEL })
+      expect(screen.getAllByLabelText(USER_LABEL)).toHaveLength(1)
+      // §9.1: a labelled image, not a button — it has no popup or action.
+      expect(marker.tagName).not.toBe('BUTTON')
+      expect(screen.queryByRole('button', { name: USER_LABEL })).toBeNull()
+      expect(marker).not.toHaveAttribute('tabindex')
+
+      const [record] = userMarkers()
+      expect(record.lngLat).toEqual(LAGOS)
+      expect(record.options.anchor).toBe('center')
+      expect(record.popup).toBeNull()
+      expect(record.addTo).toHaveBeenCalledWith(map)
+    })
+
+    it('renders no user marker when the location is null', async () => {
+      render(<Map events={events} userLocation={null} />)
+      const map = await loadMap()
+      map.sourceFeatures = events.map(unclusteredFeature)
+      await act(async () => {
+        map.trigger('moveend')
+      })
+
+      expect(screen.queryByLabelText(USER_LABEL)).toBeNull()
+      expect(userMarkers()).toHaveLength(0)
+      // The event markers are unaffected.
+      expect(screen.getByRole('button', { name: 'Lagos Flood (floods)' })).toBeInTheDocument()
+    })
+
+    it('renders no user marker when the prop is omitted', async () => {
+      render(<Map events={[]} />)
+      await loadMap()
+
+      expect(screen.queryByLabelText(USER_LABEL)).toBeNull()
+      expect(maplibreMock.Marker).not.toHaveBeenCalled()
+    })
+
+    it('keeps exactly one marker, moved in place, when the location changes', async () => {
+      const { rerender } = render(<Map events={[]} userLocation={LAGOS} />)
+      await loadMap()
+
+      rerender(<Map events={[]} userLocation={ABUJA} />)
+
+      expect(screen.getAllByLabelText(USER_LABEL)).toHaveLength(1)
+      expect(userMarkers()).toHaveLength(1)
+      expect(userMarkers()[0].lngLat).toEqual(ABUJA)
+      expect(userMarkers()[0].remove).not.toHaveBeenCalled()
+    })
+
+    it('does not touch the marker when re-rendered with an equal but new array', async () => {
+      const { rerender } = render(<Map events={[]} userLocation={[...LAGOS]} />)
+      await loadMap()
+      const [record] = userMarkers()
+      record.setLngLat.mockClear()
+
+      rerender(<Map events={[]} userLocation={[...LAGOS]} />)
+      rerender(<Map events={[]} userLocation={[...LAGOS]} />)
+
+      expect(userMarkers()).toHaveLength(1)
+      expect(record.setLngLat).not.toHaveBeenCalled()
+      expect(record.remove).not.toHaveBeenCalled()
+    })
+
+    it('removes the marker when the location goes null, and adds it back when one returns', async () => {
+      const { rerender } = render(<Map events={[]} userLocation={LAGOS} />)
+      await loadMap()
+      const [first] = userMarkers()
+
+      rerender(<Map events={[]} userLocation={null} />)
+
+      expect(first.remove).toHaveBeenCalledTimes(1)
+      expect(screen.queryByLabelText(USER_LABEL)).toBeNull()
+
+      rerender(<Map events={[]} userLocation={ABUJA} />)
+
+      expect(screen.getAllByLabelText(USER_LABEL)).toHaveLength(1)
+      expect(userMarkers().at(-1)?.lngLat).toEqual(ABUJA)
+    })
+
+    it('ignores a location with a non-finite coordinate', async () => {
+      render(<Map events={[]} userLocation={[Number.NaN, 6.5244]} />)
+      await loadMap()
+
+      expect(screen.queryByLabelText(USER_LABEL)).toBeNull()
+    })
+
+    it('is not culled when the event markers re-sync after a viewport change', async () => {
+      render(<Map events={events} userLocation={LAGOS} />)
+      const map = await loadMap()
+      map.sourceFeatures = events.map(unclusteredFeature)
+      await act(async () => {
+        map.trigger('moveend')
+      })
+      expect(screen.getByRole('button', { name: 'Lagos Flood (floods)' })).toBeInTheDocument()
+
+      // Every event is now clustered away, so syncMarkers removes all of them.
+      map.sourceFeatures = [clusterFeature(7, 2, 3.3792, 6.5244)]
+      await act(async () => {
+        map.trigger('zoomend')
+      })
+
+      expect(screen.queryByRole('button', { name: 'Lagos Flood (floods)' })).toBeNull()
+      expect(screen.getAllByLabelText(USER_LABEL)).toHaveLength(1)
+      expect(userMarkers()[0].remove).not.toHaveBeenCalled()
+      // And it is never part of the clustered source's data.
+      const source = map.sources.get(SOURCE_ID)
+      const fed = source?.setData.mock.calls.at(-1)?.[0] as FeatureCollection | undefined
+      expect(fed?.features).toHaveLength(events.length)
+    })
+
+    it('removes the marker on unmount', async () => {
+      const { unmount } = render(<Map events={[]} userLocation={LAGOS} />)
+      await loadMap()
+      const [record] = userMarkers()
+
+      unmount()
+
+      expect(record.remove).toHaveBeenCalledTimes(1)
+      expect(screen.queryByLabelText(USER_LABEL)).toBeNull()
+    })
+
+    it('has no axe violations with the user marker and event markers on the map', async () => {
+      const { container } = render(<Map events={events} userLocation={LAGOS} />)
+      const map = await loadMap()
+      map.sourceFeatures = events.map(unclusteredFeature)
+      await act(async () => {
+        map.trigger('moveend')
+      })
+      expect(screen.getByRole('img', { name: USER_LABEL })).toBeInTheDocument()
+      expect(screen.getAllByRole('button')).toHaveLength(2)
+
+      const results = await axe(container)
+      expect(results.violations).toHaveLength(0)
+    })
   })
 
   it('reinitializes cleanly across the StrictMode effect cleanup cycle', () => {

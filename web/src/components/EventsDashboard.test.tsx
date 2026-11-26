@@ -11,8 +11,17 @@ import { fetchContext, fetchEvents, fetchHealth, fetchStates } from '../api/even
 import type { ContextResponse, EventsResponse, HealthResponse } from '../api/events'
 
 vi.mock('./Map', () => ({
-  Map: ({ events }: { events: readonly { title: string }[] }) => (
-    <div aria-label="Event locations map" role="img">
+  // `data-user-location` exposes the userLocation prop the dashboard passed, so
+  // the wiring can be asserted without the real MapLibre-backed component.
+  Map: ({ events, userLocation }: {
+    events: readonly { title: string }[]
+    userLocation?: readonly [number, number] | null
+  }) => (
+    <div
+      aria-label="Event locations map"
+      role="img"
+      data-user-location={userLocation ? userLocation.join(',') : ''}
+    >
       {events.map(event => event.title).join(', ')}
     </div>
   ),
@@ -339,6 +348,76 @@ describe('EventsDashboard', () => {
 
     await screen.findByRole("heading", { level: 3, name: /Lagos Flood 42/i })
     expect(screen.getByRole('status', { name: /data freshness/i })).toHaveTextContent(/data freshness unknown/i)
+  })
+})
+
+// ── "You are here" marker (feature-current-location-marker) ───────────────────
+
+describe('EventsDashboard user location', () => {
+  beforeEach(() => {
+    mockFetchEvents.mockResolvedValue(eventsResponse)
+    mockFetchStates.mockResolvedValue(['Lagos', 'Greater Accra'])
+    mockFetchHealth.mockResolvedValue(okHealth)
+  })
+
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
+  const lagosContext: ContextResponse = {
+    location: { country: 'Nigeria', state: 'Lagos', lat: 6.5244, lng: 3.3792 },
+    nearby_events: [],
+  }
+
+  it('passes the resolved location to the map as [lng, lat] and names it as approximate', async () => {
+    mockFetchContext.mockResolvedValue(lagosContext)
+    renderWithProviders(<EventsDashboard />)
+
+    const status = screen.getByRole('status', { name: /approximate location/i })
+    await waitFor(() => {
+      expect(status).toHaveTextContent(
+        'Your approximate location: Lagos, Nigeria (based on your network)',
+      )
+    })
+    expect(await screen.findByRole('img', { name: /event locations map/i }))
+      .toHaveAttribute('data-user-location', '3.3792,6.5244')
+  })
+
+  it('names the country alone when GeoIP returned no subdivision', async () => {
+    mockFetchContext.mockResolvedValue({
+      location: { country: 'Ghana', state: '', lat: 7.9465, lng: -1.0232 },
+      nearby_events: [],
+    })
+    renderWithProviders(<EventsDashboard />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('status', { name: /approximate location/i })).toHaveTextContent(
+        'Your approximate location: Ghana (based on your network)',
+      )
+    })
+  })
+
+  it('passes no location and leaves the status region empty when context has none', async () => {
+    mockFetchContext.mockResolvedValue(contextResponse)
+    renderWithProviders(<EventsDashboard />)
+
+    expect(await screen.findByRole('img', { name: /event locations map/i }))
+      .toHaveAttribute('data-user-location', '')
+    await waitFor(() => expect(mockFetchContext).toHaveBeenCalled())
+    // The region stays mounted so a later location is announced; it is empty.
+    expect(screen.getByRole('status', { name: /approximate location/i })).toBeEmptyDOMElement()
+  })
+
+  it('has no accessibility violations with a resolved location', async () => {
+    mockFetchContext.mockResolvedValue(lagosContext)
+    const { container } = renderWithProviders(<EventsDashboard />)
+
+    await screen.findByRole('heading', { level: 3, name: /Lagos Flood 42/i })
+    await waitFor(() => {
+      expect(screen.getByRole('status', { name: /approximate location/i })).not.toBeEmptyDOMElement()
+    })
+    const results = await axe(container)
+    expect(results.violations).toHaveLength(0)
   })
 })
 

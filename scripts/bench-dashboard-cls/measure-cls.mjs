@@ -30,6 +30,15 @@ function parseViewport(raw) {
 }
 // Without this the chunk arrives too fast to observe the shift it exists to prevent.
 const CHUNK_DELAY_MS = Number(process.env.CHUNK_DELAY_MS ?? 1200)
+// `CONTEXT_LOCATION=lagos` makes /v1/context resolve a location, so the
+// dashboard renders its "you are here" status line and the map its marker
+// (feature-current-location-marker). Default: no location, as before.
+const CONTEXT_LOCATION = process.env.CONTEXT_LOCATION === 'lagos'
+  ? { country: 'Nigeria', state: 'Lagos', lat: 6.5244, lng: 3.3792 }
+  : null
+// The bundled headless shell has no WebGL2, so the map throws and the dashboard
+// never mounts; on the Windows dev host use the installed Chrome: PW_CHANNEL=chrome.
+const CHANNEL = process.env.PW_CHANNEL || undefined
 const TOTAL = 3268   // continental-scale projection
 const PAGE  = 50
 
@@ -76,7 +85,7 @@ async function measureOnce(browser, target, waitSelector) {
       events_fetched: TOTAL, events_stored: TOTAL, error: null,
     },
   }}))
-  await page.route('**/v1/context', r => r.fulfill({ json: { location: null, nearby_events: [] } }))
+  await page.route('**/v1/context', r => r.fulfill({ json: { location: CONTEXT_LOCATION, nearby_events: [] } }))
   await page.route('**/v1/states**', r => r.fulfill({ json: { states: ['Lagos', 'Kano', 'Rivers'] } }))
   await page.route('**/v1/events**', r => r.fulfill({ json: eventsPayload }))
   await page.route('**/assets/EventsDashboard-*.js', async r => {
@@ -96,7 +105,7 @@ async function measureOnce(browser, target, waitSelector) {
   return result
 }
 
-const browser = await chromium.launch()
+const browser = await chromium.launch({ channel: CHANNEL })
 try {
   for (const arm of [
     // The baseline predates `.dashboard-results`, so it waits on a selector both

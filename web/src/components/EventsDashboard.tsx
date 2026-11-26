@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { formatLocation } from '../formatLocation'
 import { Link, useSearchParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
@@ -350,6 +350,29 @@ export function EventsDashboard() {
         ? [contextData.location.lng, contextData.location.lat]
         : COUNTRY_CENTERS['Nigeria']
 
+  // "You are here" (feature-current-location-marker): the same IP-resolved
+  // point the camera flies to, drawn as a marker. Memoised on the primitives so
+  // the prop keeps its identity across renders (§8.8); null when /v1/context
+  // resolved no location (localhost, lookup failure), which draws no marker.
+  const userLng = contextData?.location?.lng
+  const userLat = contextData?.location?.lat
+  const userLocation = useMemo<[number, number] | null>(
+    () => (typeof userLng === 'number' && typeof userLat === 'number' ? [userLng, userLat] : null),
+    [userLng, userLat],
+  )
+  // The marker's text alternative (§12.11), and its visible legend: the marker
+  // itself has no popup, so this line is where a sighted user reads that the
+  // point is approximate and network-derived. GeoIP may return a country with
+  // no subdivision, so either part can be empty.
+  const userPlace = userLocation
+    ? [contextData?.location?.state, contextData?.location?.country].filter(Boolean).join(', ')
+    : ''
+  const userLocationText = userLocation
+    ? userPlace
+      ? `Your approximate location: ${userPlace} (based on your network)`
+      : 'Your approximate location is marked on the map (based on your network)'
+    : ''
+
   // ── Pagination arithmetic ──────────────────────────────────────────────────
   // EVERY value here derives from `meta` as the server applied it to the rows
   // currently rendered — never from the offset the URL is asking for.
@@ -623,8 +646,29 @@ export function EventsDashboard() {
             {/* announce={false}: this mounts alongside the data-fetch status
                 region; one wait, one announcement. The visible text stays. */}
             <Suspense fallback={<LoadingState message="Loading map telemetry..." announce={false} />}>
-              <Map events={mapEvents} center={mapCenter} />
+              <Map events={mapEvents} center={mapCenter} userLocation={userLocation} />
             </Suspense>
+            {/*
+              Rendered here, outside the lazily-loaded map, so the location is
+              conveyed even if the map chunk or WebGL fails. The region is always
+              mounted, empty until a location resolves, because a live region
+              that appears together with its text is often not announced.
+              Absolutely positioned over the map, so it reserves no layout space
+              and cannot shift the page when context lands.
+            */}
+            <div
+              className="dashboard-location-status"
+              role="status"
+              aria-live="polite"
+              aria-label="Approximate location"
+            >
+              {userLocationText && (
+                <span className="dashboard-location-status__chip">
+                  <span className="dashboard-location-status__swatch" aria-hidden="true" />
+                  {userLocationText}
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </div>
