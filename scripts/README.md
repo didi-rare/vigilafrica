@@ -2,6 +2,34 @@
 
 Maintenance and data-preparation utilities for VigilAfrica.
 
+## boundaries/ — the boundary manifest (feature-continental-coverage)
+
+Countries are added by a manifest entry, not a migration. The API's boundary
+loader (`api/internal/boundaries`) downloads each entry at run time.
+
+```bash
+# Build or refresh one country's entry in api/internal/boundaries/manifest.json
+python -I scripts/boundaries/boundary_manifest.py build --iso3 NGA --code NG --name Nigeria
+
+# Re-download every entry and verify member_sha256 (run on every manifest PR)
+python -I scripts/boundaries/boundary_manifest.py verify
+
+# Offline tests for the script's helpers
+python -I scripts/boundaries/test_boundary_manifest.py
+
+# Before/after check of unit counts and stored-event names around a load
+scripts/boundaries/equivalence.sh snapshot before.tsv   # see the script header
+
+# LOCAL databases only: 16,625 deterministic probe events (a 0.1-degree grid
+# over the old NG and GH boxes, plus 130 polygons) so the comparison covers
+# borders and coasts, not only where real events fell. Removal is in its header.
+psql "$DATABASE_URL" -f scripts/boundaries/equivalence-probes.sql
+```
+
+The manifest is validated offline in CI by
+`api/internal/boundaries/manifest_test.go`. `generate_boundary_migration.py`
+below is how migration 000010 was built; new countries do not use it.
+
 ## generate_boundary_migration.py
 
 Converts an HDX COD Admin Boundaries GeoJSON file into a VigilAfrica PostgreSQL migration.

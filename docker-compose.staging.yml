@@ -43,6 +43,13 @@ services:
       # reasoning. Staging's gateway was measured as 172.18.0.1 on 2026-08-18.
       - TRUSTED_PROXY_CIDRS=${TRUSTED_PROXY_CIDRS:-127.0.0.1/8,::1/128,172.18.0.1/32}
       - INGEST_INTERVAL_MIN=${INGEST_INTERVAL_MIN:-60}
+      # Boundary loader (feature-continental-coverage): on unless the host .env says
+      # false; the other four default to the values in api/internal/boundaries/config.go.
+      - BOUNDARY_LOADER_ENABLED=${BOUNDARY_LOADER_ENABLED:-true}
+      - BOUNDARY_RETRY_HOURS=${BOUNDARY_RETRY_HOURS:-24}
+      - BOUNDARY_MAX_ARCHIVE_BYTES=${BOUNDARY_MAX_ARCHIVE_BYTES:-134217728}
+      - BOUNDARY_TX_TIMEOUT=${BOUNDARY_TX_TIMEOUT:-2m}
+      - BOUNDARY_COUNTRY_PAUSE_MS=${BOUNDARY_COUNTRY_PAUSE_MS:-1000}
       - RATE_LIMIT_RPM=${RATE_LIMIT_RPM:-60}
       - GLOBAL_RATE_LIMIT_RPM=${GLOBAL_RATE_LIMIT_RPM:-300}
       - RATE_LIMIT_MAX_BUCKETS=${RATE_LIMIT_MAX_BUCKETS:-10000}

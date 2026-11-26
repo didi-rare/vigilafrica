@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"vigilafrica/api/internal/alert"
+	"vigilafrica/api/internal/boundaries"
 	"vigilafrica/api/internal/database"
 	"vigilafrica/api/internal/digest"
 	"vigilafrica/api/internal/geoip"
@@ -69,7 +70,31 @@ func main() {
 
 	// ── Alert config + scheduler + watchdog ───────────────────────────────────
 	alertClient := alert.NewClient(loadAlertConfigFromEnv(), slog.Default().With("component", "alert"))
-	ingestor.StartScheduler(ctx, repo, alertClient)
+
+	// ── Boundary manifest + loader (feature-continental-coverage §1, §2) ───────
+	// The manifest is compiled in and validated by a CI test, so a parse error
+	// here is a build bug: fail fast rather than serve without a country list.
+	manifest, err := boundaries.Embedded()
+	if err != nil {
+		slog.Error("boundary manifest is invalid", "err", err)
+		os.Exit(1)
+	}
+	boundaryLog := slog.Default().With("component", "boundaries")
+	boundaryRepo, hasBoundaryRepo := repo.(database.BoundaryRepository)
+	if !hasBoundaryRepo {
+		slog.Error("repository does not support boundary loading")
+		os.Exit(1)
+	}
+	// Assigned only when enabled: a nil *Loader in the interface would be non-nil.
+	var boundaryLoader ingestor.BoundaryLoader
+	if enabled, boundaryCfg := boundaries.ConfigFromEnv(os.Getenv, ingestor.SchedulerLockTTL, boundaryLog); enabled {
+		boundaryLoader = boundaries.NewLoader(manifest, boundaryRepo, nil, boundaryCfg, boundaryLog)
+	} else {
+		boundaryLog.Info("boundary loader disabled via BOUNDARY_LOADER_ENABLED=false; using the boundaries already stored")
+	}
+	boundaryStatus := boundaries.NewStatusReporter(manifest, boundaryRepo)
+
+	schedulerDone := ingestor.StartScheduler(ctx, repo, alertClient, boundaryLoader)
 	alert.StartStalenessWatchdog(ctx, repo, alertClient, loadWatchdogConfigFromEnv(), slog.Default().With("component", "watchdog"))
 
 	// ── Daily flood digest (feature-daily-flood-digest) ───────────────────────
@@ -83,7 +108,7 @@ func main() {
 	cache := handlers.NewResponseCache()
 
 	// ── Handlers ──────────────────────────────────────────────────────────────
-	healthHandler := handlers.NewHealthHandler(version, repo)
+	healthHandler := handlers.NewHealthHandler(version, repo).WithBoundaryStatus(boundaryStatus)
 	eventHandler := handlers.NewEventHandler(repo, slog.Default().With("component", "events"))
 	enrichmentStatsHandler := handlers.NewEnrichmentStatsHandler(repo)
 	digestHandler := handlers.NewDigestHandler(repo, slog.Default().With("component", "digest"))
@@ -129,7 +154,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.Handle("GET /live", handlers.LiveHandler(version))
 	mux.Handle("GET /health", healthHandler)
-	mux.Handle("GET /ready", handlers.NewReadinessHandler(version, repo))
+	mux.Handle("GET /ready", handlers.NewReadinessHandler(version, repo).WithBoundaryStatus(boundaryStatus))
 	mux.Handle("GET /openapi.yaml", handlers.OpenAPISpecHandler()) // local docs/testing
 	mux.Handle("GET /docs", handlers.SwaggerUIHandler())           // local docs/testing
 	mux.Handle("GET /docs/", handlers.SwaggerUIHandler())          // local docs/testing
@@ -178,6 +203,16 @@ func main() {
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		slog.Error("graceful shutdown error", "err", err)
+	}
+	// The scheduler saw the same cancellation and has been unwinding meanwhile.
+	// Wait for it (within the same 15 s) before the deferred repo.Close(): the
+	// run in progress releases the scheduler lease through the pool, and a
+	// release on a closed pool leaves the lease held for a whole TTL.
+	select {
+	case <-schedulerDone:
+		slog.Info("scheduler stopped; lease released")
+	case <-shutdownCtx.Done():
+		slog.Warn("scheduler did not stop within the shutdown timeout; its lease will expire on its own")
 	}
 	slog.Info("server stopped cleanly")
 }

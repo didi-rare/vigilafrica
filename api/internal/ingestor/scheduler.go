@@ -21,19 +21,51 @@ type schedulerLockRepository interface {
 	ReleaseSchedulerLock(ctx context.Context, lockName, holder string) error
 }
 
+// BoundaryLoader is the boundary step that runs at the start of every locked
+// scheduler run, before ingestion (feature-continental-coverage spec §2, P1).
+// renewLease extends the scheduler lease; it returns an error wrapping
+// ErrLeaseLost when the lease could not be renewed, and the loader must then
+// stop. An error wrapping ErrLeaseLost stops the whole run; any other error is
+// logged and ingestion goes ahead. Implemented by boundaries.Loader.
+type BoundaryLoader interface {
+	Run(ctx context.Context, renewLease func(context.Context) error) error
+}
+
+// ErrLeaseLost: renewing the scheduler lease failed or another holder has it.
+var ErrLeaseLost = errors.New("scheduler lease lost")
+
+// lockReleaseTimeout bounds the lock release, which runs on a fresh context so
+// that a run ended by SIGTERM still frees the lease at once instead of leaving
+// it to expire (the shutdown context is already cancelled by then).
+const lockReleaseTimeout = 10 * time.Second
+
 // StartScheduler launches a background goroutine that runs ingestion for all
 // countries in DefaultCountries at a configurable interval (F-012).
 // Uses stdlib time.Ticker — no external deps.
 //
-// Default interval: 60 minutes, configurable via INGEST_INTERVAL_MIN.
+// Every run — the one on startup and each tick — takes the scheduler lease,
+// runs the boundary loader (when boundaryLoader is non-nil), then ingests. The
+// function returns as soon as the goroutine is launched, so boot never waits
+// on a boundary download.
+//
+// Default interval: 60 minutes, configurable via INGEST_INTERVAL_MIN; 0 turns
+// the whole scheduler off, boundary loader included.
 // The goroutine exits cleanly when ctx is cancelled (SIGTERM/SIGINT).
-func StartScheduler(ctx context.Context, repo database.Repository, alertClient *alert.Client) {
+//
+// The returned channel is closed when the goroutine has returned, after the
+// run in progress has released the scheduler lease (already closed when the
+// scheduler is disabled). The caller must wait on it before closing the
+// repository: releasing the lease needs the pool, and a release on a closed
+// pool leaves the lease held until it expires (developers-go.md §7.1).
+func StartScheduler(ctx context.Context, repo database.Repository, alertClient *alert.Client, boundaryLoader BoundaryLoader) <-chan struct{} {
+	done := make(chan struct{})
 	intervalMin := 60
 	if v := os.Getenv("INGEST_INTERVAL_MIN"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
 			if n == 0 {
 				slog.Info("scheduler: disabled via INGEST_INTERVAL_MIN=0")
-				return
+				close(done)
+				return done
 			}
 			if n > 0 {
 				intervalMin = n
@@ -45,12 +77,14 @@ func StartScheduler(ctx context.Context, repo database.Repository, alertClient *
 	slog.Info("scheduler: starting",
 		"interval_minutes", intervalMin,
 		"countries", len(DefaultCountries),
+		"boundary_loader", boundaryLoader != nil,
 	)
 
 	go func() {
+		defer close(done)
 		// Run once immediately on startup so there is data on first boot
 		slog.Info("scheduler: running initial ingestion on startup")
-		runAllCountriesWithLock(ctx, repo, alertClient, interval)
+		runAllCountriesWithLock(ctx, repo, alertClient, boundaryLoader)
 
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
@@ -62,10 +96,11 @@ func StartScheduler(ctx context.Context, repo database.Repository, alertClient *
 				return
 			case <-ticker.C:
 				slog.Info("scheduler: tick — starting scheduled ingestion")
-				runAllCountriesWithLock(ctx, repo, alertClient, interval)
+				runAllCountriesWithLock(ctx, repo, alertClient, boundaryLoader)
 			}
 		}
 	}()
+	return done
 }
 
 // schedulerLockTTL bounds how long a crashed/disappeared scheduler holds the
@@ -82,30 +117,80 @@ func StartScheduler(ctx context.Context, repo database.Repository, alertClient *
 // for multi-replica HA and is captured as a follow-up.
 const schedulerLockTTL = 5 * time.Minute
 
-func runAllCountriesWithLock(ctx context.Context, repo database.Repository, alertClient *alert.Client, _ time.Duration) {
+// SchedulerLockTTL is schedulerLockTTL for callers that must stay under it
+// (the boundary loader's BOUNDARY_TX_TIMEOUT).
+const SchedulerLockTTL = schedulerLockTTL
+
+func runAllCountriesWithLock(ctx context.Context, repo database.Repository, alertClient *alert.Client, boundaryLoader BoundaryLoader) {
+	ingest := func(ctx context.Context) { runAllCountries(ctx, repo, alertClient) }
+
 	lockRepo, ok := repo.(schedulerLockRepository)
 	if !ok {
-		runAllCountries(ctx, repo, alertClient)
+		// No lease to take or renew: a repository without the lock (test doubles).
+		runLocked(ctx, nil, "", boundaryLoader, ingest)
 		return
 	}
+	runLocked(ctx, lockRepo, schedulerLockHolder(), boundaryLoader, ingest)
+}
 
-	holder := schedulerLockHolder()
-	acquired, err := lockRepo.TryAcquireSchedulerLock(ctx, schedulerLockName, holder, schedulerLockTTL)
-	if err != nil {
-		slog.Error("scheduler: failed to acquire scheduler lock", "err", err)
-		return
-	}
-	if !acquired {
-		slog.Info("scheduler: another instance holds scheduler lock; skipping ingestion")
-		return
-	}
-	defer func() {
-		if err := lockRepo.ReleaseSchedulerLock(ctx, schedulerLockName, holder); err != nil {
-			slog.Error("scheduler: failed to release scheduler lock", "err", err)
+// runLocked is one scheduler run: take the lease (when lockRepo is non-nil),
+// load boundaries, ingest, release the lease. A run that finds the lease held
+// does nothing, so a startup run that loses the race loads boundaries on the
+// next tick instead.
+func runLocked(ctx context.Context, lockRepo schedulerLockRepository, holder string, boundaryLoader BoundaryLoader, ingest func(context.Context)) {
+	renew := func(context.Context) error { return nil }
+
+	if lockRepo != nil {
+		acquired, err := lockRepo.TryAcquireSchedulerLock(ctx, schedulerLockName, holder, schedulerLockTTL)
+		if err != nil {
+			slog.Error("scheduler: failed to acquire scheduler lock", "err", err)
+			return
 		}
-	}()
+		if !acquired {
+			slog.Info("scheduler: another instance holds scheduler lock; skipping this run (boundary load and ingestion)")
+			return
+		}
+		defer releaseSchedulerLock(ctx, lockRepo, holder)
 
-	runAllCountries(ctx, repo, alertClient)
+		// Calling TryAcquire with our own holder extends the lease
+		// (TryAcquireSchedulerLock in database/queries.go).
+		renew = func(ctx context.Context) error {
+			ok, err := lockRepo.TryAcquireSchedulerLock(ctx, schedulerLockName, holder, schedulerLockTTL)
+			if err != nil {
+				return fmt.Errorf("%w: %w", ErrLeaseLost, err)
+			}
+			if !ok {
+				return fmt.Errorf("%w: held by another instance", ErrLeaseLost)
+			}
+			return nil
+		}
+	}
+
+	if boundaryLoader != nil {
+		if err := boundaryLoader.Run(ctx, renew); err != nil {
+			switch {
+			case errors.Is(err, ErrLeaseLost):
+				slog.Error("scheduler: lease lost during the boundary load; stopping this run", "err", err)
+				return
+			case ctx.Err() != nil:
+				slog.Info("scheduler: context cancelled during the boundary load", "err", err)
+				return
+			default:
+				slog.Error("scheduler: boundary load did not complete; ingesting on the boundaries already stored", "err", err)
+			}
+		}
+	}
+
+	ingest(ctx)
+}
+
+// releaseSchedulerLock frees the lease on a fresh, short-lived context.
+func releaseSchedulerLock(ctx context.Context, lockRepo schedulerLockRepository, holder string) {
+	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), lockReleaseTimeout)
+	defer cancel()
+	if err := lockRepo.ReleaseSchedulerLock(rctx, schedulerLockName, holder); err != nil {
+		slog.Error("scheduler: failed to release scheduler lock", "err", err)
+	}
 }
 
 func schedulerLockHolder() string {

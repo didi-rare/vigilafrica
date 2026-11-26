@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "countries": [
+    {"code": "GH", "name": "Ghana", "levels": "adm1", "source": "hdx-cod-ab", "enabled": true, "archive_url": "https://data.humdata.org/dataset/dc4c17cf-59d9-478c-b2b7-acd889241194/resource/c8d647a7-f396-4108-9fe4-cf7b31731a73/download/gha_admin_boundaries.geojson.zip", "member": "gha_admin1.geojson", "member_sha256": "3ad6d140032813c4a3982914f9a14b020fe27c1d2cf77c0ba350c4b46d59871b", "vintage": "2025-10-30", "name_field": "adm1_name", "pcode_field": "adm1_pcode", "name_overrides": {}, "bbox": [-3.37, 4.64, 1.31, 11.28]},
+    {"code": "NG", "name": "Nigeria", "levels": "adm1", "source": "hdx-cod-ab", "enabled": true, "archive_url": "https://data.humdata.org/dataset/81ac1d38-f603-4a98-804d-325c658599a3/resource/7e30ec96-7f29-4ee8-9f4c-77633b353cbb/download/nga_admin_boundaries.geojson.zip", "member": "nga_admin1.geojson", "member_sha256": "e6fe01536b567cf94ae381860b4a6cc6f955f498f27f4293ecec1fc3b19c6a70", "vintage": "2025-10-30", "name_field": "adm1_name", "pcode_field": "adm1_pcode", "name_overrides": {}, "bbox": [2.56, 4.17, 14.78, 14.0]}
+  ]
+}
