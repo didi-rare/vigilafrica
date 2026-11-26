@@ -30,6 +30,15 @@ function parseViewport(raw) {
 }
 // Without this the chunk arrives too fast to observe the shift it exists to prevent.
 const CHUNK_DELAY_MS = Number(process.env.CHUNK_DELAY_MS ?? 1200)
+// `CONTEXT_LOCATION=lagos` makes /v1/context resolve a location, so the
+// dashboard renders its "you are here" status line and the map its marker
+// (feature-current-location-marker). Default: no location, as before.
+const CONTEXT_LOCATION = process.env.CONTEXT_LOCATION === 'lagos'
+  ? { country: 'Nigeria', state: 'Lagos', lat: 6.5244, lng: 3.3792 }
+  : null
+// The bundled headless shell has no WebGL2, so the map throws and the dashboard
+// never mounts; on the Windows dev host use the installed Chrome: PW_CHANNEL=chrome.
+const CHANNEL = process.env.PW_CHANNEL || undefined
 const TOTAL = 3268   // continental-scale projection
 const PAGE  = 50
 
@@ -49,7 +58,7 @@ const eventsPayload = {
   meta: { total: TOTAL, limit: PAGE, offset: 0 },
 }
 
-async function measureOnce(browser, target, waitSelector) {
+async function measureOnce(browser, target, waitSelector, contextSelector) {
   const page = await browser.newPage({ viewport: VIEWPORT })
 
   await page.addInitScript(() => {
@@ -76,7 +85,12 @@ async function measureOnce(browser, target, waitSelector) {
       events_fetched: TOTAL, events_stored: TOTAL, error: null,
     },
   }}))
-  await page.route('**/v1/context', r => r.fulfill({ json: { location: null, nearby_events: [] } }))
+  let contextServed
+  const contextDone = new Promise(res => { contextServed = res })
+  await page.route('**/v1/context', async r => {
+    await r.fulfill({ json: { location: CONTEXT_LOCATION, nearby_events: [] } })
+    contextServed()
+  })
   await page.route('**/v1/states**', r => r.fulfill({ json: { states: ['Lagos', 'Kano', 'Rivers'] } }))
   await page.route('**/v1/events**', r => r.fulfill({ json: eventsPayload }))
   await page.route('**/assets/EventsDashboard-*.js', async r => {
@@ -86,6 +100,14 @@ async function measureOnce(browser, target, waitSelector) {
 
   await page.goto(target, { waitUntil: 'domcontentloaded' })
   await page.waitForSelector(waitSelector, { timeout: 25000 })
+  // With a context location, read CLS only after what the location renders has
+  // rendered: the status chip on a build that has one (`contextSelector`), and
+  // at least the served /v1/context response on a build that does not, so both
+  // arms are measured over the same window.
+  if (CONTEXT_LOCATION) {
+    await contextDone
+    if (contextSelector) await page.waitForSelector(contextSelector, { timeout: 25000 })
+  }
   await page.waitForTimeout(1500)
 
   const result = await page.evaluate(() => ({
@@ -96,18 +118,19 @@ async function measureOnce(browser, target, waitSelector) {
   return result
 }
 
-const browser = await chromium.launch()
+const browser = await chromium.launch({ channel: CHANNEL })
 try {
   for (const arm of [
     // The baseline predates `.dashboard-results`, so it waits on a selector both
     // versions have.
-    { label: 'BASELINE (control)', target: BASELINE_URL, selector: '.dashboard-layout' },
-    { label: 'BRANCH', target: BRANCH_URL, selector: '.dashboard-layout' },
+    { label: 'BASELINE (control)', target: BASELINE_URL, selector: '.dashboard-layout', contextSelector: process.env.BASELINE_CONTEXT_SELECTOR || null },
+    // The control predates the status chip; the branch must show it before CLS is read.
+    { label: 'BRANCH', target: BRANCH_URL, selector: '.dashboard-layout', contextSelector: process.env.BRANCH_CONTEXT_SELECTOR ?? '.dashboard-location-status__chip' },
   ]) {
     const samples = []
     const sources = new Set()
     for (let i = 0; i < RUNS; i++) {
-      const r = await measureOnce(browser, arm.target, arm.selector)
+      const r = await measureOnce(browser, arm.target, arm.selector, arm.contextSelector)
       samples.push(r.cls)
       r.sources.forEach(s => sources.add(s))
     }

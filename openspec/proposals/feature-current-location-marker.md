@@ -1,8 +1,10 @@
 ---
 id: feature-current-location-marker
-status: proposed
-branch: tbd
+status: in-progress
+branch: feat/current-location-marker
 ---
+
+> **Implemented under the change record [`openspec/changes/feature-current-location-marker/`](../changes/feature-current-location-marker/proposal.md)** (2026-11-26). This proposal is kept as written on 2026-07-18; several of its line references and its "Nigeria default" wording are stale, and the change record lists the corrections.
 
 # Proposal: "You Are Here" Current-Location Marker on the Map (feature-current-location-marker)
 

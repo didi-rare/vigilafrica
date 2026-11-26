@@ -1,7 +1,7 @@
 .map-wrapper {
   position: relative;
   width: 100%;
-  height: 600px;
+  height: var(--map-height);
   border-radius: var(--radius-lg);
   overflow: hidden;
   border: 1px solid var(--border);
@@ -147,6 +147,102 @@
   --marker-bg-top: var(--marker-flood-top);
   --marker-bg-bottom: var(--marker-flood-bottom);
   --marker-glow: var(--marker-flood-glow);
+}
+
+/* "You are here" marker (feature-current-location-marker).
+   Differs from the hazard pins by shape, not only colour (§9.4): a centre-
+   anchored disc with a person glyph inside a dashed "approximate area" halo,
+   where hazards are bottom-anchored teardrop pins with a flame or wave. */
+.map-user-marker {
+  /* `absolute`, matching MapLibre's own `.maplibregl-marker` rule: this file
+     loads after maplibre-gl.css with equal specificity, so any other value here
+     would override it and put the marker into normal flow. */
+  position: absolute;
+  display: inline-flex;
+  /* Equal to MIN_HALO_DIAMETER_PX in userLocationHalo.ts. */
+  width: 56px;
+  height: 56px;
+  align-items: center;
+  justify-content: center;
+  /* Non-interactive: never intercept a click meant for a hazard marker or a
+     map drag. */
+  pointer-events: none;
+  z-index: var(--z-map-user-marker);
+}
+
+/* The halo stands for a fixed ground radius (APPROX_RADIUS_M in
+   userLocationHalo.ts); Map.tsx sets its diameter on zoom. It is centred on the
+   dot and may be far larger than the 56px marker box. The fallback equals
+   MIN_HALO_DIAMETER_PX. */
+.map-user-marker__halo {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--map-user-halo-size, 56px);
+  height: var(--map-user-halo-size, 56px);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: var(--marker-user-halo-fill);
+  border: 1.5px dashed var(--marker-user-halo-border);
+}
+
+/* The pulse is an attention cue around the dot, not the area: pixel-sized. */
+.map-user-marker__pulse {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid var(--marker-user-pulse);
+  opacity: 0;
+}
+
+.map-user-marker__dot {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--marker-user-fill);
+  border: 2px solid var(--marker-user-ring);
+  color: var(--marker-user-glyph);
+  box-shadow: var(--shadow-marker-base);
+}
+
+.map-user-marker__dot svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
+/* The pulse is opt-in by motion preference, not opt-out: with no stated
+   preference it runs; under `reduce` it is not declared at all, and the static
+   halo alone carries the "approximate area" meaning. */
+@media (prefers-reduced-motion: no-preference) {
+  .map-user-marker__pulse {
+    animation: map-user-marker-pulse 2.6s ease-out infinite;
+  }
+}
+
+@keyframes map-user-marker-pulse {
+  0% {
+    transform: scale(0.45);
+    opacity: 0.9;
+  }
+
+  80% {
+    transform: scale(1.15);
+    opacity: 0;
+  }
+
+  100% {
+    transform: scale(1.15);
+    opacity: 0;
+  }
+}
+
+.maplibregl-popup {
+  z-index: var(--z-map-popup);
 }
 
 @keyframes marker-pulse {
