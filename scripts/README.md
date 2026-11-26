@@ -19,6 +19,11 @@ python -I scripts/boundaries/test_boundary_manifest.py
 
 # Before/after check of unit counts and stored-event names around a load
 scripts/boundaries/equivalence.sh snapshot before.tsv   # see the script header
+
+# LOCAL databases only: 16,625 deterministic probe events (a 0.1-degree grid
+# over the old NG and GH boxes, plus 130 polygons) so the comparison covers
+# borders and coasts, not only where real events fell. Removal is in its header.
+psql "$DATABASE_URL" -f scripts/boundaries/equivalence-probes.sql
 ```
 
 The manifest is validated offline in CI by
