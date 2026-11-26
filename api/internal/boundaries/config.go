@@ -113,10 +113,16 @@ func (m *Manifest) Status(sources map[string]models.BoundarySource) models.Bound
 		if !ok {
 			continue
 		}
-		if src.EntrySHA256 != nil && src.ReenrichedAt != nil {
+		loaded := src.EntrySHA256 != nil && src.ReenrichedAt != nil
+		if loaded {
 			st.Loaded++
 		}
-		if src.FailedEntrySHA256 != nil && *src.FailedEntrySHA256 == e.Hash() {
+		// A failure of the current entry is stale once that same entry is
+		// loaded: the loader never re-attempts a loaded entry, so the only way
+		// to get both is a commit whose acknowledgement was lost (the server
+		// committed, the loader saw an error and recorded a failure after it).
+		currentLoaded := loaded && *src.EntrySHA256 == e.Hash()
+		if src.FailedEntrySHA256 != nil && *src.FailedEntrySHA256 == e.Hash() && !currentLoaded {
 			st.Failed = append(st.Failed, e.Code)
 		}
 	}

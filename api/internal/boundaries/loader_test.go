@@ -646,9 +646,16 @@ func TestStatusCountsLoadedAndCurrentFailures(t *testing.T) {
 		// not in the manifest any more: ignored
 		"ZZ": {CountryCode: "ZZ", EntrySHA256: &old, ReenrichedAt: &now},
 	}
+	// Commit acknowledgement lost: the current entry loaded, then a failure of
+	// that same entry was recorded after the commit. Not failed.
+	xc, _ := m.Entry("XC")
+	xcHash := xc.Hash()
+	later := now.Add(time.Second)
+	sources["XC"] = models.BoundarySource{CountryCode: "XC", EntrySHA256: &xcHash, ReenrichedAt: &now, LoadedAt: &now,
+		FailedEntrySHA256: &xcHash, FailedAt: &later}
 	st := m.Status(sources)
-	if st.Loaded != 2 || fmt.Sprint(st.Failed) != "[XA]" || st.ManifestSHA256 != m.Checksum() {
-		t.Errorf("status = %+v, want loaded 2, failed [XA]", st)
+	if st.Loaded != 3 || fmt.Sprint(st.Failed) != "[XA]" || st.ManifestSHA256 != m.Checksum() {
+		t.Errorf("status = %+v, want loaded 3, failed [XA] (XC's failure is stale)", st)
 	}
 	if empty := m.Status(nil); empty.Failed == nil || empty.Loaded != 0 {
 		t.Errorf("empty status = %+v, want loaded 0 and failed [] (not null)", empty)
@@ -685,5 +692,56 @@ func TestConfigFromEnv(t *testing.T) {
 	}), 5*time.Minute, quiet)
 	if !enabled || cfg.RetryAfter != DefaultRetryAfter || cfg.TxTimeout != DefaultTxTimeout {
 		t.Errorf("invalid values must fall back to defaults: enabled=%v cfg=%+v", enabled, cfg)
+	}
+}
+
+func TestLoaderRedirectPolicy(t *testing.T) {
+	member := twoStates(t)
+	archive := zipOf(t, map[string][]byte{"xa_admin1.geojson": member})
+	plain := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(archive) // reaching this handler at all is the failure
+	}))
+	t.Cleanup(plain.Close)
+	var tlsURL string
+	tlsSrv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/to-http":
+			http.Redirect(w, r, plain.URL+"/xa.zip", http.StatusFound)
+		case "/to-https":
+			http.Redirect(w, r, tlsURL+"/xa.zip", http.StatusFound)
+		case "/loop":
+			http.Redirect(w, r, tlsURL+"/loop", http.StatusFound)
+		case "/xa.zip":
+			_, _ = w.Write(archive) // a failed write surfaces as a client error
+		}
+	}))
+	t.Cleanup(tlsSrv.Close)
+	tlsURL = tlsSrv.URL
+
+	tests := []struct {
+		path string
+		want error
+	}{
+		{"/to-https", nil},
+		{"/to-http", ErrInsecureRedirect},
+		{"/loop", ErrInsecureRedirect},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.path, func(t *testing.T) {
+			m := parseManifest(t, entryFor("XA", tlsURL+tt.path, member))
+			l := NewLoader(m, newFakeStore(), tlsSrv.Client(), DefaultConfig(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+			e, _ := m.Entry("XA")
+			_, _, err := l.fetchMember(context.Background(), e)
+			if tt.want == nil && err != nil {
+				t.Fatalf("https redirect refused: %v", err)
+			}
+			if tt.want != nil && !errors.Is(err, tt.want) {
+				t.Fatalf("err = %v, want %v", err, tt.want)
+			}
+		})
+	}
+	if tlsSrv.Client().CheckRedirect != nil {
+		t.Error("NewLoader modified the caller's http.Client")
 	}
 }

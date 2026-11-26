@@ -167,7 +167,10 @@ func TestManifestChecksumIgnoresWhitespace(t *testing.T) {
 	compact := manifestJSON(t, validEntry())
 	var pretty strings.Builder
 	pretty.WriteString("{\r\n  \"schema_version\": 1,\r\n  \"countries\": [\r\n    ")
-	b, _ := json.Marshal(validEntry())
+	b, err := json.Marshal(validEntry())
+	if err != nil {
+		t.Fatal(err)
+	}
 	pretty.Write(b)
 	pretty.WriteString("\r\n  ]\r\n}\r\n")
 

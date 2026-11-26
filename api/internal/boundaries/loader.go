@@ -44,7 +44,26 @@ const (
 	// failureRecordTimeout bounds recording a failure after the run's context
 	// has been cancelled.
 	failureRecordTimeout = 10 * time.Second
+	// maxRedirects caps redirect hops on a download (HDX answers with one, to
+	// its storage).
+	maxRedirects = 5
 )
+
+// ErrInsecureRedirect: a download redirected to a non-https URL, or redirected
+// more than maxRedirects times.
+var ErrInsecureRedirect = errors.New("boundary download redirect refused")
+
+// httpsOnlyRedirect keeps every hop of a download on https; the manifest's own
+// URL is already https-only (validate).
+func httpsOnlyRedirect(req *http.Request, via []*http.Request) error {
+	if len(via) >= maxRedirects {
+		return fmt.Errorf("%w: more than %d redirects", ErrInsecureRedirect, maxRedirects)
+	}
+	if req.URL.Scheme != "https" {
+		return fmt.Errorf("%w: to %s URL %s", ErrInsecureRedirect, req.URL.Scheme, req.URL.Redacted())
+	}
+	return nil
+}
 
 // Loader loads the manifest's boundaries. It is safe to call Run repeatedly;
 // it is not safe to call Run concurrently with itself (the scheduler lease is
@@ -62,11 +81,17 @@ type Loader struct {
 }
 
 // NewLoader builds a loader. client may be nil (a client with
-// cfg.DownloadTimeout is made); log may be nil (slog.Default()).
+// cfg.DownloadTimeout is made); its redirect policy is replaced by an
+// https-only one. log may be nil (slog.Default()).
 func NewLoader(m *Manifest, store database.BoundaryRepository, client *http.Client, cfg Config, log *slog.Logger) *Loader {
 	if client == nil {
 		client = &http.Client{Timeout: cfg.DownloadTimeout}
 	}
+	// A copy, so the caller's client is not modified; the redirect policy is
+	// enforced whatever client is passed in.
+	c := *client
+	c.CheckRedirect = httpsOnlyRedirect
+	client = &c
 	if log == nil {
 		log = slog.Default()
 	}
@@ -264,7 +289,9 @@ func (l *Loader) loadEntry(ctx context.Context, elog *slog.Logger, e Entry, rene
 	case err != nil:
 		elog.Warn("could not count events left without a country after the load", "err", err)
 	case unnamed > 0:
-		elog.Warn("events inside the country's box have no country after the load; re-run the null-country cleanup script",
+		// Recorded for the null-country cleanup (feature-continental-coverage
+		// task 5.10), which is a later PR; nothing to run yet.
+		elog.Warn("events inside the country's box have no country after the load; count recorded for the null-country cleanup",
 			"events_null_country", unnamed)
 	default:
 		elog.Info("no events inside the country's box are left without a country", "events_null_country", 0)

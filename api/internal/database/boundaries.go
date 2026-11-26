@@ -157,11 +157,11 @@ func (t *pgBoundaryTx) ReplaceBoundaries(ctx context.Context, r models.BoundaryR
 	if err != nil {
 		return res, fmt.Errorf("failed to delete old boundaries for %s: %w", r.CountryCode, err)
 	}
+	defer rows.Close() // §5.4; the explicit Close below frees the connection for the next statement
 	seen := map[string]bool{}
 	for rows.Next() {
 		var name string
 		if err := rows.Scan(&name); err != nil {
-			rows.Close()
 			return res, fmt.Errorf("failed to scan deleted boundary row: %w", err)
 		}
 		if !seen[name] {
@@ -169,7 +169,7 @@ func (t *pgBoundaryTx) ReplaceBoundaries(ctx context.Context, r models.BoundaryR
 			res.PreviousCountryNames = append(res.PreviousCountryNames, name)
 		}
 	}
-	rows.Close()
+	rows.Close() // idempotent with the defer; must run before the tx's next statement
 	if err := rows.Err(); err != nil {
 		return res, fmt.Errorf("rows error deleting boundaries for %s: %w", r.CountryCode, err)
 	}
